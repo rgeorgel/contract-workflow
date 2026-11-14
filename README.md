@@ -24,6 +24,11 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Tela de detalhe com progresso, linha do tempo, downloads, cancelar, reenviar link e exclusão com confirmação pelo número (`deletion_log`)
 - Provedor **fake** até a fase 4: na tela do contrato, a faixa "Simular" faz o papel do signatário (abrir, assinar, recusar, falha na entrega)
 
+**Fase 5 (painel e busca)**
+- Painel com contadores por status, pendentes há mais de 3 dias e concluídos recentes (`GET /api/v1/dashboard/summary`)
+- Busca full-text em português sem acento (`tsvector` com config `pt_unaccent`, prefixo de palavra) em título, número, valores das variáveis e signatários, mais busca parcial por nome/e-mail (trigram)
+- Filtros na URL: status, template, criado por, período de criação ou de conclusão
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):

@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Contratos.Tests.Contracts;
 
 [Collection(ApiCollection.Name)]
-public sealed class ContractsApiTests(ApiFactory factory)
+public sealed partial class ContractsApiTests(ApiFactory factory)
 {
     private static readonly object ValidValues = new Dictionary<string, string>
     {
@@ -98,6 +98,19 @@ public sealed class ContractsApiTests(ApiFactory factory)
 
         var usage = (await (await admin.Client.GetAsync("/api/v1/organization/settings")).JsonAsync()).GetProperty("usage");
         Assert.Equal(1, usage.GetProperty("contractsSent").GetInt32());
+    }
+
+    [Fact]
+    public async Task Expiry_date_is_saved_as_the_end_of_that_day_in_brasilia()
+    {
+        var (admin, id) = await DraftAsync();
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
+
+        var res = await admin.Client.PutAsync($"/api/v1/contracts/{id}", new { title = "Com prazo", expiresAt = date.ToString("yyyy-MM-dd") });
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var expires = (await res.JsonAsync()).GetProperty("expiresAt").GetDateTimeOffset();
+        Assert.Equal(new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3)), expires);
     }
 
     [Fact]

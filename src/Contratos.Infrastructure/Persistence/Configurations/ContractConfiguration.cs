@@ -5,6 +5,7 @@ using Contratos.Infrastructure.Identity;
 using Contratos.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using NpgsqlTypes;
 
 namespace Contratos.Infrastructure.Persistence.Configurations;
 
@@ -42,7 +43,13 @@ internal sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
         b.Ignore(c => c.IsDraft);
         b.Ignore(c => c.IsOpen);
         b.Ignore(c => c.IsFinal);
+
+        // Busca: título, número, valores das variáveis e signatários. Preenchido por contracts_search_refresh().
+        b.Property<NpgsqlTsVector>(SearchVector).HasColumnType("tsvector");
+        b.HasIndex(SearchVector).HasMethod("GIN");
     }
+
+    public const string SearchVector = "SearchVector";
 }
 
 internal sealed class ContractSignerConfiguration : IEntityTypeConfiguration<ContractSigner>

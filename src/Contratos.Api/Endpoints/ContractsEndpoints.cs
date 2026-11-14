@@ -10,8 +10,9 @@ internal static class ContractsEndpoints
         var g = api.MapGroup("/contracts").WithTags("Contratos").RequireAuthorization();
 
         g.MapGet("/", async (string? q, ContractStatus? status, Guid? templateId, DateOnly? from, DateOnly? to,
-                int? page, int? pageSize, string? sort, IContractService contracts, CancellationToken ct) =>
-                TypedResults.Ok(await contracts.ListAsync(new ContractListQuery(q, status, templateId, from, to, page ?? 1, pageSize ?? 20, sort), ct)))
+                int? page, int? pageSize, string? sort, string? dateField, Guid? createdBy, IContractService contracts, CancellationToken ct) =>
+                TypedResults.Ok(await contracts.ListAsync(
+                    new ContractListQuery(q, status, templateId, from, to, page ?? 1, pageSize ?? 20, sort, dateField, createdBy), ct)))
             .WithSummary("Busca e listagem paginada");
 
         g.MapPost("/", async (CreateContractRequest req, IContractService contracts, HttpContext http, CancellationToken ct) =>

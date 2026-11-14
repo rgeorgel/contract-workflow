@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/progress.css">
   <script type="module" src="/js/components/app-nav.js"></script>
   <script type="module" src="/js/pages/dashboard.js"></script>
 </head>
@@ -18,10 +19,37 @@
     <div class="page-header">
       <div>
         <h1>Olá, <span data-first-name></span>!</h1>
-        <p>A conta de <strong data-org-name></strong> está pronta. Os próximos passos:</p>
+        <p data-lead></p>
+      </div>
+      <div class="page-header__actions">
+        <a class="btn btn--primary" href="/contract-new.html" data-new hidden>Novo contrato</a>
       </div>
     </div>
-    <ol class="next-steps" data-steps></ol>
+
+    <ol class="next-steps" data-steps hidden></ol>
+
+    <div data-overview hidden>
+      <ul class="stats" data-stats></ul>
+      <div class="dash-grid">
+        <section class="panel" aria-labelledby="stale-title">
+          <div class="panel__header">
+            <div>
+              <h2 id="stale-title">Pendentes há mais tempo</h2>
+              <p class="muted panel__sub" data-stale-sub></p>
+            </div>
+            <a class="btn btn--link" href="/contracts.html?status=Sent" data-stale-link>Ver todos</a>
+          </div>
+          <div data-stale></div>
+        </section>
+        <section class="panel" aria-labelledby="recent-title">
+          <div class="panel__header">
+            <h2 id="recent-title">Concluídos recentemente</h2>
+            <a class="btn btn--link" href="/contracts.html?status=Completed">Ver todos</a>
+          </div>
+          <div data-recent></div>
+        </section>
+      </div>
+    </div>
   </main>
 </body>
 </html>

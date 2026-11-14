@@ -9,6 +9,7 @@ const form = document.querySelector('[data-filters]');
 const listEl = document.querySelector('[data-list]');
 const pagerEl = document.querySelector('[data-pager]');
 const PAGE_SIZE = 20;
+const FILTERS = ['q', 'status', 'templateId', 'createdBy', 'dateField', 'from', 'to'];
 let page = 1;
 let controller = null;
 let timer = null;
@@ -20,17 +21,21 @@ api('/templates').then((templates) => {
   for (const t of templates) form.elements.templateId.append(h('option', { value: t.id }, t.name));
   form.elements.templateId.value = new URLSearchParams(location.search).get('templateId') ?? '';
 }).catch(() => {});
+api('/organization/members').then((members) => {
+  for (const m of members) form.elements.createdBy.append(h('option', { value: m.id }, m.name));
+  form.elements.createdBy.value = new URLSearchParams(location.search).get('createdBy') ?? '';
+}).catch(() => {});
 
 // Filtros vivem na URL: o link pode ser compartilhado e o "voltar" funciona.
 function readUrl() {
   const p = new URLSearchParams(location.search);
-  for (const name of ['q', 'status', 'templateId', 'from', 'to']) form.elements[name].value = p.get(name) ?? '';
+  for (const name of FILTERS) form.elements[name].value = p.get(name) ?? '';
   page = Number(p.get('page')) || 1;
 }
 
 function writeUrl() {
   const p = new URLSearchParams();
-  for (const name of ['q', 'status', 'templateId', 'from', 'to']) {
+  for (const name of FILTERS) {
     const v = form.elements[name].value.trim();
     if (v) p.set(name, v);
   }

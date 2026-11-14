@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -20,6 +21,8 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Contratos.Domain.Contracts.Contract", b =>
@@ -82,6 +85,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector");
+
                     b.Property<string>("SendError")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -141,6 +148,11 @@ namespace Contratos.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedBy")
                         .HasDatabaseName("ix_contracts_created_by");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("ix_contracts_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("TemplateVersionId")
                         .HasDatabaseName("ix_contracts_template_version_id");

@@ -151,3 +151,27 @@ a.next-step:hover { border-color: var(--color-primary); color: var(--color-text)
 .cell-number { font-variant-numeric: tabular-nums; color: var(--color-muted); font-weight: 600; white-space: nowrap; }
 .flag { display: inline-block; margin-top: 4px; font-size: .78rem; font-weight: 600; color: var(--color-warning); }
 .flag--danger { color: var(--color-danger); }
+
+/* Painel */
+.stats { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) { .stats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.stat-card { display: grid; gap: 4px; padding: 16px 18px; text-decoration: none; color: var(--color-text); }
+a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text); }
+.stat-card .stat__value { font-size: 1.75rem; }
+.stat-card .stat__label { display: flex; align-items: center; gap: 6px; }
+.stat-card[data-tone="danger"] .stat__value { color: var(--color-danger); }
+.stat-card[data-tone="warning"] .stat__value { color: var(--color-warning); }
+.stat-card[data-tone="success"] .stat__value { color: var(--color-success); }
+.dash-grid { display: grid; gap: 16px; align-items: start; }
+.dash-grid .panel + .panel { margin-top: 0; }
+@media (min-width: 960px) { .dash-grid { grid-template-columns: 1.4fr 1fr; } }
+.dash-list { list-style: none; margin: 0; padding: 0; }
+.dash-list li { border-bottom: 1px solid var(--color-border); }
+.dash-list li:last-child { border-bottom: 0; }
+.dash-list a { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 14px; align-items: center; padding: 14px 20px; color: var(--color-text); text-decoration: none; }
+.dash-list a:hover { background: #fafbfd; }
+.dash-list .cell-number { font-size: .85rem; }
+.dash-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-list small { color: var(--color-muted); font-size: .82rem; }
+.dash-list .days { font-weight: 700; color: var(--color-warning); font-size: .85rem; white-space: nowrap; }
+.dash-empty { padding: 28px 20px; color: var(--color-muted); font-size: .925rem; text-align: center; }

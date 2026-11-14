@@ -12,6 +12,7 @@ using Contratos.Infrastructure.Signatures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NpgsqlTypes;
 
 namespace Contratos.Infrastructure.Contracts;
 
@@ -45,28 +46,32 @@ internal sealed class ContractService(
         var query = db.Contracts.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(q.Q))
-        {
-            var term = q.Q.Trim();
-            var like = $"%{term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
-            var number = int.TryParse(term.TrimStart('0', '#'), out var n) ? n : -1;
-            query = query.Where(c => c.Number == number
-                || EF.Functions.ILike(c.Title, like)
-                || c.Signers.Any(s => EF.Functions.ILike(s.Name, like) || (s.Email != null && EF.Functions.ILike(s.Email, like))));
-        }
+            query = ApplySearch(query, q.Q.Trim());
         if (q.Status is { } status)
             query = query.Where(c => c.Status == status);
         if (q.TemplateId is { } templateId)
             query = query.Where(c => db.TemplateVersions.Any(v => v.Id == c.TemplateVersionId && v.TemplateId == templateId));
+        if (q.CreatedBy is { } createdBy)
+            query = query.Where(c => c.CreatedBy == createdBy);
+
+        var byCompletion = string.Equals(q.DateField, "completed", StringComparison.OrdinalIgnoreCase);
         if (q.From is { } from)
-            query = query.Where(c => c.CreatedAt >= new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
+        {
+            var start = StartOfDayBrt(from);
+            query = byCompletion ? query.Where(c => c.CompletedAt >= start) : query.Where(c => c.CreatedAt >= start);
+        }
         if (q.To is { } to)
-            query = query.Where(c => c.CreatedAt < new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
+        {
+            var end = StartOfDayBrt(to.AddDays(1));
+            query = byCompletion ? query.Where(c => c.CompletedAt < end) : query.Where(c => c.CreatedAt < end);
+        }
 
         query = q.Sort switch
         {
             "created_asc" => query.OrderBy(c => c.CreatedAt),
             "title" => query.OrderBy(c => c.Title).ThenByDescending(c => c.CreatedAt),
             "number" => query.OrderByDescending(c => c.Number),
+            "completed_desc" => query.OrderByDescending(c => c.CompletedAt).ThenByDescending(c => c.CreatedAt),
             _ => query.OrderByDescending(c => c.CreatedAt),
         };
 
@@ -169,6 +174,7 @@ internal sealed class ContractService(
         db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Created, actorUserId: tenant.UserId,
             payload: new() { ["template"] = template.Name }));
         await db.SaveChangesAsync(ct);
+        await RefreshSearchAsync(contract.Id, ct);
         return await DetailAsync(contract, ct);
     }
 
@@ -192,7 +198,7 @@ internal sealed class ContractService(
             .ToDictionary(kv => kv.Key, kv => kv.Value.Trim(), StringComparer.Ordinal);
         // Expira ao fim do dia escolhido (horário de Brasília).
         var expiresAt = req.ExpiresAt is { } date
-            ? new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3))
+            ? new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3)).ToUniversalTime()
             : (DateTimeOffset?)null;
 
         contract.UpdateDraft(req.Title!, values, expiresAt, req.SigningMode ?? contract.SigningMode, req.Message);
@@ -395,6 +401,52 @@ internal sealed class ContractService(
         return Result.Ok();
     }
 
+    // ---------- Busca ----------
+
+    /// <summary>
+    /// Número exato, texto completo (título, valores, signatários; com prefixo e sem acento)
+    /// ou trecho de nome/e-mail de signatário (trigram).
+    /// </summary>
+    private IQueryable<Contract> ApplySearch(IQueryable<Contract> query, string term)
+    {
+        var number = int.TryParse(term.TrimStart('#').TrimStart('0'), out var n) ? n : -1;
+        var like = $"%{EscapeLike(RemoveDiacritics(term))}%";
+        var tsQuery = PrefixTsQuery(term);
+
+        return tsQuery is null
+            ? query.Where(c => c.Number == number
+                || c.Signers.Any(s => EF.Functions.ILike(AppDbContext.ImmutableUnaccent(s.Name), like) || EF.Functions.ILike(s.Email!, like)))
+            : query.Where(c => c.Number == number
+                || EF.Property<NpgsqlTsVector>(c, Persistence.Configurations.ContractConfiguration.SearchVector)
+                    .Matches(EF.Functions.ToTsQuery("pt_unaccent", tsQuery))
+                || c.Signers.Any(s => EF.Functions.ILike(AppDbContext.ImmutableUnaccent(s.Name), like) || EF.Functions.ILike(s.Email!, like)));
+    }
+
+    /// <summary>"café aur" → "café:* &amp; aur:*". Só letras e números entram: nada de sintaxe de tsquery vinda do usuário.</summary>
+    internal static string? PrefixTsQuery(string term)
+    {
+        var tokens = System.Text.RegularExpressions.Regex.Matches(term, @"[\p{L}\p{N}]+")
+            .Select(m => m.Value).Where(t => t.Length > 0).Take(8).ToList();
+        return tokens.Count == 0 ? null : string.Join(" & ", tokens.Select(t => $"{t}:*"));
+    }
+
+    private static string EscapeLike(string s) => s.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private static string RemoveDiacritics(string s)
+    {
+        var normalized = s.Normalize(System.Text.NormalizationForm.FormD);
+        return new string(normalized.Where(ch => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch)
+            != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()).Normalize(System.Text.NormalizationForm.FormC);
+    }
+
+    /// <summary>Meia-noite em Brasília, em UTC (o Npgsql só grava timestamptz com offset zero).</summary>
+    private static DateTimeOffset StartOfDayBrt(DateOnly date) =>
+        new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(-3)).ToUniversalTime();
+
+    /// <summary>search_vector é recalculado no banco, a partir do estado salvo de contrato e signatários.</summary>
+    private Task RefreshSearchAsync(Guid contractId, CancellationToken ct) =>
+        db.Database.ExecuteSqlAsync($"SELECT contracts_search_refresh({contractId})", ct);
+
     // ---------- Apoio ----------
 
     private Task<Contract?> LoadAsync(Guid id, CancellationToken ct) =>
@@ -422,6 +474,7 @@ internal sealed class ContractService(
         {
             return Error.Concurrency();
         }
+        await RefreshSearchAsync(contract.Id, ct);
         return await DetailAsync(contract, ct);
     }
 

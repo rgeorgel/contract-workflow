@@ -1,6 +1,7 @@
 using Contratos.Application.Accounts;
 using Contratos.Application.Common;
 using Contratos.Application.Contracts;
+using Contratos.Application.Dashboard;
 using Contratos.Application.Signatures;
 using Contratos.Application.Storage;
 using Contratos.Application.Email;
@@ -10,6 +11,7 @@ using Contratos.Application.Users;
 using Contratos.Infrastructure.Accounts;
 using Contratos.Infrastructure.Email;
 using Contratos.Infrastructure.Contracts;
+using Contratos.Infrastructure.Dashboard;
 using Contratos.Infrastructure.Identity;
 using Contratos.Infrastructure.Messaging;
 using Contratos.Infrastructure.Signatures;
@@ -78,6 +80,7 @@ public static class DependencyInjection
         services.AddOptions<FakeSignatureOptions>().Bind(config.GetSection(FakeSignatureOptions.Section));
         services.AddOptions<WorkerOptions>().Bind(config.GetSection(WorkerOptions.Section));
         services.AddScoped<IContractService, ContractService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.AddSingleton<IFileStorage, S3FileStorage>();
         services.AddHostedService<StorageInitializer>();
         services.AddHttpClient<IPdfRenderer, GotenbergPdfRenderer>((sp, http) =>

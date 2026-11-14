@@ -30,9 +30,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<WebhookInboxItem> WebhookInbox => Set<WebhookInboxItem>();
     public DbSet<DeletionLogEntry> DeletionLog => Set<DeletionLogEntry>();
 
+    /// <summary><c>unaccent</c> marcada como IMMUTABLE, para poder ir em índice (criada na migration Search).</summary>
+    public static string ImmutableUnaccent(string text) => throw new NotSupportedException("Só em consultas.");
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.HasPostgresExtension("unaccent");
+        builder.HasPostgresExtension("pg_trgm");
+        builder.HasDbFunction(typeof(AppDbContext).GetMethod(nameof(ImmutableUnaccent))!).HasName("immutable_unaccent");
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         // Isolamento por organização. Versões de template são lidas sempre a partir do template.

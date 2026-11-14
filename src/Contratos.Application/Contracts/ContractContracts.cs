@@ -4,9 +4,10 @@ using Contratos.Domain.Templates;
 
 namespace Contratos.Application.Contracts;
 
+/// <param name="DateField">"created" (padrão) ou "completed": a qual data From/To se aplicam.</param>
 public sealed record ContractListQuery(
     string? Q, ContractStatus? Status, Guid? TemplateId, DateOnly? From, DateOnly? To,
-    int Page = 1, int PageSize = 20, string? Sort = null);
+    int Page = 1, int PageSize = 20, string? Sort = null, string? DateField = null, Guid? CreatedBy = null);
 
 public sealed record ContractListItem(
     Guid Id, int Number, string Title, ContractStatus Status, string TemplateName,
