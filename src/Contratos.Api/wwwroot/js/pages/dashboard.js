@@ -8,7 +8,7 @@ document.querySelector('[data-org-name]').textContent = me.organization.name;
 
 const steps = [
   { title: 'Montar o primeiro template', text: 'Cole o modelo de contrato e marque as variáveis.', href: '/templates.html' },
-  { title: 'Gerar e enviar um contrato', text: 'Preencha os dados, adicione quem assina e envie.' },
+  { title: 'Gerar e enviar um contrato', text: 'Preencha os dados, adicione quem assina e envie.', href: '/contract-new.html' },
   isAdmin(me)
     ? { title: 'Convidar a equipe', text: 'Defina quem é Admin, Editor ou Leitor.', href: '/users.html' }
     : { title: 'Conferir as configurações', text: 'Veja os padrões de envio da sua empresa.', href: '/settings.html' },

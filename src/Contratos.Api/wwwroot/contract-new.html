@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novo contrato · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/contracts.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/contract-new.js"></script>
+</head>
+<body class="app">
+  <app-nav active="contracts"></app-nav>
+  <main class="container page wizard" data-main hidden>
+    <a class="back-link" href="/contracts.html">← Contratos</a>
+    <div class="page-header">
+      <div>
+        <h1 data-title>Novo contrato</h1>
+        <p data-subtitle>Escolha o modelo, preencha os dados, adicione quem assina e envie.</p>
+      </div>
+    </div>
+
+    <ol class="stepper" aria-label="Etapas">
+      <li data-step-label="1"><span>1</span> Template</li>
+      <li data-step-label="2"><span>2</span> Dados</li>
+      <li data-step-label="3"><span>3</span> Signatários</li>
+      <li data-step-label="4"><span>4</span> Revisar e enviar</li>
+    </ol>
+
+    <div class="alert alert--error" role="alert" data-alert hidden></div>
+
+    <!-- 1. Template -->
+    <section class="panel" data-step="1" hidden aria-labelledby="s1-title">
+      <div class="panel__header"><h2 id="s1-title">Qual modelo de contrato?</h2></div>
+      <div class="panel__body">
+        <div class="template-grid" data-templates role="radiogroup" aria-label="Templates publicados"></div>
+        <div class="field wizard__title-field">
+          <label class="field__label" for="title">Título do contrato</label>
+          <input class="input" id="title" maxlength="200" placeholder="Ex.: Consultoria de marketing – Café Aurora" aria-describedby="title-hint">
+          <p class="field__hint" id="title-hint">Ajuda a encontrar o contrato depois. Se ficar vazio, usamos o nome do template.</p>
+        </div>
+      </div>
+      <div class="wizard__footer">
+        <span></span>
+        <button class="btn btn--primary" type="button" data-create disabled>Continuar</button>
+      </div>
+    </section>
+
+    <!-- 2. Dados -->
+    <section class="panel" data-step="2" hidden aria-labelledby="s2-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="s2-title">Dados do contrato</h2>
+          <p class="muted panel__sub">Campos com * são obrigatórios para enviar. Dá para salvar e completar depois.</p>
+        </div>
+      </div>
+      <form class="panel__body form-grid form-grid--2" id="values-form" novalidate data-values></form>
+      <div class="wizard__footer">
+        <button class="btn btn--ghost" type="button" data-goto="1" disabled>Voltar</button>
+        <button class="btn btn--primary" type="button" data-save-values>Salvar e continuar</button>
+      </div>
+    </section>
+
+    <!-- 3. Signatários -->
+    <section class="panel" data-step="3" hidden aria-labelledby="s3-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="s3-title">Quem vai assinar</h2>
+          <p class="muted panel__sub">Cada pessoa recebe o link pelo canal escolhido. Ninguém precisa criar conta.</p>
+        </div>
+        <button class="btn btn--secondary btn--sm" type="button" data-add-signer>Adicionar signatário</button>
+      </div>
+      <div class="panel__body signers-step">
+        <fieldset class="fieldset">
+          <legend class="field__label">Ordem de assinatura</legend>
+          <div class="radio-cards radio-cards--row">
+            <label class="radio-card"><input type="radio" name="signingMode" value="Parallel"><span><strong>Todos ao mesmo tempo</strong>Cada um assina quando puder.</span></label>
+            <label class="radio-card"><input type="radio" name="signingMode" value="Sequential"><span><strong>Um depois do outro</strong>O próximo só recebe o link quando o anterior assina.</span></label>
+          </div>
+        </fieldset>
+        <div class="suggestions" data-suggestions hidden>
+          <span class="muted">Papéis do template:</span>
+        </div>
+        <ol class="signer-cards" data-signers></ol>
+        <p class="muted signers-empty" data-signers-empty>Nenhum signatário ainda.</p>
+      </div>
+      <div class="wizard__footer">
+        <button class="btn btn--ghost" type="button" data-goto="2">Voltar</button>
+        <button class="btn btn--primary" type="button" data-goto="4" data-to-review>Revisar</button>
+      </div>
+    </section>
+
+    <!-- 4. Revisar -->
+    <section class="panel" data-step="4" hidden aria-labelledby="s4-title">
+      <div class="panel__header">
+        <h2 id="s4-title">Revisar e enviar</h2>
+        <a class="btn btn--secondary btn--sm" target="_blank" rel="noopener" data-preview-link>Ver o documento</a>
+      </div>
+      <div class="panel__body review">
+        <form class="form-grid form-grid--2" id="review-form" novalidate>
+          <div class="field span-2">
+            <label class="field__label" for="review-title">Título</label>
+            <input class="input" id="review-title" name="title" maxlength="200" aria-describedby="review-title-error">
+            <p class="field__error" id="review-title-error" data-error-for="title"></p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="expiresAt">Prazo para assinar <span class="muted">(opcional)</span></label>
+            <input class="input" id="expiresAt" name="expiresAt" type="date" aria-describedby="expires-hint expiresAt-error">
+            <p class="field__hint" id="expires-hint">Depois dessa data o link para de funcionar.</p>
+            <p class="field__error" id="expiresAt-error" data-error-for="expiresAt"></p>
+          </div>
+          <div class="field">
+            <span class="field__label">Template</span>
+            <p class="review__static" data-review-template></p>
+          </div>
+          <div class="field span-2">
+            <label class="field__label" for="message">Mensagem para quem assina <span class="muted">(opcional)</span></label>
+            <textarea class="input" id="message" name="message" maxlength="500" aria-describedby="message-hint"></textarea>
+            <p class="field__hint" id="message-hint">Vai junto com o nome da sua empresa no e-mail, WhatsApp ou SMS.</p>
+          </div>
+        </form>
+        <div class="review__grid">
+          <section>
+            <h3>Dados</h3>
+            <dl class="review__values" data-review-values></dl>
+            <button class="btn btn--link" type="button" data-goto="2">Editar dados</button>
+          </section>
+          <section>
+            <h3>Signatários <span class="muted" data-review-mode></span></h3>
+            <ol class="review__signers" data-review-signers></ol>
+            <button class="btn btn--link" type="button" data-goto="3">Editar signatários</button>
+          </section>
+        </div>
+      </div>
+      <div class="wizard__footer">
+        <button class="btn btn--ghost" type="button" data-goto="3">Voltar</button>
+        <button class="btn btn--primary btn--lg" type="button" data-send>Enviar para assinatura</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

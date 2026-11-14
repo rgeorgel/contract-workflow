@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using Contratos.Application.Email;
+using Contratos.Application.Storage;
+using Contratos.Infrastructure.Messaging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -15,6 +17,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly PostgreSqlContainer _db = new PostgreSqlBuilder("postgres:17").Build();
 
     public CapturingEmailSender Emails { get; } = new();
+    public InMemoryFileStorage Files { get; } = new();
+
+    /// <summary>Roda o worker uma vez: webhooks, outbox e expiração.</summary>
+    public Task ProcessBackgroundAsync() => Services.GetRequiredService<BackgroundProcessor>().ProcessAllAsync(CancellationToken.None);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -23,10 +29,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Database:MigrateOnStartup", "true");
         builder.UseSetting("RateLimiting:AuthPermitsPerMinute", "10000");
         builder.UseSetting("App:PublicBaseUrl", "https://app.test");
+        builder.UseSetting("Worker:Enabled", "false");
+        builder.UseSetting("Storage:CreateBucket", "false");
+        for (var i = 0; i < 4; i++)
+            builder.UseSetting($"Worker:RetryDelaysSeconds:{i}", "0");
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(Emails);
+            services.RemoveAll<IFileStorage>();
+            services.AddSingleton<IFileStorage>(Files);
+            services.RemoveAll<IPdfRenderer>();
+            services.AddSingleton<IPdfRenderer, FakePdfRenderer>();
         });
     }
 
@@ -55,6 +69,37 @@ public sealed class CapturingEmailSender : IEmailSender
 
     public IReadOnlyList<EmailMessage> To(string email) =>
         _sent.Where(m => string.Equals(m.To, email, StringComparison.OrdinalIgnoreCase)).ToList();
+}
+
+public sealed class InMemoryFileStorage : IFileStorage
+{
+    private readonly ConcurrentDictionary<string, byte[]> _files = new();
+
+    public IReadOnlyCollection<string> Keys => _files.Keys.ToList();
+
+    public async Task PutAsync(string key, Stream content, string contentType, CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        await content.CopyToAsync(ms, ct);
+        _files[key] = ms.ToArray();
+    }
+
+    public Task<Stream?> OpenReadAsync(string key, CancellationToken ct) =>
+        Task.FromResult<Stream?>(_files.TryGetValue(key, out var bytes) ? new MemoryStream(bytes) : null);
+
+    public Task DeletePrefixAsync(string prefix, CancellationToken ct)
+    {
+        foreach (var key in _files.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)))
+            _files.TryRemove(key, out _);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>PDF mínimo com o HTML embutido, para os testes conferirem o conteúdo sem Gotenberg.</summary>
+public sealed class FakePdfRenderer : IPdfRenderer
+{
+    public Task<byte[]> RenderAsync(string html, CancellationToken ct) =>
+        Task.FromResult(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n%fake\n" + html));
 }
 
 [CollectionDefinition(Name)]

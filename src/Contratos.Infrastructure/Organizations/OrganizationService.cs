@@ -51,7 +51,12 @@ internal sealed class OrganizationService(AppDbContext db, ICurrentTenant tenant
             new UsageDto(month.ToString("yyyy-MM"), sent));
     }
 
-    /// <summary>Contratos enviados no mês. Ganha a contagem real quando os contratos existirem (fase 3).</summary>
-    private static Task<int> CountSentAsync(Guid organizationId, DateTimeOffset month, CancellationToken ct) =>
-        Task.FromResult(0);
+    /// <summary>Contratos enviados no mês, pela view usage_by_month (inclui os já excluídos).</summary>
+    private async Task<int> CountSentAsync(Guid organizationId, DateTimeOffset month, CancellationToken ct)
+    {
+        var counts = await db.Database
+            .SqlQuery<int>($"SELECT contracts_sent::int AS \"Value\" FROM usage_by_month WHERE organization_id = {organizationId} AND month = {month}")
+            .ToListAsync(ct);
+        return counts.SingleOrDefault();
+    }
 }

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contratos · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/progress.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/contracts.js"></script>
+</head>
+<body class="app">
+  <app-nav active="contracts"></app-nav>
+  <main class="container page">
+    <div class="page-header">
+      <div>
+        <h1>Contratos</h1>
+        <p>Busque por título, número, nome ou e-mail de quem assina.</p>
+      </div>
+      <div class="page-header__actions">
+        <a class="btn btn--primary" href="/contract-new.html" data-new hidden>Novo contrato</a>
+      </div>
+    </div>
+
+    <form class="filters" data-filters role="search">
+      <label class="filters__q">
+        <span class="visually-hidden">Buscar</span>
+        <input class="input" type="search" name="q" placeholder="Buscar contratos" autocomplete="off">
+      </label>
+      <label>
+        <span class="visually-hidden">Status</span>
+        <select class="select" name="status">
+          <option value="">Todos os status</option>
+        </select>
+      </label>
+      <label>
+        <span class="visually-hidden">Template</span>
+        <select class="select" name="templateId">
+          <option value="">Todos os templates</option>
+        </select>
+      </label>
+      <label class="filters__date">
+        <span>De</span>
+        <input class="input" type="date" name="from">
+      </label>
+      <label class="filters__date">
+        <span>Até</span>
+        <input class="input" type="date" name="to">
+      </label>
+    </form>
+
+    <section class="panel">
+      <div class="table-wrap" data-list><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+      <div class="pager" data-pager hidden>
+        <span class="muted" data-range></span>
+        <span class="pager__buttons">
+          <button class="btn btn--secondary btn--sm" type="button" data-prev>Anterior</button>
+          <button class="btn btn--secondary btn--sm" type="button" data-next>Próxima</button>
+        </span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

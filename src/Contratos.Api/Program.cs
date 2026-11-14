@@ -110,6 +110,10 @@ api.MapAuthEndpoints();
 api.MapUsersEndpoints();
 api.MapOrganizationEndpoints();
 api.MapTemplatesEndpoints();
+api.MapContractsEndpoints();
+if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", StringComparison.OrdinalIgnoreCase))
+    api.MapFakeProviderEndpoints();
+app.MapWebhookEndpoints();
 
 app.Run();
 

@@ -1,0 +1,357 @@
+using Contratos.Application.Signatures;
+using Contratos.Application.Storage;
+using Contratos.Domain.Contracts;
+using Contratos.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Contratos.Infrastructure.Messaging;
+
+public sealed class WorkerOptions
+{
+    public const string Section = "Worker";
+    public bool Enabled { get; set; } = true;
+    public int PollIntervalSeconds { get; set; } = 2;
+    /// <summary>Espera entre tentativas; vazio usa 1, 5, 15 e 60 min. Depois da última, desiste.</summary>
+    /// <remarks>Sem valor inicial: o binder de configuração somaria os itens configurados aos padrões.</remarks>
+    public int[]? RetryDelaysSeconds { get; set; }
+
+    public int[] Delays => RetryDelaysSeconds is { Length: > 0 } d ? d : [60, 300, 900, 3600];
+}
+
+/// <summary>Recebe webhooks: valida a assinatura e grava em webhook_inbox; o processamento é assíncrono.</summary>
+public sealed class WebhookReceiver(AppDbContext db, ISignatureProvider provider, ILogger<WebhookReceiver> logger)
+{
+    public enum Outcome { Accepted, InvalidSignature, Malformed }
+
+    public async Task<Outcome> ReceiveAsync(string rawBody, string? signatureHeader, CancellationToken ct)
+    {
+        if (!provider.ValidateWebhook(rawBody, signatureHeader))
+            return Outcome.InvalidSignature;
+
+        IReadOnlyList<SignatureEvent> events;
+        try
+        {
+            events = provider.ParseWebhook(rawBody);
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or FormatException or InvalidOperationException)
+        {
+            logger.LogWarning(e, "Webhook malformado de {Provider}", provider.Name);
+            return Outcome.Malformed;
+        }
+        if (events.Count == 0)
+            return Outcome.Accepted;
+
+        // Idempotência: o mesmo event.id reentregue é ignorado pelo índice único.
+        await db.Database.ExecuteSqlAsync($"""
+            INSERT INTO webhook_inbox (provider, external_event_id, payload, received_at, attempts)
+            VALUES ({provider.Name}, {events[0].ExternalEventId}, {rawBody}::jsonb, now(), 0)
+            ON CONFLICT (provider, external_event_id) DO NOTHING
+            """, ct);
+        return Outcome.Accepted;
+    }
+}
+
+/// <summary>
+/// Processa, nesta ordem: webhooks recebidos, mensagens da outbox (chamadas ao provedor com retentativa)
+/// e contratos vencidos. O worker chama em laço; os testes chamam direto.
+/// </summary>
+public sealed class BackgroundProcessor(
+    IServiceScopeFactory scopes,
+    TimeProvider clock,
+    IOptions<WorkerOptions> options,
+    ILogger<BackgroundProcessor> logger)
+{
+    private const int BatchLimit = 50;
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    public async Task ProcessAllAsync(CancellationToken ct)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            for (var i = 0; i < BatchLimit && await ProcessNextInboxAsync(ct); i++) { }
+            for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
+            await ExpireContractsAsync(ct);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    // ---------- Webhooks ----------
+
+    private async Task<bool> ProcessNextInboxAsync(CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var provider = scope.ServiceProvider.GetRequiredService<ISignatureProvider>();
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var item = (await db.WebhookInbox
+            .FromSql($"SELECT * FROM webhook_inbox WHERE processed_at IS NULL ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED")
+            .ToListAsync(ct)).SingleOrDefault();
+        if (item is null)
+            return false;
+
+        try
+        {
+            foreach (var ev in provider.ParseWebhook(item.Payload))
+                await ApplyEventAsync(db, ev, ct);
+            item.ProcessedAt = clock.GetUtcNow();
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            await tx.RollbackAsync(ct);
+            logger.LogError(e, "Falha ao processar webhook {InboxId}", item.Id);
+            await RecordInboxFailureAsync(item.Id, e.Message, ct);
+        }
+        return true;
+    }
+
+    private async Task RecordInboxFailureAsync(long id, string error, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var item = await db.WebhookInbox.SingleAsync(w => w.Id == id, ct);
+        item.Attempts++;
+        item.LastError = Truncate(error);
+        if (item.Attempts >= options.Value.Delays.Length + 1)
+            item.ProcessedAt = clock.GetUtcNow(); // desiste; o erro fica registrado
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task ApplyEventAsync(AppDbContext db, SignatureEvent ev, CancellationToken ct)
+    {
+        // Webhook não tem tenant: acha o contrato (e a organização) pelo id do documento.
+        var contract = await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers)
+            .SingleOrDefaultAsync(c => c.AutentiqueDocumentId == ev.DocumentId, ct);
+        if (contract is null)
+        {
+            logger.LogWarning("Webhook para documento desconhecido {DocumentId}", ev.DocumentId);
+            return;
+        }
+
+        var signer = ev.SignaturePublicId is null ? null : contract.Signers.SingleOrDefault(s => s.AutentiquePublicId == ev.SignaturePublicId);
+        void Log(string type, Dictionary<string, string?>? payload = null) =>
+            db.ContractEvents.Add(new ContractEvent(contract.Id, type, signer?.Id, payload: payload, occurredAt: ev.OccurredAt));
+
+        switch (ev.Type)
+        {
+            case SignatureEventType.Viewed when signer is not null:
+                if (contract.SignerViewed(signer, ev.OccurredAt)) Log(ContractEventTypes.SignerViewed);
+                break;
+            case SignatureEventType.Signed when signer is not null:
+                if (contract.SignerSigned(signer, ev.OccurredAt)) Log(ContractEventTypes.SignerSigned);
+                break;
+            case SignatureEventType.Declined when signer is not null:
+                if (contract.SignerDeclined(signer, ev.OccurredAt, ev.Reason)) Log(ContractEventTypes.SignerDeclined, new() { ["reason"] = ev.Reason });
+                break;
+            case SignatureEventType.DeliveryFailed when signer is not null:
+                if (contract.SignerDeliveryFailed(signer)) Log(ContractEventTypes.DeliveryFailed, new() { ["channel"] = signer.DeliveryMethod.ToString() });
+                break;
+            case SignatureEventType.DocumentFinished:
+                if (contract.Complete(ev.OccurredAt))
+                {
+                    Log(ContractEventTypes.Completed);
+                    db.Enqueue(OutboxTypes.StoreSignedDocument, new ContractMessage(contract.Id));
+                }
+                break;
+            case SignatureEventType.DocumentDeleted:
+                // Exclusão pedida por nós já deixou o contrato cancelado; o resto é alerta.
+                if (contract.Status != ContractStatus.Cancelled)
+                    Log(ContractEventTypes.ProviderDocumentDeleted);
+                break;
+            default:
+                logger.LogWarning("Evento {Type} sem signatário conhecido no contrato {ContractId}", ev.Type, contract.Id);
+                break;
+        }
+    }
+
+    // ---------- Outbox ----------
+
+    private async Task<bool> ProcessNextOutboxAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        long messageId;
+        string type;
+        int attempts;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var message = (await db.OutboxMessages
+                .FromSql($"SELECT * FROM outbox_messages WHERE processed_at IS NULL AND next_attempt_at <= {now} ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED")
+                .ToListAsync(ct)).SingleOrDefault();
+            if (message is null)
+                return false;
+
+            (messageId, type, attempts) = (message.Id, message.Type, message.Attempts);
+            try
+            {
+                await HandleAsync(scope.ServiceProvider, db, message, ct);
+                message.ProcessedAt = clock.GetUtcNow();
+                message.LastError = null;
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return true;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                await tx.RollbackAsync(ct);
+                logger.LogWarning(e, "Falha na mensagem {Type} #{Id} (tentativa {Attempt})", type, messageId, attempts + 1);
+                await RecordOutboxFailureAsync(messageId, e.Message, ct);
+                return true;
+            }
+        }
+    }
+
+    private async Task RecordOutboxFailureAsync(long id, string error, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var message = await db.OutboxMessages.SingleAsync(m => m.Id == id, ct);
+        var delays = options.Value.Delays;
+        message.Attempts++;
+        message.LastError = Truncate(error);
+
+        if (message.Attempts > delays.Length)
+        {
+            // Esgotou (5 tentativas): desiste e deixa o erro visível no contrato.
+            message.ProcessedAt = clock.GetUtcNow();
+            if (message.Type == OutboxTypes.SendContract)
+            {
+                var contractId = message.Read<ContractMessage>().ContractId;
+                var contract = await db.Contracts.IgnoreQueryFilters().SingleOrDefaultAsync(c => c.Id == contractId, ct);
+                if (contract is not null)
+                {
+                    contract.RecordSendFailure(error);
+                    db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SendFailed,
+                        payload: new() { ["error"] = Truncate(error, 300) }));
+                }
+            }
+        }
+        else
+        {
+            message.NextAttemptAt = clock.GetUtcNow().AddSeconds(delays[message.Attempts - 1]);
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task HandleAsync(IServiceProvider services, AppDbContext db, OutboxMessage message, CancellationToken ct)
+    {
+        var provider = services.GetRequiredService<ISignatureProvider>();
+        var storage = services.GetRequiredService<IFileStorage>();
+
+        switch (message.Type)
+        {
+            case OutboxTypes.SendContract:
+            {
+                var contract = await LoadContractAsync(db, message.Read<ContractMessage>().ContractId, ct);
+                // Cancelado antes de sair, excluído ou já entregue: nada a fazer.
+                if (contract is null || contract.Status == ContractStatus.Cancelled || contract.AutentiqueDocumentId is not null)
+                    return;
+
+                var org = await db.Organizations.SingleAsync(o => o.Id == contract.OrganizationId, ct);
+                await using var pdf = await storage.OpenReadAsync(contract.DocumentKey!, ct)
+                    ?? throw new InvalidOperationException("PDF original não encontrado no storage.");
+
+                var signers = contract.SignersInSendOrder();
+                var request = new DocumentRequest(
+                    Name: $"{contract.Title} (nº {contract.Number:0000})",
+                    // O signatário vê o nome da conta da plataforma; a mensagem diz quem está pedindo a assinatura.
+                    Message: $"{org.Name} enviou este documento para você assinar." + (contract.Message is { } m ? $"\n\n{m}" : ""),
+                    Sortable: contract.SigningMode == SigningMode.Sequential,
+                    DeadlineAt: contract.ExpiresAt,
+                    Reminder: org.Settings.Reminder,
+                    FolderId: org.AutentiqueFolderId,
+                    Signers: signers.Select(s => new DocumentSigner(s.Name, s.Email, s.Phone, s.DeliveryMethod, s.Action, s.Cpf)).ToList());
+
+                var created = await provider.CreateDocumentAsync(request, pdf, ct);
+                contract.AttachProviderDocument(created.DocumentId, created.Signatures.Select(s => (s.PublicId, s.ShortLink)).ToList());
+                db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SentToProvider,
+                    payload: new() { ["provider"] = provider.Name, ["documentId"] = created.DocumentId }));
+                break;
+            }
+            case OutboxTypes.DeleteProviderDocument:
+                await provider.DeleteDocumentAsync(message.Read<ProviderDocumentMessage>().DocumentId, ct);
+                break;
+            case OutboxTypes.ResendSignature:
+            {
+                var msg = message.Read<ResendMessage>();
+                var contract = await LoadContractAsync(db, msg.ContractId, ct);
+                var signer = contract?.Signers.SingleOrDefault(s => s.Id == msg.SignerId);
+                if (contract is { IsOpen: true } && signer?.AutentiquePublicId is { } publicId)
+                    await provider.ResendAsync([publicId], ct);
+                break;
+            }
+            case OutboxTypes.StoreSignedDocument:
+            {
+                var contract = await LoadContractAsync(db, message.Read<ContractMessage>().ContractId, ct);
+                if (contract?.AutentiqueDocumentId is null || contract.SignedDocumentKey is not null)
+                    return;
+                await using var signedPdf = await provider.DownloadSignedPdfAsync(contract.AutentiqueDocumentId, ct);
+                var key = StorageKeys.Signed(contract.OrganizationId, contract.Id);
+                await storage.PutAsync(key, signedPdf, "application/pdf", ct);
+                contract.AttachSignedDocument(key);
+                db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SignedDocumentStored));
+                break;
+            }
+            default:
+                logger.LogError("Tipo de mensagem desconhecido: {Type}", message.Type);
+                break;
+        }
+    }
+
+    // ---------- Expiração ----------
+
+    private async Task ExpireContractsAsync(CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var now = clock.GetUtcNow();
+        var expired = await db.Contracts.IgnoreQueryFilters()
+            .Where(c => (c.Status == ContractStatus.Sent || c.Status == ContractStatus.PartiallySigned) && c.ExpiresAt != null && c.ExpiresAt <= now)
+            .Take(BatchLimit)
+            .ToListAsync(ct);
+        foreach (var contract in expired.Where(c => c.Expire(now)))
+            db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Expired));
+        if (expired.Count > 0)
+            await db.SaveChangesAsync(ct);
+    }
+
+    private static Task<Contract?> LoadContractAsync(AppDbContext db, Guid id, CancellationToken ct) =>
+        db.Contracts.IgnoreQueryFilters().Include(c => c.Signers).SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    private static string Truncate(string s, int max = 2000) => s.Length > max ? s[..max] : s;
+}
+
+/// <summary>Chama o processador a cada poucos segundos. Desligável (testes chamam o processador direto).</summary>
+internal sealed class BackgroundWorker(BackgroundProcessor processor, IOptions<WorkerOptions> options, ILogger<BackgroundWorker> logger)
+    : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (!options.Value.Enabled)
+            return;
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, options.Value.PollIntervalSeconds)));
+        do
+        {
+            try
+            {
+                await processor.ProcessAllAsync(stoppingToken);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Banco fora do ar, por exemplo: tenta de novo no próximo ciclo.
+                logger.LogError(e, "Falha no ciclo do worker");
+            }
+        } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}

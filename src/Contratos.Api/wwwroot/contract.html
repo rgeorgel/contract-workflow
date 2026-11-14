@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contrato · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/contracts.css">
+  <link rel="stylesheet" href="/css/progress.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/contract.js"></script>
+</head>
+<body class="app">
+  <app-nav active="contracts"></app-nav>
+  <main class="container page" data-main hidden>
+    <a class="back-link" href="/contracts.html">← Contratos</a>
+    <div class="page-header">
+      <div>
+        <div class="title-row">
+          <span class="title-number" data-number></span>
+          <h1 data-title></h1>
+          <span data-status></span>
+        </div>
+        <p data-subtitle></p>
+      </div>
+      <div class="page-header__actions" data-actions></div>
+    </div>
+
+    <div class="alert alert--error" role="alert" data-alert hidden></div>
+    <div data-banner></div>
+
+    <div class="detail">
+      <div class="detail__main">
+        <section class="panel" aria-labelledby="signers-title">
+          <div class="panel__header">
+            <h2 id="signers-title">Signatários</h2>
+          </div>
+          <div class="panel__body" data-progress></div>
+          <ol class="signer-rows" data-signers></ol>
+        </section>
+        <section class="panel" aria-labelledby="values-title">
+          <div class="panel__header"><h2 id="values-title">Dados do contrato</h2></div>
+          <div class="panel__body"><dl class="facts" data-values></dl></div>
+        </section>
+      </div>
+
+      <aside class="detail__side">
+        <section class="panel" aria-labelledby="facts-title">
+          <div class="panel__header"><h2 id="facts-title">Resumo</h2></div>
+          <div class="panel__body"><dl class="facts" data-facts></dl></div>
+        </section>
+        <section class="panel" aria-labelledby="timeline-title">
+          <div class="panel__header"><h2 id="timeline-title">Linha do tempo</h2></div>
+          <ol class="timeline" data-timeline></ol>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

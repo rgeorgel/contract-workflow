@@ -134,3 +134,20 @@ a.next-step:hover { border-color: var(--color-primary); color: var(--color-text)
 .segmented button { border: 0; background: none; padding: 7px 14px; border-radius: 7px; font-weight: 600; font-size: .9rem; color: var(--color-muted); cursor: pointer; }
 .segmented button[aria-selected="true"] { background: var(--color-bg); color: var(--color-text); box-shadow: var(--shadow-sm); }
 .container--wide { max-width: 1440px; }
+
+/* Progresso compacto (listas). A largura vem de data-pct, sem style inline (CSP). */
+.mini-progress { display: inline-grid; gap: 4px; min-width: 90px; font-size: .85rem; }
+.mini-progress__track { height: 6px; border-radius: 999px; background: var(--color-surface-2); overflow: hidden; }
+.mini-progress__bar { display: block; height: 100%; width: 0; background: var(--color-primary); border-radius: inherit; }
+.mini-progress__bar[data-pct="100"] { background: var(--color-success); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+.filters .input, .filters .select { min-height: 40px; }
+.filters__q { flex: 1 1 260px; }
+.filters__date { display: inline-flex; align-items: center; gap: 6px; font-size: .875rem; color: var(--color-muted); }
+.filters__date .input { width: auto; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--color-border); font-size: .9rem; flex-wrap: wrap; }
+.pager__buttons { display: inline-flex; gap: 8px; }
+.cell-number { font-variant-numeric: tabular-nums; color: var(--color-muted); font-weight: 600; white-space: nowrap; }
+.flag { display: inline-block; margin-top: 4px; font-size: .78rem; font-weight: 600; color: var(--color-warning); }
+.flag--danger { color: var(--color-danger); }

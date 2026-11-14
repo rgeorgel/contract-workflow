@@ -16,6 +16,14 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Rascunho + versões publicadas imutáveis; concorrência otimista com ETag/If-Match
 - Sanitização no servidor (sem scripts nem URLs externas, para o Gotenberg não buscar nada na rede) e pré-visualização com dados de exemplo
 
+**Fase 3 (contratos e signatários)**
+- Assistente em 4 passos: template → dados (formulário gerado pelas variáveis, validado por tipo) → signatários (papel, ordem, e-mail/WhatsApp/SMS) → revisar e enviar
+- PDF gerado no Gotenberg, congelado no storage S3 com SHA-256; número sequencial por organização
+- Envio pela outbox com retentativa (1, 5, 15, 60 min); depois de 5 falhas o contrato mostra "Erro no envio" com "Tentar de novo"
+- Webhooks em `/api/v1/webhooks/autentique` (HMAC-SHA256, idempotentes via `webhook_inbox`); expiração automática
+- Tela de detalhe com progresso, linha do tempo, downloads, cancelar, reenviar link e exclusão com confirmação pelo número (`deletion_log`)
+- Provedor **fake** até a fase 4: na tela do contrato, a faixa "Simular" faz o papel do signatário (abrir, assinar, recusar, falha na entrega)
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):
@@ -53,6 +61,7 @@ Escolhidas para não colidir com serviços comuns; todas ajustáveis no `.env`.
 | Mailpit (caixa de entrada) | 8026 |
 | Mailpit (SMTP) | 1026 |
 | S3 local (SeaweedFS) | 8333 |
+| Gotenberg | 3005 |
 
 ## Estrutura
 

@@ -51,6 +51,8 @@ services:
 
   gotenberg:
     image: gotenberg/gotenberg:8
+    # Chromium só abre o próprio HTML: nada de rede interna (defesa extra contra SSRF além da sanitização).
+    command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--chromium-disable-javascript=true"]
 
   # S3 local. O MinIO parou de publicar imagens; o SeaweedFS fala o mesmo protocolo S3.
   # Em produção este serviço sai: aponte S3_SERVICE_URL, S3_BUCKET e as chaves para o S3 escolhido.

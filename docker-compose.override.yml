@@ -18,6 +18,9 @@ services:
   s3:
     ports: ["${S3_PORT:-8333}:8333"]
 
+  gotenberg:
+    ports: ["${GOTENBERG_PORT:-3005}:3000"]
+
   mailpit:
     image: axllent/mailpit
     ports:
