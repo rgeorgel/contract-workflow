@@ -1,0 +1,66 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: src/Contratos.Api/Dockerfile
+    ports: ["${APP_PORT:-7700}:7700"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: Host=db;Database=contratos;Username=contratos;Password=${DB_PASSWORD}
+      Database__MigrateOnStartup: ${MIGRATE_ON_STARTUP:-false}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:7700}
+      Gotenberg__Url: http://gotenberg:3000
+      Storage__ServiceUrl: ${S3_SERVICE_URL:-http://s3:8333}
+      Storage__Bucket: ${S3_BUCKET:-contratos}
+      Storage__AccessKey: ${S3_ACCESS_KEY}
+      Storage__SecretKey: ${S3_SECRET_KEY}
+      Signature__Provider: ${SIGNATURE_PROVIDER:-Fake}
+      Autentique__ApiUrl: https://api.autentique.com.br/v2/graphql
+      Autentique__ApiKey: ${AUTENTIQUE_API_KEY}
+      Autentique__WebhookSecret: ${AUTENTIQUE_WEBHOOK_SECRET}
+      Autentique__Sandbox: ${AUTENTIQUE_SANDBOX:-true}
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Security: ${SMTP_SECURITY:-StartTls}
+      Smtp__Username: ${SMTP_USERNAME}
+      Smtp__Password: ${SMTP_PASSWORD}
+      Smtp__FromAddress: ${SMTP_FROM:-nao-responda@contratos.local}
+      DataProtection__KeysPath: /data/keys
+    volumes:
+      - keys:/data/keys
+    depends_on:
+      db:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+      s3:
+        condition: service_started
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: contratos
+      POSTGRES_USER: contratos
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contratos"]
+      interval: 5s
+      retries: 10
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+
+  # S3 local. O MinIO parou de publicar imagens; o SeaweedFS fala o mesmo protocolo S3.
+  # Em produção este serviço sai: aponte S3_SERVICE_URL, S3_BUCKET e as chaves para o S3 escolhido.
+  s3:
+    image: chrislusf/seaweedfs
+    command: server -dir=/data -s3 -s3.port=8333
+    volumes:
+      - s3data:/data
+
+volumes:
+  pgdata:
+  s3data:
+  keys:

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contratos · Do modelo à assinatura</title>
+  <meta name="description" content="Monte templates com variáveis, gere contratos em minutos e envie para assinatura eletrônica por e-mail, WhatsApp ou SMS. Acompanhe cada signatário em tempo real.">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <script type="module" src="/js/pages/landing.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="site-header" data-header>
+    <div class="container site-header__inner">
+      <a class="brand" href="/" aria-label="Contratos, página inicial">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Contratos
+      </a>
+      <nav class="site-nav" aria-label="Seções">
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#recursos">Recursos</a>
+        <a href="#perguntas">Perguntas</a>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost btn--sm" href="/login.html">Entrar</a>
+        <a class="btn btn--primary btn--sm" href="/signup.html">Criar conta</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero__inner">
+        <div class="hero__copy">
+          <p class="eyebrow">Contratos com assinatura eletrônica</p>
+          <h1>Do modelo à assinatura, sem planilha nem e-mail perdido.</h1>
+          <p class="hero__lead">
+            Monte templates com variáveis, gere o contrato em minutos e envie para assinatura por
+            e-mail, WhatsApp ou SMS. Acompanhe cada signatário até o PDF assinado chegar.
+          </p>
+          <div class="hero__ctas">
+            <a class="btn btn--primary btn--lg" href="/signup.html">Criar conta da empresa</a>
+            <a class="btn btn--secondary btn--lg" href="#como-funciona">Ver como funciona</a>
+          </div>
+          <ul class="hero__points">
+            <li>Quem assina não precisa de conta</li>
+            <li>Equipe com perfis de acesso</li>
+            <li>Histórico completo de cada contrato</li>
+          </ul>
+        </div>
+
+        <figure class="hero__visual" aria-label="Exemplo de um contrato sendo acompanhado: 2 de 3 signatários já assinaram.">
+          <div class="mock card" aria-hidden="true">
+            <div class="mock__head">
+              <div>
+                <p class="mock__number">Nº 0042 · Prestação de serviços</p>
+                <p class="mock__title">Consultoria de marketing – Café Aurora</p>
+              </div>
+              <span class="badge badge--info">Parcialmente assinado</span>
+            </div>
+
+            <div class="mock__progress">
+              <div class="mock__progress-label"><span>2 de 3 assinaram</span><span class="muted">Expira em 12 dias</span></div>
+              <div class="progress"><span class="progress__bar"></span></div>
+            </div>
+
+            <ul class="mock__signers">
+              <li class="signer">
+                <span class="avatar avatar--a">MC</span>
+                <span class="signer__info"><strong>Marina Costa</strong><span>Contratante · e-mail</span></span>
+                <span class="badge badge--success">Assinou</span>
+              </li>
+              <li class="signer">
+                <span class="avatar avatar--b">JP</span>
+                <span class="signer__info"><strong>João Pereira</strong><span>Contratado · WhatsApp</span></span>
+                <span class="badge badge--success">Assinou</span>
+              </li>
+              <li class="signer">
+                <span class="avatar avatar--c">AL</span>
+                <span class="signer__info"><strong>Ana Lima</strong><span>Testemunha · SMS</span></span>
+                <span class="badge badge--warning">Visualizou</span>
+              </li>
+            </ul>
+
+            <ol class="mock__timeline">
+              <li><span class="dot dot--success"></span><span>João Pereira assinou</span><time>há 8 min</time></li>
+              <li><span class="dot dot--warning"></span><span>Ana Lima abriu o link</span><time>há 20 min</time></li>
+              <li><span class="dot dot--success"></span><span>Marina Costa assinou</span><time>ontem</time></li>
+            </ol>
+          </div>
+
+          <div class="mock-toast card" aria-hidden="true">
+            <span class="mock-toast__icon">
+              <svg viewBox="0 0 20 20" fill="none"><path d="m5 10.5 3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span><strong>João Pereira</strong> assinou pelo WhatsApp</span>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- Como funciona -->
+    <section class="section" id="como-funciona" aria-labelledby="como-funciona-titulo">
+      <div class="container">
+        <header class="section__header">
+          <p class="eyebrow">Como funciona</p>
+          <h2 id="como-funciona-titulo">Quatro passos, do template ao PDF assinado</h2>
+          <p class="section__lead">O mesmo caminho para todo contrato, para ninguém da equipe precisar improvisar.</p>
+        </header>
+
+        <ol class="steps">
+          <li class="step">
+            <span class="step__num">1</span>
+            <h3>Monte o template</h3>
+            <p>Cole o texto do seu contrato e marque o que muda, como <code>{{contratante.nome}}</code>. Cada variável tem tipo: texto, data, moeda ou CPF/CNPJ.</p>
+          </li>
+          <li class="step">
+            <span class="step__num">2</span>
+            <h3>Preencha os dados</h3>
+            <p>O formulário nasce das variáveis do template e confere cada campo antes de gerar o PDF.</p>
+          </li>
+          <li class="step">
+            <span class="step__num">3</span>
+            <h3>Adicione quem assina</h3>
+            <p>Defina papel, ordem de assinatura e canal de cada pessoa: e-mail, WhatsApp ou SMS.</p>
+          </li>
+          <li class="step">
+            <span class="step__num">4</span>
+            <h3>Acompanhe até o fim</h3>
+            <p>Veja quem abriu, quem assinou e quem recusou. Ao concluir, o PDF assinado fica guardado no contrato.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Ciclo de vida -->
+    <section class="section section--tinted" aria-labelledby="status-titulo">
+      <div class="container lifecycle">
+        <div class="lifecycle__copy">
+          <p class="eyebrow">Acompanhamento</p>
+          <h2 id="status-titulo">Você sempre sabe em que pé está cada contrato</h2>
+          <p class="section__lead">O status muda sozinho conforme as assinaturas chegam. Contratos parados há dias aparecem em destaque no painel.</p>
+        </div>
+        <ol class="lifecycle__flow" aria-label="Etapas do contrato">
+          <li><span class="badge badge--neutral">Rascunho</span><span class="lifecycle__desc">Em edição pela sua equipe</span></li>
+          <li><span class="badge badge--info">Enviado</span><span class="lifecycle__desc">Links entregues aos signatários</span></li>
+          <li><span class="badge badge--warning">Parcialmente assinado</span><span class="lifecycle__desc">Falta pouca gente</span></li>
+          <li><span class="badge badge--success">Concluído</span><span class="lifecycle__desc">Todos assinaram; PDF arquivado</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Recursos -->
+    <section class="section" id="recursos" aria-labelledby="recursos-titulo">
+      <div class="container">
+        <header class="section__header">
+          <p class="eyebrow">Recursos</p>
+          <h2 id="recursos-titulo">Feito para quem envia contrato toda semana</h2>
+        </header>
+
+        <ul class="features">
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+            <h3>Templates versionados</h3>
+            <p>Editou o modelo? Nasce uma versão nova, e os contratos antigos continuam apontando para a que usaram.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.4A8.5 8.5 0 1 1 21 12z"/></svg></span>
+            <h3>E-mail, WhatsApp ou SMS</h3>
+            <p>Cada signatário recebe o link pelo canal que funciona para ele e assina pelo celular ou computador.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+            <h3>Ordem de assinatura</h3>
+            <p>Todos ao mesmo tempo ou um depois do outro: a testemunha só recebe o link quando as partes já assinaram.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></span>
+            <h3>Painel em tempo real</h3>
+            <p>Contadores por status, progresso de cada contrato e alerta para quem está pendente há mais tempo.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+            <h3>Busca que encontra</h3>
+            <p>Procure por título, número, nome ou e-mail de quem assinou, status, template e período.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span>
+            <h3>Trilha de auditoria</h3>
+            <p>Cada evento fica registrado na linha do tempo. O PDF enviado é congelado e tem a impressão digital (SHA-256) guardada.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg></span>
+            <h3>Equipe com perfis</h3>
+            <p>Admin cuida de usuários e templates, Editor cria e envia contratos, Leitor só consulta.</p>
+          </li>
+          <li class="feature">
+            <span class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <h3>Seus dados, suas regras</h3>
+            <p>Nada é apagado por prazo. Um contrato só sai quando alguém da sua equipe pede, com confirmação.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Perguntas -->
+    <section class="section section--tinted" id="perguntas" aria-labelledby="perguntas-titulo">
+      <div class="container faq">
+        <header class="section__header section__header--left">
+          <p class="eyebrow">Perguntas frequentes</p>
+          <h2 id="perguntas-titulo">Antes de começar</h2>
+        </header>
+        <div class="faq__list">
+          <details>
+            <summary>A assinatura tem validade jurídica?</summary>
+            <p>A assinatura é feita pela Autentique, plataforma brasileira de assinatura eletrônica. A legislação brasileira reconhece assinaturas eletrônicas (MP 2.200-2/2001 e Lei 14.063/2020), e cada documento guarda o registro de quem assinou e quando.</p>
+          </details>
+          <details>
+            <summary>Quem assina precisa criar conta?</summary>
+            <p>Não. O signatário recebe um link por e-mail, WhatsApp ou SMS e assina direto pelo navegador, no celular ou no computador.</p>
+          </details>
+          <details>
+            <summary>Posso usar os modelos de contrato que já tenho?</summary>
+            <p>Sim. Cole o texto do modelo no editor, marque as partes que mudam com <code>{{ }}</code> e defina o tipo de cada campo.</p>
+          </details>
+          <details>
+            <summary>Os contratos são apagados depois de um tempo?</summary>
+            <p>Não. Contratos e PDFs ficam guardados até alguém da sua equipe com permissão pedir a exclusão.</p>
+          </details>
+          <details>
+            <summary>Quantas pessoas da empresa podem usar?</summary>
+            <p>Quem cria a conta vira Admin e pode convidar o resto da equipe por e-mail, definindo o perfil de cada pessoa.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA final -->
+    <section class="section cta-band" aria-labelledby="cta-titulo">
+      <div class="container cta-band__inner">
+        <h2 id="cta-titulo">Pronto para enviar o primeiro contrato?</h2>
+        <p>Crie a conta da sua empresa e convide a equipe.</p>
+        <a class="btn btn--lg cta-band__btn" href="/signup.html">Criar conta da empresa</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <a class="brand brand--small" href="/">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Contratos
+      </a>
+      <nav class="site-footer__nav" aria-label="Rodapé">
+        <a href="/login.html">Entrar</a>
+        <a href="/signup.html">Criar conta</a>
+        <a href="#perguntas">Perguntas</a>
+      </nav>
+      <p class="site-footer__copy">© <span data-year>2026</span> Contratos</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Ajustes de desenvolvimento. O Compose aplica este arquivo automaticamente em `docker compose up`.
+# Para rodar a app com `dotnet run` fora do Docker: `docker compose up -d db mailpit`.
+services:
+  app:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__MigrateOnStartup: "true"
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__Security: None
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  db:
+    ports: ["${DB_PORT:-5434}:5432"]
+
+  s3:
+    ports: ["${S3_PORT:-8333}:8333"]
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "${MAILPIT_UI_PORT:-8026}:8025"   # caixa de entrada: http://localhost:8026
+      - "${MAILPIT_SMTP_PORT:-1026}:1025"

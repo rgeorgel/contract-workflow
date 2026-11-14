@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      # Testcontainers usa o Docker do runner para subir um Postgres real.
+      - name: Test
+        run: dotnet test --no-build -c Release --logger "trx;LogFileName=results.trx"
+
+      - name: Docker image
+        run: docker build -f src/Contratos.Api/Dockerfile .

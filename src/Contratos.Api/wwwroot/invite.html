@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aceitar convite · Contratos</title>
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <script type="module" src="/js/pages/invite.js"></script>
+</head>
+<body>
+  <div class="auth">
+    <aside class="auth__aside">
+      <a class="brand" href="/"><svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Contratos</a>
+      <div class="auth__pitch">
+        <h2>Sua equipe está te esperando.</h2>
+        <p>Crie sua senha para acompanhar e enviar contratos com a sua empresa.</p>
+      </div>
+      <p class="auth__aside-foot"></p>
+    </aside>
+    <main class="auth__main">
+      <div class="auth__topbar">
+        <a class="brand" href="/"><svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Contratos</a>
+        <p class="auth__topbar-link">Já tem senha? <a href="/login.html">Entrar</a></p>
+      </div>
+      <div class="auth__panel">
+        <section class="auth__state auth__state--center" data-state="loading" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Abrindo o convite…</p>
+        </section>
+
+        <section data-state="form" aria-labelledby="invite-title" hidden>
+          <h1 id="invite-title" tabindex="-1">Entrar na equipe de <span data-org></span></h1>
+          <p class="auth__lead">Escolha seu nome de exibição e uma senha.</p>
+          <form class="form" id="invite-form" novalidate>
+            <div class="alert alert--error" role="alert" data-form-alert hidden></div>
+            <div class="field">
+              <label class="field__label" for="email">E-mail</label>
+              <input class="input" id="email" type="email" autocomplete="username" readonly>
+            </div>
+            <div class="field">
+              <label class="field__label" for="name">Seu nome</label>
+              <input class="input" id="name" name="name" type="text" autocomplete="name" maxlength="100" required aria-describedby="name-error">
+              <p class="field__error" id="name-error" data-error-for="name"></p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="password">Crie uma senha</label>
+              <div class="input-group">
+                <input class="input" id="password" name="password" type="password" autocomplete="new-password" minlength="6" required aria-describedby="password-hint password-error">
+                <button class="input-group__action" type="button" data-toggle-password="password" aria-pressed="false" aria-controls="password">Mostrar</button>
+              </div>
+              <p class="field__hint" id="password-hint">Pelo menos 6 caracteres.</p>
+              <p class="field__error" id="password-error" data-error-for="password"></p>
+            </div>
+            <button class="btn btn--primary btn--lg btn--block" type="submit">Aceitar convite e entrar</button>
+          </form>
+        </section>
+
+        <section class="auth__state" data-state="invalid" aria-labelledby="invalid-title" hidden>
+          <span class="state-icon state-icon--danger" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></span>
+          <h1 id="invalid-title" tabindex="-1">Convite inválido ou expirado</h1>
+          <p>O convite vale por 7 dias e só pode ser usado uma vez. Peça a um Admin da sua empresa para enviar outro.</p>
+          <div class="auth__state-actions"><a class="btn btn--secondary" href="/login.html">Ir para o login</a></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

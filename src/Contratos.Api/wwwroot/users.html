@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/users.js"></script>
+</head>
+<body class="app">
+  <app-nav active="users"></app-nav>
+  <main class="container page">
+    <div class="page-header">
+      <div>
+        <h1>Usuários</h1>
+        <p>Quem da sua empresa acessa o sistema e o que cada um pode fazer.</p>
+      </div>
+      <div class="page-header__actions">
+        <button class="btn btn--primary" type="button" data-invite>Convidar pessoa</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="table-wrap" data-list><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+    </section>
+  </main>
+</body>
+</html>

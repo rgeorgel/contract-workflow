@@ -1,0 +1,59 @@
+/* Telas de cadastro e login: painel da marca + formulário. */
+.auth { min-height: 100vh; min-height: 100dvh; display: grid; }
+@media (min-width: 960px) { .auth { grid-template-columns: minmax(380px, 0.9fr) 1.1fr; } }
+
+.auth__aside {
+  display: none; position: relative; overflow: hidden;
+  padding: 40px 48px; color: #fff;
+  background:
+    radial-gradient(600px 400px at 110% 110%, rgb(255 255 255 / .12), transparent 60%),
+    linear-gradient(160deg, #2747d6 0%, #1a2f99 100%);
+}
+@media (min-width: 960px) { .auth__aside { display: flex; flex-direction: column; } }
+.auth__aside .brand { color: #fff; }
+.auth__aside .brand rect { fill: #fff; }
+.auth__aside .brand path:first-of-type { fill: #2747d6; }
+.auth__aside .brand path:last-of-type { stroke: #fff; }
+.auth__pitch { margin-top: auto; margin-bottom: auto; max-width: 420px; }
+.auth__pitch h2 { font-size: 2rem; }
+.auth__pitch > p { margin-top: 14px; color: rgb(255 255 255 / .8); font-size: 1.05rem; }
+.auth__benefits { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 16px; }
+.auth__benefits li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; color: rgb(255 255 255 / .92); }
+.auth__benefits li::before {
+  content: ""; width: 28px; height: 28px; border-radius: 8px;
+  background: rgb(255 255 255 / .14) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4.5 8.2 2.2 2.2 4.8-4.8' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat;
+}
+.auth__benefits strong { display: block; color: #fff; }
+.auth__aside-foot { font-size: .85rem; color: rgb(255 255 255 / .65); }
+
+.auth__main { display: flex; flex-direction: column; padding: 20px var(--gutter) 32px; }
+.auth__topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; }
+.auth__topbar-link { font-size: .925rem; color: var(--color-muted); }
+.auth__topbar-link a { font-weight: 600; }
+@media (min-width: 960px) {
+  .auth__main { padding: 32px 48px; }
+  .auth__topbar .brand { visibility: hidden; }
+}
+
+.auth__panel { width: 100%; max-width: 440px; margin: auto; padding: 32px 0; }
+.auth__panel h1 { font-size: clamp(1.6rem, 4vw, 2rem); }
+.auth__panel .auth__lead { margin-top: 8px; margin-bottom: 28px; color: var(--color-muted); }
+.auth__panel .form { margin-top: 4px; }
+.auth__fine { margin-top: 20px; font-size: .85rem; color: var(--color-muted); text-align: center; }
+
+.auth__state { display: grid; gap: 16px; justify-items: start; }
+.auth__state h1 { margin-top: 8px; }
+.auth__state p { color: var(--color-muted); }
+.auth__state .auth__email { color: var(--color-text); font-weight: 600; overflow-wrap: anywhere; }
+.auth__state-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.auth__state--center { justify-items: center; text-align: center; }
+
+.password-meter { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--color-muted); }
+.password-meter__check {
+  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--color-border-strong); flex: none; transition: all .15s;
+}
+.password-meter.is-ok { color: var(--color-success); }
+.password-meter.is-ok .password-meter__check {
+  border-color: var(--color-success);
+  background: var(--color-success) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4.5 8.2 2.2 2.2 4.8-4.8' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+}

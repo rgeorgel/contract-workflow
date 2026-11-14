@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configurações · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/settings.js"></script>
+</head>
+<body class="app">
+  <app-nav active="settings"></app-nav>
+  <main class="container page">
+    <div class="page-header">
+      <div>
+        <h1>Configurações</h1>
+        <p>Dados da empresa e padrões usados ao enviar contratos.</p>
+      </div>
+    </div>
+
+    <section class="panel" aria-labelledby="usage-title">
+      <div class="panel__header"><h2 id="usage-title">Uso do mês</h2></div>
+      <div class="panel__body">
+        <div class="stat">
+          <span class="stat__value" data-usage>—</span>
+          <span class="stat__label" data-usage-label>contratos enviados</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="org-title">
+      <div class="panel__header"><h2 id="org-title">Empresa e padrões de envio</h2></div>
+      <div class="panel__body">
+        <form class="form" id="settings-form" novalidate>
+          <div class="alert alert--info" data-readonly-note hidden>Só um Admin pode alterar estas configurações.</div>
+          <div class="alert alert--error" role="alert" data-form-alert hidden></div>
+          <div class="form-grid form-grid--2">
+            <div class="field span-2">
+              <label class="field__label" for="name">Nome da empresa</label>
+              <input class="input" id="name" name="name" type="text" maxlength="120" required aria-describedby="name-error">
+              <p class="field__error" id="name-error" data-error-for="name"></p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="reminder">Lembrete aos signatários</label>
+              <select class="select select--block" id="reminder" name="reminder" aria-describedby="reminder-hint">
+                <option value="">Sem lembrete</option>
+                <option value="DAILY">Diário</option>
+                <option value="WEEKLY">Semanal</option>
+              </select>
+              <p class="field__hint" id="reminder-hint">Enviado a quem ainda não assinou.</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="language">Idioma dos e-mails de assinatura</label>
+              <select class="select select--block" id="language" name="language">
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en-US">Inglês</option>
+              </select>
+            </div>
+            <div class="field span-2">
+              <label class="field__label" for="defaultMessage">Mensagem padrão</label>
+              <textarea class="input" id="defaultMessage" name="defaultMessage" maxlength="500" aria-describedby="message-hint defaultMessage-error"></textarea>
+              <p class="field__hint" id="message-hint">Aparece para quem vai assinar, junto com o nome da sua empresa. Dá para mudar em cada contrato.</p>
+              <p class="field__error" id="defaultMessage-error" data-error-for="defaultMessage"></p>
+            </div>
+          </div>
+          <div class="form-actions" data-actions>
+            <button class="btn btn--primary" type="submit">Salvar alterações</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
