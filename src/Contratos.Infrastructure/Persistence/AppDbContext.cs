@@ -1,5 +1,6 @@
 using Contratos.Application.Common;
 using Contratos.Domain.Organizations;
+using Contratos.Domain.Templates;
 using Contratos.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -16,10 +17,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public Guid? CurrentOrganizationId => tenant?.OrganizationId;
 
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Template> Templates => Set<Template>();
+    public DbSet<TemplateVersion> TemplateVersions => Set<TemplateVersion>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // Isolamento por organização. Versões de template são lidas sempre a partir do template.
+        builder.Entity<Template>().HasQueryFilter(t => t.OrganizationId == CurrentOrganizationId);
     }
 }

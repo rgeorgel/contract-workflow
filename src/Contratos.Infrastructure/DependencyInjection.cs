@@ -1,11 +1,15 @@
 using Contratos.Application.Accounts;
+using Contratos.Application.Common;
 using Contratos.Application.Email;
+using Contratos.Application.Templates;
 using Contratos.Application.Organizations;
 using Contratos.Application.Users;
 using Contratos.Infrastructure.Accounts;
 using Contratos.Infrastructure.Email;
 using Contratos.Infrastructure.Identity;
 using Contratos.Infrastructure.Organizations;
+using Contratos.Infrastructure.Security;
+using Contratos.Infrastructure.Templates;
 using Contratos.Infrastructure.Users;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -55,6 +59,9 @@ public static class DependencyInjection
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
+        services.AddScoped<ITemplateService, TemplateService>();
+        services.AddSingleton<IHtmlSanitizer, TemplateHtmlSanitizer>();
+        services.AddSingleton<DocumentRenderer>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");

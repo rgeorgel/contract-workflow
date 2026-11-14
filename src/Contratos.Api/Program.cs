@@ -109,6 +109,7 @@ var api = app.MapGroup("/api/v1").AddEndpointFilter<AntiforgeryFilter>();
 api.MapAuthEndpoints();
 api.MapUsersEndpoints();
 api.MapOrganizationEndpoints();
+api.MapTemplatesEndpoints();
 
 app.Run();
 

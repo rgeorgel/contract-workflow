@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Templates · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/templates.js"></script>
+</head>
+<body class="app">
+  <app-nav active="templates"></app-nav>
+  <main class="container page">
+    <div class="page-header">
+      <div>
+        <h1>Templates</h1>
+        <p>Modelos de contrato com variáveis. Cada publicação vira uma versão nova.</p>
+      </div>
+      <div class="page-header__actions">
+        <button class="btn btn--primary" type="button" data-new hidden>Novo template</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="segmented" role="tablist" aria-label="Filtrar templates">
+        <button type="button" role="tab" aria-selected="true" data-filter="active">Ativos</button>
+        <button type="button" role="tab" aria-selected="false" data-filter="archived">Arquivados</button>
+      </div>
+      <label class="search">
+        <span class="visually-hidden">Buscar template</span>
+        <input class="input" type="search" placeholder="Buscar por nome" data-search autocomplete="off">
+      </label>
+    </div>
+
+    <section class="panel">
+      <div class="table-wrap" data-list><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+    </section>
+  </main>
+</body>
+</html>

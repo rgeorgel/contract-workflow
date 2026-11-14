@@ -11,6 +11,11 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Isolamento entre organizações, antiforgery em toda escrita, rate limiting nas rotas de autenticação, CSP restritiva
 - CI no GitHub Actions (build, testes com Postgres real e imagem Docker)
 
+**Fase 2 (templates)**
+- Criar, editar, duplicar, arquivar; corpo em HTML com variáveis `{{chave}}` tipadas (texto, número, data, moeda, CPF/CNPJ)
+- Rascunho + versões publicadas imutáveis; concorrência otimista com ETag/If-Match
+- Sanitização no servidor (sem scripts nem URLs externas, para o Gotenberg não buscar nada na rede) e pré-visualização com dados de exemplo
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):

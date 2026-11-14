@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Editor de template · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/editor.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/template-editor.js"></script>
+</head>
+<body class="app">
+  <app-nav active="templates"></app-nav>
+  <main class="container container--wide page" data-main hidden>
+    <a class="back-link" href="/templates.html">← Templates</a>
+    <div class="page-header">
+      <div>
+        <h1 data-title>Template</h1>
+        <p class="editor-status" data-status></p>
+      </div>
+      <div class="page-header__actions" data-actions>
+        <button class="btn btn--ghost" type="button" data-action="duplicate">Duplicar</button>
+        <button class="btn btn--ghost" type="button" data-action="archive">Arquivar</button>
+        <button class="btn btn--ghost" type="button" data-action="discard" hidden>Descartar rascunho</button>
+        <button class="btn btn--secondary" type="button" data-action="save">Salvar rascunho</button>
+        <button class="btn btn--primary" type="button" data-action="publish">Publicar</button>
+      </div>
+    </div>
+
+    <div class="alert alert--error" role="alert" data-alert hidden></div>
+    <div class="alert alert--info" data-readonly-note hidden>Você está vendo a versão publicada. Só um Admin pode editar templates.</div>
+
+    <div class="editor">
+      <form class="editor__main" id="editor-form" novalidate>
+        <section class="panel">
+          <div class="panel__header"><h2>Informações</h2></div>
+          <div class="panel__body form-grid">
+            <div class="field">
+              <label class="field__label" for="name">Nome</label>
+              <input class="input" id="name" name="name" maxlength="120" required aria-describedby="name-error">
+              <p class="field__error" id="name-error" data-error-for="name"></p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="description">Descrição <span class="muted">(opcional)</span></label>
+              <input class="input" id="description" name="description" maxlength="500">
+              <p class="field__error" data-error-for="description"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Texto do contrato</h2>
+            <div class="editor-tools" data-edit-only>
+              <label class="visually-hidden" for="insert-variable">Inserir variável</label>
+              <select class="select" id="insert-variable" data-insert>
+                <option value="">Inserir variável…</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" type="button" data-detect>Cadastrar variáveis do texto</button>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div class="field">
+              <label class="visually-hidden" for="bodyHtml">Texto do contrato em HTML</label>
+              <textarea class="input code-input" id="bodyHtml" name="bodyHtml" spellcheck="false" aria-describedby="body-hint bodyHtml-error"></textarea>
+              <p class="field__hint" id="body-hint">HTML simples: &lt;h1&gt;, &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;, &lt;table&gt;. Marque o que muda com <code>{{nome_da_variavel}}</code>. Scripts e imagens de fora são removidos ao salvar.</p>
+              <p class="field__error" id="bodyHtml-error" data-error-for="bodyHtml"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <div>
+              <h2>Variáveis</h2>
+              <p class="muted panel__sub">Viram o formulário que quem cria o contrato preenche.</p>
+            </div>
+            <button class="btn btn--secondary btn--sm" type="button" data-add-variable data-edit-only>Adicionar variável</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table rows-table">
+              <thead><tr><th>Chave</th><th>Rótulo</th><th>Tipo</th><th>Obrigatória</th><th><span class="visually-hidden">Remover</span></th></tr></thead>
+              <tbody data-variables></tbody>
+            </table>
+          </div>
+          <p class="rows-empty muted" data-variables-empty>Nenhuma variável. Use “Cadastrar variáveis do texto” depois de escrever o contrato.</p>
+          <p class="field__error rows-error" data-error-for="variables"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <div>
+              <h2>Signatários sugeridos</h2>
+              <p class="muted panel__sub">Papéis que aparecem prontos ao criar um contrato com este template.</p>
+            </div>
+            <button class="btn btn--secondary btn--sm" type="button" data-add-role data-edit-only>Adicionar papel</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table rows-table">
+              <thead><tr><th>Papel</th><th>Ação</th><th>Ordem</th><th><span class="visually-hidden">Remover</span></th></tr></thead>
+              <tbody data-roles></tbody>
+            </table>
+          </div>
+          <p class="rows-empty muted" data-roles-empty>Nenhum papel sugerido.</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header"><h2>Histórico de versões</h2></div>
+          <ol class="versions" data-versions></ol>
+        </section>
+      </form>
+
+      <aside class="editor__preview" aria-label="Pré-visualização">
+        <section class="panel preview-panel">
+          <div class="panel__header">
+            <h2>Pré-visualização</h2>
+            <div class="segmented" role="tablist" aria-label="Versão exibida">
+              <button type="button" role="tab" aria-selected="true" data-preview="draft">Rascunho</button>
+              <button type="button" role="tab" aria-selected="false" data-preview="current">Publicada</button>
+            </div>
+          </div>
+          <p class="preview-note muted">Com dados de exemplo. Salve para atualizar.</p>
+          <iframe class="preview-frame" title="Pré-visualização do contrato" sandbox data-frame></iframe>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

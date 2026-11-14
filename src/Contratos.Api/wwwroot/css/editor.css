@@ -1,0 +1,38 @@
+.editor { display: grid; gap: 16px; align-items: start; }
+.editor__main { display: grid; gap: 16px; min-width: 0; }
+.editor__main .panel + .panel { margin-top: 0; }
+@media (min-width: 1100px) {
+  .editor { grid-template-columns: minmax(0, 1fr) minmax(380px, 0.85fr); }
+  .editor__preview { position: sticky; top: 76px; }
+}
+.panel__sub { font-size: .85rem; margin-top: 2px; }
+.editor-status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px !important; }
+.editor-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.editor-tools .select { min-height: 36px; font-size: .9rem; }
+
+textarea.code-input { font-family: var(--font-mono); font-size: .875rem; min-height: 420px; line-height: 1.6; tab-size: 2; }
+
+.rows-table td { padding: 8px 10px; }
+.rows-table th { padding: 10px; }
+.rows-table .input, .rows-table .select { min-height: 38px; padding-top: 6px; padding-bottom: 6px; font-size: .9rem; }
+.rows-table .input--key { font-family: var(--font-mono); font-size: .85rem; min-width: 150px; }
+.rows-table .input--order { width: 72px; }
+.rows-table td.cell-check { text-align: center; }
+.rows-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-primary); }
+.rows-empty { padding: 16px 20px; font-size: .9rem; }
+.rows-error { padding: 0 20px 12px; }
+.icon-btn { border: 0; background: none; width: 34px; height: 34px; border-radius: var(--radius-sm); color: var(--color-muted); cursor: pointer; font-size: 1.2rem; line-height: 1; }
+.icon-btn:hover { background: var(--color-danger-soft); color: var(--color-danger); }
+
+.versions { list-style: none; margin: 0; padding: 8px 20px 16px; display: grid; gap: 0; }
+.versions li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--color-border); font-size: .9rem; flex-wrap: wrap; }
+.versions li:last-child { border-bottom: 0; }
+.versions strong { min-width: 32px; }
+
+.preview-panel { overflow: hidden; }
+.preview-note { padding: 10px 20px 0; font-size: .85rem; }
+.preview-frame { display: block; width: 100%; height: 70vh; min-height: 480px; border: 0; margin-top: 8px; background: #fff; border-top: 1px solid var(--color-border); }
+
+.dirty-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--color-warning); font-weight: 600; }
+.dirty-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.error-list { margin: 6px 0 0; padding-left: 20px; }

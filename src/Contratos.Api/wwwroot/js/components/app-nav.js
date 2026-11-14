@@ -3,6 +3,7 @@ import { h, icon, ICONS } from '../ui/dom.js';
 
 const LINKS = [
   { key: 'dashboard', href: '/dashboard.html', label: 'Painel' },
+  { key: 'templates', href: '/templates.html', label: 'Templates' },
   { key: 'users', href: '/users.html', label: 'Usuários', roles: ['Admin'] },
   { key: 'settings', href: '/settings.html', label: 'Configurações' },
 ];

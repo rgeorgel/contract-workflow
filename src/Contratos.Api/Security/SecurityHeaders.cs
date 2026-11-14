@@ -12,12 +12,14 @@ internal static class SecurityHeaders
             ctx.Response.OnStarting(() =>
             {
                 var h = ctx.Response.Headers;
-                // A UI do Scalar (só em dev) carrega scripts de CDN; o resto do site segue a CSP restritiva.
-                if (!ctx.Request.Path.StartsWithSegments("/scalar"))
+                // A UI do Scalar (só em dev) carrega scripts de CDN; páginas geradas (pré-visualização)
+                // trazem a própria CSP; o resto do site segue a CSP restritiva.
+                if (!ctx.Request.Path.StartsWithSegments("/scalar") && !h.ContainsKey("Content-Security-Policy"))
                     h.ContentSecurityPolicy = Csp;
                 h.XContentTypeOptions = "nosniff";
                 h["Referrer-Policy"] = "strict-origin-when-cross-origin";
-                h.XFrameOptions = "DENY";
+                if (!h.ContainsKey("X-Frame-Options"))
+                    h.XFrameOptions = "DENY";
                 h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
                 return Task.CompletedTask;
             });
