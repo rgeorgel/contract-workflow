@@ -55,10 +55,33 @@ async function load() {
   }
 }
 
-function openNew() {
+let starters = null;
+
+/** Modelos prontos; se a lista não vier, o modal oferece só o "em branco". */
+async function loadStarters() {
+  if (starters) return starters;
+  try { starters = await api('/templates/starters'); } catch { return []; }
+  return starters;
+}
+
+function startCard(value, title, description, checked) {
+  return h('label', { class: 'radio-card' },
+    h('input', { type: 'radio', name: 'starter', value, checked }),
+    h('div', {}, h('strong', {}, title), h('span', {}, description)));
+}
+
+async function openNew() {
+  const options = await loadStarters();
   const alertEl = h('div', { class: 'alert alert--error', role: 'alert', hidden: true });
   const form = h('form', { class: 'form', id: 'new-template', novalidate: true },
     alertEl,
+    h('fieldset', { class: 'fieldset field' },
+      h('legend', { class: 'field__label' }, 'Começar com'),
+      h('div', { class: 'radio-cards', 'data-starters': true },
+        startCard('', 'Em branco', 'Escreva ou cole o seu próprio texto.', true),
+        options.map((s) => startCard(s.id, s.name, `${s.description} ${s.variableCount} variáveis já cadastradas.`, false))),
+      options.length ? h('p', { class: 'field__hint' }, 'Os modelos são um ponto de partida: revise o texto com o seu jurídico antes de publicar.') : null,
+      h('p', { class: 'field__error', 'data-error-for': 'starterId' })),
     h('div', { class: 'field' },
       h('label', { class: 'field__label', for: 't-name' }, 'Nome'),
       h('input', { class: 'input', id: 't-name', name: 'name', maxlength: 120, required: true, placeholder: 'Ex.: Prestação de serviços' }),
@@ -70,10 +93,21 @@ function openNew() {
   const submit = h('button', { type: 'submit', class: 'btn btn--primary', form: 'new-template' }, 'Criar e editar');
   const { close } = openModal({
     title: 'Novo template',
+    description: options.length ? 'Comece de um modelo pronto ou do zero.' : null,
     body: form,
     actions: [h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => close() }, 'Cancelar'), submit],
   });
   form.elements.name.focus();
+
+  // Escolher um modelo sugere o nome dele, sem apagar o que a pessoa já digitou.
+  let suggestedName = '';
+  form.querySelector('[data-starters]').addEventListener('change', (e) => {
+    const nameEl = form.elements.name;
+    const starter = options.find((s) => s.id === e.target.value);
+    const next = starter?.name ?? '';
+    if (!nameEl.value.trim() || nameEl.value.trim() === suggestedName) nameEl.value = next;
+    suggestedName = next;
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -82,7 +116,14 @@ function openNew() {
     if (name.length < 2) { setFieldError(form, 'name', 'Informe o nome do template.'); form.elements.name.focus(); return; }
     setBusy(submit, true);
     try {
-      const t = await api('/templates', { method: 'POST', body: { name, description: form.elements.description.value.trim() || null } });
+      const t = await api('/templates', {
+        method: 'POST',
+        body: {
+          name,
+          description: form.elements.description.value.trim() || null,
+          starterId: form.elements.starter.value || null,
+        },
+      });
       location.assign(`/template-editor.html?id=${t.id}`);
     } catch (err) {
       setBusy(submit, false);

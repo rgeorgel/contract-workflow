@@ -39,10 +39,11 @@ async function readProblem(res) {
 
 /**
  * @param {string} path rota sob /api/v1, ex.: '/auth/me'
- * @param {{method?: string, body?: unknown, signal?: AbortSignal, redirectOn401?: boolean}} [options]
+ * @param {{method?: string, body?: unknown, signal?: AbortSignal, redirectOn401?: boolean, as?: 'json'|'text'}} [options]
+ *   `as: 'text'` devolve o corpo como texto (ex.: HTML da pré-visualização).
  */
-export async function api(path, { method = 'GET', body, signal, redirectOn401 = true } = {}, retried = false) {
-  const headers = { Accept: 'application/json' };
+export async function api(path, { method = 'GET', body, signal, redirectOn401 = true, as = 'json' } = {}, retried = false) {
+  const headers = { Accept: as === 'text' ? 'text/html, application/json' : 'application/json' };
   const unsafe = !['GET', 'HEAD'].includes(method);
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (unsafe) headers['X-CSRF-TOKEN'] = await getCsrf();
@@ -63,6 +64,7 @@ export async function api(path, { method = 'GET', body, signal, redirectOn401 = 
 
   if (res.ok) {
     if (res.status === 204) return null;
+    if (as === 'text') return res.text();
     const type = res.headers.get('content-type') || '';
     return type.includes('json') ? res.json() : null;
   }
@@ -72,7 +74,7 @@ export async function api(path, { method = 'GET', body, signal, redirectOn401 = 
   // Token antiforgery velho (ex.: a sessão mudou em outra aba): pega outro e tenta uma vez.
   if (problem?.code === 'csrf_invalid' && !retried) {
     resetCsrf();
-    return api(path, { method, body, signal, redirectOn401 }, true);
+    return api(path, { method, body, signal, redirectOn401, as }, true);
   }
 
   if (res.status === 401 && redirectOn401) {

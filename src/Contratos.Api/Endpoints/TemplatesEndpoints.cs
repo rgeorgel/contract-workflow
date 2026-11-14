@@ -16,10 +16,20 @@ internal static class TemplatesEndpoints
                 TypedResults.Ok(await templates.ListAsync(archived ?? false, ct)))
             .WithSummary("Lista os templates (ativos ou arquivados)");
 
+        g.MapGet("/starters", () => TypedResults.Ok(TemplateStarters.All
+                .Select(s => new TemplateStarterItem(s.Id, s.Name, s.Description, s.Variables.Count)).ToList()))
+            .RequireAuthorization(Policies.IsAdmin)
+            .WithSummary("Modelos prontos para começar um template");
+
+        g.MapPost("/preview", (PreviewTemplateRequest req, ITemplateService templates, HttpContext http) =>
+                templates.PreviewUnsaved(req).ToHttp(html => Html(http, html)))
+            .RequireAuthorization(Policies.IsAdmin)
+            .WithSummary("HTML do conteúdo ainda não salvo do editor, com dados de exemplo");
+
         g.MapPost("/", async (CreateTemplateRequest req, ITemplateService templates, HttpContext http, CancellationToken ct) =>
                 (await templates.CreateAsync(req, ct)).ToHttp(t => WithETag(http, t, TypedResults.Created($"/api/v1/templates/{t.Id}", t))))
             .RequireAuthorization(Policies.IsAdmin)
-            .WithSummary("Cria um template com rascunho vazio");
+            .WithSummary("Cria um template em branco ou a partir de um modelo pronto (starterId)");
 
         g.MapGet("/{id:guid}", async (Guid id, ITemplateService templates, HttpContext http, CancellationToken ct) =>
                 (await templates.GetAsync(id, ct)).ToHttp(t => WithETag(http, t, TypedResults.Ok(t))))

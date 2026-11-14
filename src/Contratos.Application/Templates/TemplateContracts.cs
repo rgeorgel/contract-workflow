@@ -17,7 +17,11 @@ public sealed record TemplateDetail(
     Guid Id, string Name, string? Description, DateTimeOffset? ArchivedAt, DateTimeOffset UpdatedAt,
     TemplateVersionDto? Current, TemplateVersionDto? Draft, IReadOnlyList<TemplateVersionSummary> Versions, uint RowVersion);
 
-public sealed record CreateTemplateRequest(string? Name, string? Description, string? BodyHtml);
+/// <param name="StarterId">Modelo pronto de <see cref="TemplateStarters"/>; vazio começa em branco.</param>
+public sealed record CreateTemplateRequest(string? Name, string? Description, string? BodyHtml, string? StarterId = null);
+
+/// <summary>Conteúdo ainda não salvo do editor, para a pré-visualização ao vivo.</summary>
+public sealed record PreviewTemplateRequest(string? Name, string? BodyHtml, List<TemplateVariable>? Variables);
 
 public sealed record SaveTemplateRequest(
     string? Name, string? Description, string? BodyHtml,
@@ -37,4 +41,6 @@ public interface ITemplateService
     Task<Result<TemplateDetail>> DuplicateAsync(Guid id, CancellationToken ct);
     Task<Result<TemplateDetail>> SetArchivedAsync(Guid id, bool archived, CancellationToken ct);
     Task<Result<string>> PreviewAsync(Guid id, PreviewSource source, CancellationToken ct);
+    /// <summary>Renderiza o que está no editor, sem salvar.</summary>
+    Result<string> PreviewUnsaved(PreviewTemplateRequest request);
 }

@@ -97,12 +97,13 @@ textarea.input { min-height: 110px; resize: vertical; line-height: 1.5; }
 .loading { display: grid; place-items: center; padding: 56px 0; }
 
 /* Diálogo */
-dialog.modal { border: 0; padding: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(520px, calc(100vw - 32px)); color: var(--color-text); }
+dialog.modal { border: 0; padding: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); color: var(--color-text); }
+dialog.modal[open] { display: flex; flex-direction: column; }
 dialog.modal::backdrop { background: rgb(21 26 45 / .45); }
 .modal__header { padding: 20px 24px 0; }
 .modal__header h2 { font-size: 1.2rem; }
 .modal__header p { color: var(--color-muted); margin-top: 6px; font-size: .925rem; }
-.modal__body { padding: 20px 24px; }
+.modal__body { padding: 20px 24px; overflow-y: auto; }
 .modal__footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 
 /* Toast */

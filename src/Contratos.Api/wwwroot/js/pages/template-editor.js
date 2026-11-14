@@ -104,6 +104,7 @@ function fillForm() {
   rolesEl.replaceChildren(...content.defaultSignerRoles.map(roleRow));
   afterRowsChange();
   setDirty(false);
+  cancelLivePreview();
 }
 
 function payload() {
@@ -122,7 +123,12 @@ function setDirty(value) {
   dirty = value;
   renderStatus();
 }
-const markDirty = () => { if (template && !dirty) setDirty(true); };
+/** Toda edição: marca como não salvo e atualiza a pré-visualização. */
+const markDirty = () => {
+  if (!template) return;
+  if (!dirty) setDirty(true);
+  scheduleLivePreview();
+};
 
 function renderStatus() {
   document.querySelector('[data-title]').textContent = template.name;
@@ -166,8 +172,65 @@ function apply(detail, newEtag) {
 }
 
 function reloadPreview() {
+  frameReady = false;
   frame.src = `/api/v1/templates/${id}/preview?source=${previewSource}&t=${Date.now()}`;
 }
+
+// ---------- Pré-visualização ao vivo ----------
+// O iframe carrega a página salva (com a CSP própria da pré-visualização). A cada edição, o servidor
+// renderiza o conteúdo do formulário e só o <body> do iframe é trocado: a rolagem fica onde estava.
+
+const LIVE_DELAY_MS = 500;
+let frameReady = false;
+let liveTimer = null;
+let liveAbort = null;
+let livePending = false;
+
+function cancelLivePreview() {
+  clearTimeout(liveTimer);
+  liveAbort?.abort();
+  livePending = false;
+}
+
+function scheduleLivePreview() {
+  if (!canEdit || previewSource !== 'draft') return;
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(renderLivePreview, LIVE_DELAY_MS);
+}
+
+async function renderLivePreview() {
+  if (!frameReady) { livePending = true; return; }
+  liveAbort?.abort();
+  const controller = new AbortController();
+  liveAbort = controller;
+  const { name, bodyHtml, variables } = payload();
+  try {
+    const html = await api('/templates/preview', { method: 'POST', body: { name, bodyHtml, variables }, signal: controller.signal, as: 'text' });
+    if (controller.signal.aborted || previewSource !== 'draft') return;
+    const doc = frame.contentDocument;
+    if (!doc?.body) return;
+    // O parser do próprio iframe: o HTML fica sob a CSP da pré-visualização, não a da página.
+    const rendered = new frame.contentWindow.DOMParser().parseFromString(html, 'text/html');
+    doc.body.replaceChildren(...[...rendered.body.childNodes].map((n) => doc.importNode(n, true)));
+    previewNote.textContent = NOTE_LIVE;
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    // Falhou (ex.: limite de requisições): fica a última versão boa e o aviso.
+    previewNote.textContent = 'Não foi possível atualizar a pré-visualização agora. Ela volta na próxima edição.';
+  }
+}
+
+const previewNote = document.querySelector('[data-preview-note]');
+const NOTE_LIVE = 'Com dados de exemplo. Atualiza enquanto você edita.';
+
+frame.addEventListener('load', () => {
+  frameReady = true;
+  // Voltando para "Rascunho" com alterações não salvas, ou edição feita enquanto carregava.
+  if (livePending || (dirty && previewSource === 'draft' && canEdit)) {
+    livePending = false;
+    renderLivePreview();
+  }
+});
 
 // ---------- Erros ----------
 
@@ -335,6 +398,8 @@ for (const tab of document.querySelectorAll('[data-preview]')) {
   tab.addEventListener('click', () => {
     previewSource = tab.dataset.preview;
     for (const t of document.querySelectorAll('[data-preview]')) t.setAttribute('aria-selected', String(t === tab));
+    cancelLivePreview();
+    previewNote.textContent = previewSource === 'draft' && canEdit ? NOTE_LIVE : 'Versão publicada, com dados de exemplo.';
     reloadPreview();
   });
 }
@@ -369,6 +434,7 @@ if (!canEdit) {
   document.querySelector('[data-readonly-note]').hidden = false;
   document.querySelector('[data-preview="draft"]').hidden = true;
   document.querySelector('[data-preview="current"]').setAttribute('aria-selected', 'true');
+  previewNote.textContent = 'Versão publicada, com dados de exemplo.';
 }
 
 apply(template);

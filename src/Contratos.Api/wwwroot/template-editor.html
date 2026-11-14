@@ -123,8 +123,9 @@
               <button type="button" role="tab" aria-selected="false" data-preview="current">Publicada</button>
             </div>
           </div>
-          <p class="preview-note muted">Com dados de exemplo. Salve para atualizar.</p>
-          <iframe class="preview-frame" title="Pré-visualização do contrato" sandbox data-frame></iframe>
+          <p class="preview-note muted" data-preview-note aria-live="polite">Com dados de exemplo. Atualiza enquanto você edita.</p>
+          <!-- allow-same-origin (sem allow-scripts) deixa a página trocar o conteúdo do iframe; nada roda lá dentro. -->
+          <iframe class="preview-frame" title="Pré-visualização do contrato" sandbox="allow-same-origin" data-frame></iframe>
         </section>
       </aside>
     </div>

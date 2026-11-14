@@ -54,13 +54,23 @@ internal sealed class TemplateService(
     public async Task<Result<TemplateDetail>> CreateAsync(CreateTemplateRequest req, CancellationToken ct)
     {
         var errors = TemplateValidator.ValidateSave(new SaveTemplateRequest(req.Name, req.Description, req.BodyHtml, [], []));
+        TemplateStarter? starter = null;
+        if (!string.IsNullOrWhiteSpace(req.StarterId))
+        {
+            starter = TemplateStarters.Find(req.StarterId);
+            if (starter is null)
+                errors.Add("starterId", "Modelo pronto não encontrado.");
+        }
         if (!errors.IsEmpty)
             return Error.Validation(errors);
 
         var userId = tenant.RequireUserId();
-        var template = new Template(tenant.RequireOrganizationId(), req.Name!, req.Description, userId);
+        var template = new Template(tenant.RequireOrganizationId(), req.Name!.Trim(), req.Description?.Trim() is { Length: > 0 } d ? d : null, userId);
         var draft = new TemplateVersion(template.Id, 1, userId);
-        draft.Update(Clean(req.BodyHtml), [], []);
+        if (starter is not null)
+            draft.Update(Clean(starter.BodyHtml), starter.Variables, starter.DefaultSignerRoles);
+        else
+            draft.Update(Clean(req.BodyHtml), [], []);
 
         // A versão precisa existir antes de o template apontar para ela (FK circular).
         db.TemplateVersions.Add(draft);
@@ -175,10 +185,35 @@ internal sealed class TemplateService(
         var current = template.CurrentVersionId is { } cid ? await db.TemplateVersions.SingleAsync(v => v.Id == cid, ct) : null;
         var version = source == PreviewSource.Draft ? draft ?? current : current ?? draft;
         if (version is null || string.IsNullOrWhiteSpace(version.BodyHtml))
-            return renderer.Render(template.Name, "<p style=\"color:#7b849a\">O texto do contrato aparece aqui.</p>", [], new Dictionary<string, string>());
+            return renderer.Render(template.Name, EmptyPreview, [], new Dictionary<string, string>());
 
         return renderer.RenderSample(template.Name, version.BodyHtml, version.Variables);
     }
+
+    public Result<string> PreviewUnsaved(PreviewTemplateRequest req)
+    {
+        var body = req.BodyHtml ?? "";
+        if (body.Length > TemplateValidator.BodyMaxLength)
+            return Error.Validation("bodyHtml", "O texto do template está grande demais.");
+
+        var name = string.IsNullOrWhiteSpace(req.Name) ? "Pré-visualização" : req.Name.Trim();
+        if (string.IsNullOrWhiteSpace(body))
+            return renderer.Render(name, EmptyPreview, [], new Dictionary<string, string>());
+
+        // O editor manda o que está na tela, inclusive linhas incompletas: fica só o que dá para usar.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var variables = (req.Variables ?? [])
+            .Take(TemplateValidator.MaxVariables)
+            .Select(v => v with { Key = v.Key?.Trim() ?? "", Label = v.Label?.Trim() ?? "" })
+            .Where(v => Placeholders.KeyPattern().IsMatch(v.Key) && Enum.IsDefined(v.Type) && seen.Add(v.Key))
+            .Select(v => v.Label.Length == 0 ? v with { Label = v.Key } : v)
+            .ToList();
+
+        // O renderer sanitiza o HTML final, como no salvar.
+        return renderer.RenderSample(name, body, variables);
+    }
+
+    private const string EmptyPreview = "<p style=\"color:#7b849a\">O texto do contrato aparece aqui.</p>";
 
     private async Task<Result<TemplateDetail>> SaveAsync(Template template, CancellationToken ct)
     {
