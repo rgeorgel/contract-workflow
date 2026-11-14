@@ -43,11 +43,11 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):
 
 ```bash
-cp .env.example .env
+cp .env.example.local .env
 docker compose up -d --build
 ```
 
-O `docker-compose.override.yml` (Postgres local, Mailpit, portas de debug) entra automaticamente em desenvolvimento. No servidor, onde o banco é externo, use só o `docker-compose.yml`: veja [docs/operacao.md](docs/operacao.md#qual-arquivo-do-compose-é-lido) e o modelo [.env.server.example](.env.server.example).
+O `docker-compose.override.yml` (Postgres local, Mailpit, portas de debug) entra automaticamente em desenvolvimento. No servidor, onde o banco é externo, use só o `docker-compose.yml`: veja [docs/operacao.md](docs/operacao.md#qual-arquivo-do-compose-é-lido) e o modelo [.env.example](.env.example) (o de desenvolvimento é o [.env.example.local](.env.example.local)).
 
 Ou só os serviços de apoio no Docker e a app com `dotnet run` (também em http://localhost:7700; pare o container `app` antes):
 

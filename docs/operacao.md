@@ -9,7 +9,7 @@
 
 O `docker compose` procura o `docker-compose.override.yml` sozinho e junta com o base. Para usar **só o base**, escolha um jeito:
 
-1. **`COMPOSE_FILE` no `.env`** (recomendado no servidor): com `COMPOSE_FILE=docker-compose.yml`, todo `docker compose ...` naquela pasta ignora o override, sem precisar lembrar de flag. O [.env.server.example](../.env.server.example) já vem assim.
+1. **`COMPOSE_FILE` no `.env`** (recomendado no servidor): com `COMPOSE_FILE=docker-compose.yml`, todo `docker compose ...` naquela pasta ignora o override, sem precisar lembrar de flag. O [.env.example](../.env.example), modelo do servidor, já vem assim; o de desenvolvimento é o [.env.example.local](../.env.example.local).
 2. **`-f` explícito**: `docker compose -f docker-compose.yml up -d`. Repita o `-f` em todo comando (`logs`, `ps`, `down`).
 3. **Não copiar o override** para o servidor.
 
@@ -18,7 +18,7 @@ Para conferir o que vai rodar: `docker compose config --services` lista os servi
 ## Servidor de testes
 
 ```bash
-cp .env.server.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, SMTP_*, PUBLIC_BASE_URL
+cp .env.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, SMTP_*, PUBLIC_BASE_URL
 docker compose up -d --build
 curl -fs http://localhost:7700/health/ready
 ```

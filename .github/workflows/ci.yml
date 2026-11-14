@@ -38,7 +38,7 @@ jobs:
 
       - name: Sobe o sistema (app, Postgres, Gotenberg, S3, Mailpit)
         run: |
-          cp .env.example .env
+          cp .env.example.local .env
           docker compose up -d --build
           for i in $(seq 1 60); do
             curl -fs http://localhost:7700/health/ready && break
