@@ -18,17 +18,19 @@ public sealed class SmtpOptions
     public string? Password { get; set; }
     /// <summary>None, StartTls ou SslOnConnect. Mailpit em dev usa None.</summary>
     public SecureSocketOptions Security { get; set; } = SecureSocketOptions.StartTlsWhenAvailable;
-    public string FromAddress { get; set; } = "nao-responda@contratos.local";
-    public string FromName { get; set; } = "Contratos";
 }
 
-internal sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
+internal sealed class SmtpEmailSender(
+    IOptions<SmtpOptions> options,
+    IOptions<EmailOptions> emailOptions,
+    ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     public async Task SendAsync(EmailMessage message, CancellationToken ct)
     {
         var o = options.Value;
+        var from = emailOptions.Value;
         var mime = new MimeMessage();
-        mime.From.Add(new MailboxAddress(o.FromName, o.FromAddress));
+        mime.From.Add(new MailboxAddress(from.FromName, from.FromAddress));
         mime.To.Add(new MailboxAddress(message.ToName, message.To));
         mime.Subject = message.Subject;
         mime.Body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody }.ToMessageBody();

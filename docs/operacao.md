@@ -18,7 +18,7 @@ Para conferir o que vai rodar: `docker compose config --services` lista os servi
 ## Servidor de testes
 
 ```bash
-cp .env.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, SMTP_*, PUBLIC_BASE_URL
+cp .env.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, RESEND_API_KEY, EMAIL_FROM, PUBLIC_BASE_URL
 docker compose up -d --build
 curl -fs http://localhost:7700/health/ready
 ```
@@ -26,6 +26,18 @@ curl -fs http://localhost:7700/health/ready
 - O banco é externo: crie o database e o usuário antes. Com `MIGRATE_ON_STARTUP=true`, a app cria as tabelas na subida; o usuário precisa poder criar extensões (`unaccent`, `pg_trgm`) ou elas devem ser criadas antes por um superusuário.
 - Fora de `Development` os cookies são `Secure`: o acesso precisa ser por HTTPS (proxy na frente, com `FORWARDED_HEADERS=true`). Por HTTP o login não funciona.
 - Sem `DB_HOST` ou `DB_PASSWORD` no `.env`, o Compose para com um erro dizendo o que falta.
+
+## E-mails (Resend)
+
+Confirmação de cadastro, convites e nova senha saem pela [Resend](https://resend.com) (`EMAIL_PROVIDER=Resend`, o padrão do `docker-compose.yml`):
+
+1. Em resend.com/domains, adicione o domínio do remetente e publique os registros DNS (SPF/DKIM) que ela mostrar, até o domínio aparecer como verificado.
+2. Em resend.com/api-keys, crie uma chave com permissão **Sending access** (de preferência restrita a esse domínio).
+3. No `.env` do servidor: `RESEND_API_KEY=re_...`, `EMAIL_FROM=nao-responda@seu-dominio` (do domínio verificado) e, se quiser, `EMAIL_FROM_NAME`.
+
+Sem `RESEND_API_KEY` a app não sobe e o log diz o que falta. Se a Resend devolver 429 ou 5xx, a app tenta de novo até 3 vezes com a mesma chave de idempotência (o e-mail não sai duplicado); outros erros (remetente não verificado, chave inválida) aparecem no log com o código e o nome do erro da Resend, sem o destinatário. Para usar um SMTP qualquer no lugar: `EMAIL_PROVIDER=Smtp` e as variáveis `SMTP_*`.
+
+Em desenvolvimento o `docker-compose.override.yml` força `Email__Provider=Smtp` com o Mailpit (http://localhost:8026): nada sai para a Resend.
 
 ## Saúde
 

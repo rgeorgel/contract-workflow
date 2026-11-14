@@ -17,17 +17,23 @@ services:
       Storage__Bucket: ${S3_BUCKET:-contratos}
       Storage__AccessKey: ${S3_ACCESS_KEY}
       Storage__SecretKey: ${S3_SECRET_KEY}
+      Storage__Region: ${S3_REGION:-us-east-1}
+      Storage__CreateBucket: ${S3_CREATE_BUCKET:-true}
       Signature__Provider: ${SIGNATURE_PROVIDER:-Fake}
       Autentique__ApiUrl: https://api.autentique.com.br/v2/graphql
       Autentique__ApiKey: ${AUTENTIQUE_API_KEY}
       Autentique__WebhookSecret: ${AUTENTIQUE_WEBHOOK_SECRET}
       Autentique__Sandbox: ${AUTENTIQUE_SANDBOX:-true}
-      Smtp__Host: ${SMTP_HOST}
+      # E-mails do sistema: Resend por padrão (EMAIL_PROVIDER=Smtp usa as variáveis SMTP_*).
+      Email__Provider: ${EMAIL_PROVIDER:-Resend}
+      Email__FromAddress: ${EMAIL_FROM:-${SMTP_FROM:-nao-responda@contratos.local}}
+      Email__FromName: ${EMAIL_FROM_NAME:-Contratos}
+      Resend__ApiKey: ${RESEND_API_KEY:-}
+      Smtp__Host: ${SMTP_HOST:-}
       Smtp__Port: ${SMTP_PORT:-587}
       Smtp__Security: ${SMTP_SECURITY:-StartTls}
-      Smtp__Username: ${SMTP_USERNAME}
-      Smtp__Password: ${SMTP_PASSWORD}
-      Smtp__FromAddress: ${SMTP_FROM:-nao-responda@contratos.local}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
       DataProtection__KeysPath: /data/keys
       ForwardedHeaders__Enabled: ${FORWARDED_HEADERS:-false}
       RateLimiting__ApiPermitsPerMinute: ${API_RATE_LIMIT_PER_MINUTE:-300}

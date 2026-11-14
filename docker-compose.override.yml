@@ -9,6 +9,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Database__MigrateOnStartup: "true"
+      # Em dev os e-mails vão para o Mailpit (http://localhost:8026), não para a Resend.
+      Email__Provider: Smtp
       Smtp__Host: mailpit
       Smtp__Port: "1025"
       Smtp__Security: None

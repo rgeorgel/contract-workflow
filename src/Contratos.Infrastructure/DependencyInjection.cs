@@ -41,7 +41,9 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(o => ConfigureDbContext(o, connectionString));
 
         services.AddOptions<AppOptions>().Bind(config.GetSection(AppOptions.Section));
+        services.AddOptions<EmailOptions>().Bind(config.GetSection(EmailOptions.Section));
         services.AddOptions<SmtpOptions>().Bind(config.GetSection(SmtpOptions.Section));
+        services.AddOptions<ResendOptions>().Bind(config.GetSection(ResendOptions.Section));
 
         services
             .AddIdentityCore<AppUser>(o =>
@@ -99,7 +101,7 @@ public static class DependencyInjection
         services.AddScoped<WebhookReceiver>();
         services.AddSingleton<BackgroundProcessor>();
         services.AddHostedService<BackgroundWorker>();
-        services.AddScoped<IEmailSender, SmtpEmailSender>();
+        AddEmailSender(services, config);
 
         // "ready": tudo de que o envio de contratos depende. /health/live não olha dependências.
         services.AddHttpClient(nameof(GotenbergHealthCheck));
@@ -109,6 +111,30 @@ public static class DependencyInjection
             .AddCheck<StorageHealthCheck>("storage", tags: ["ready"]);
 
         return services;
+    }
+
+    private static void AddEmailSender(IServiceCollection services, IConfiguration config)
+    {
+        var email = config.GetSection(EmailOptions.Section).Get<EmailOptions>() ?? new EmailOptions();
+        switch (email.Provider)
+        {
+            case EmailProvider.Smtp:
+                services.AddScoped<IEmailSender, SmtpEmailSender>();
+                break;
+            case EmailProvider.Resend:
+                var resend = config.GetSection(ResendOptions.Section).Get<ResendOptions>() ?? new ResendOptions();
+                if (string.IsNullOrWhiteSpace(resend.ApiKey))
+                    throw new InvalidOperationException("Email__Provider=Resend exige a chave da API em Resend__ApiKey (RESEND_API_KEY no .env).");
+                services.AddHttpClient<IEmailSender, ResendEmailSender>(http =>
+                {
+                    http.BaseAddress = new Uri(resend.BaseUrl);
+                    http.Timeout = TimeSpan.FromSeconds(15);
+                    http.DefaultRequestHeaders.Authorization = new("Bearer", resend.ApiKey);
+                });
+                break;
+            default:
+                throw new InvalidOperationException($"Provedor de e-mail '{email.Provider}' desconhecido. Use Smtp ou Resend.");
+        }
     }
 
     internal static void ConfigureDbContext(DbContextOptionsBuilder options, string connectionString) =>
