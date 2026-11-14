@@ -1,5 +1,6 @@
-.editor { display: grid; gap: 16px; align-items: start; }
-.editor__main { display: grid; gap: 16px; min-width: 0; }
+/* minmax(0, 1fr): sem isso a tabela de variáveis estica a coluna além da tela no celular. */
+.editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.editor__main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 .editor__main .panel + .panel { margin-top: 0; }
 @media (min-width: 1100px) {
   .editor { grid-template-columns: minmax(0, 1fr) minmax(380px, 0.85fr); }
@@ -36,3 +37,43 @@ textarea.code-input { font-family: var(--font-mono); font-size: .875rem; min-hei
 .dirty-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--color-warning); font-weight: 600; }
 .dirty-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .error-list { margin: 6px 0 0; padding-left: 20px; }
+
+/* ---------- Editor visual do texto ---------- */
+.rich-editor { border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-bg); }
+.rich-editor:focus-within { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+.rte-toolbar { position: sticky; top: 60px; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); border-radius: var(--radius) var(--radius) 0 0; }
+.rte-group { display: flex; gap: 2px; align-items: center; }
+.rte-group + .rte-group { padding-left: 10px; border-left: 1px solid var(--color-border); }
+.rte-block { min-height: 34px; padding-top: 4px; padding-bottom: 4px; font-size: .875rem; width: auto; }
+.rte-btn { display: inline-grid; place-items: center; min-width: 34px; height: 34px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-text); font: inherit; font-size: .95rem; cursor: pointer; }
+.rte-btn svg { width: 18px; height: 18px; }
+.rte-btn:hover { background: var(--color-bg); box-shadow: inset 0 0 0 1px var(--color-border-strong); }
+.rte-btn[aria-pressed="true"] { background: var(--color-primary-soft); color: var(--color-primary); }
+.rte-btn--text { font-size: .8rem; font-weight: 600; padding: 0 8px; }
+.rte-btn--danger { color: var(--color-danger); }
+
+/* A área de texto imita a página do PDF (mesma fonte e hierarquia da pré-visualização). */
+.doc-editor { position: relative; min-height: 420px; padding: 28px 32px; outline: none; font-family: "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.6; color: var(--color-text); overflow-wrap: anywhere; }
+.doc-editor > :first-child { margin-top: 0; }
+.doc-editor h1 { font-size: 1.35rem; text-align: center; margin: 0 0 18px; }
+.doc-editor h2 { font-size: 1.08rem; margin: 20px 0 8px; }
+.doc-editor h3 { font-size: 1rem; margin: 16px 0 6px; }
+.doc-editor p { margin: 0 0 10px; }
+.doc-editor ul, .doc-editor ol { margin: 0 0 10px; padding-left: 26px; }
+.doc-editor table { border-collapse: collapse; width: 100%; margin: 0 0 12px; }
+.doc-editor td, .doc-editor th { border: 1px solid var(--color-border-strong); padding: 6px 8px; vertical-align: top; min-width: 40px; }
+.doc-editor img { max-width: 100%; }
+.doc-editor a { color: var(--color-primary); }
+.doc-editor.is-empty::before { content: attr(data-placeholder); position: absolute; top: 28px; left: 32px; right: 32px; color: var(--color-muted); pointer-events: none; }
+.doc-editor[contenteditable="false"] { background: var(--color-surface); }
+.doc-editor[aria-invalid="true"] { box-shadow: inset 0 0 0 2px var(--color-danger); }
+
+.var-chip { display: inline-block; padding: 0 6px; border-radius: var(--radius-full); background: var(--color-primary-soft); color: var(--color-primary); font-size: .88em; font-weight: 600; line-height: 1.5; white-space: nowrap; cursor: default; user-select: all; }
+.var-chip--missing { background: var(--color-warning-soft); color: var(--color-warning); box-shadow: inset 0 0 0 1px currentColor; }
+
+@media (max-width: 640px) {
+  .rte-toolbar { gap: 4px 6px; }
+  .rte-group + .rte-group { padding-left: 6px; }
+  .doc-editor { padding: 18px 16px; min-height: 320px; }
+  .doc-editor.is-empty::before { top: 18px; left: 16px; right: 16px; }
+}

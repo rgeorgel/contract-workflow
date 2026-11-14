@@ -3,6 +3,7 @@ import { isAdmin, requireUser } from '../auth.js';
 import { clear, h } from '../ui/dom.js';
 import { setBusy } from '../ui/form.js';
 import { confirmModal } from '../ui/modal.js';
+import { RichEditor } from '../ui/rich-editor.js';
 import { toast } from '../ui/toast.js';
 import { formatDateTime, humanize } from '../utils/format.js';
 
@@ -22,6 +23,17 @@ const rolesEl = document.querySelector('[data-roles]');
 const insertEl = document.querySelector('[data-insert]');
 const frame = document.querySelector('[data-frame]');
 const actions = Object.fromEntries([...document.querySelectorAll('[data-action]')].map((b) => [b.dataset.action, b]));
+
+const bodyEl = form.elements.bodyHtml;
+const MODE_KEY = 'contratos.templateEditorMode';
+let mode = 'visual';
+
+// O textarea continua sendo o campo do formulário; o editor visual escreve nele a cada edição.
+const visual = new RichEditor(document.querySelector('[data-visual]'), {
+  label: 'Texto do contrato',
+  placeholder: 'Escreva o contrato aqui, ou cole do Word ou do Google Docs.',
+  onChange: (html) => { bodyEl.value = html; markDirty(); },
+});
 
 let template = null;
 let etag = null;
@@ -89,17 +101,20 @@ function afterRowsChange() {
 }
 
 function refreshInsertOptions() {
-  const keys = readVariables().map((v) => v.key).filter(Boolean);
+  const variables = readVariables();
+  visual.setVariables(variables);
+  const keys = variables.map((v) => v.key).filter(Boolean);
   insertEl.replaceChildren(
     h('option', { value: '' }, keys.length ? 'Inserir variável…' : 'Cadastre variáveis primeiro'),
-    keys.map((k) => h('option', { value: k }, k)));
+    ...keys.map((k) => h('option', { value: k }, k)));
 }
 
 function fillForm() {
   const content = working();
   form.elements.name.value = template.name;
   form.elements.description.value = template.description ?? '';
-  form.elements.bodyHtml.value = content.bodyHtml;
+  bodyEl.value = content.bodyHtml;
+  visual.setHtml(content.bodyHtml);
   variablesEl.replaceChildren(...content.variables.map(variableRow));
   rolesEl.replaceChildren(...content.defaultSignerRoles.map(roleRow));
   afterRowsChange();
@@ -259,6 +274,8 @@ function showErrors(err) {
     }
   }
 
+  if (bodyEl.getAttribute('aria-invalid')) visual.area.setAttribute('aria-invalid', 'true');
+
   const title = err.message || 'Não foi possível salvar.';
   alertEl.replaceChildren(h('div', { class: 'alert__body' },
     h('strong', {}, title),
@@ -384,6 +401,11 @@ document.querySelector('[data-detect]').addEventListener('click', () => {
 insertEl.addEventListener('change', () => {
   const key = insertEl.value;
   if (!key) return;
+  if (mode === 'visual') {
+    visual.insertVariable(key);
+    insertEl.value = '';
+    return;
+  }
   const ta = form.elements.bodyHtml;
   const { selectionStart: start, selectionEnd: end, value } = ta;
   const snippet = `{{${key}}}`;
@@ -404,13 +426,33 @@ for (const tab of document.querySelectorAll('[data-preview]')) {
   });
 }
 
-form.addEventListener('input', markDirty);
+form.addEventListener('input', (e) => {
+  if (e.target.dataset?.field === 'label' || e.target.dataset?.field === 'key') visual.setVariables(readVariables());
+  markDirty();
+});
 form.addEventListener('change', (e) => { if (e.target.dataset.field === 'key') refreshInsertOptions(); markDirty(); });
 form.addEventListener('submit', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's' && canEdit) { e.preventDefault(); actions.save.click(); }
 });
 window.addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+// ---------- Modo visual / HTML ----------
+
+function setMode(next, { remember = true } = {}) {
+  mode = next === 'html' ? 'html' : 'visual';
+  // O textarea é a fonte: ao voltar para o visual, mostra o que foi escrito em HTML.
+  if (mode === 'visual') visual.setHtml(bodyEl.value);
+  document.querySelector('[data-visual]').hidden = mode !== 'visual';
+  document.querySelector('[data-visual-hint]').hidden = mode !== 'visual';
+  document.querySelector('[data-html-field]').hidden = mode !== 'html';
+  for (const tab of document.querySelectorAll('[data-mode]')) tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
+  if (remember) { try { localStorage.setItem(MODE_KEY, mode); } catch { /* sem storage: só não lembra */ } }
+}
+
+for (const tab of document.querySelectorAll('[data-mode]')) {
+  tab.addEventListener('click', () => { if (tab.dataset.mode !== mode) setMode(tab.dataset.mode); });
+}
 
 // ---------- Carga ----------
 
@@ -437,10 +479,15 @@ if (!canEdit) {
   previewNote.textContent = 'Versão publicada, com dados de exemplo.';
 }
 
+let savedMode = 'visual';
+try { savedMode = localStorage.getItem(MODE_KEY) ?? 'visual'; } catch { /* sem storage */ }
+
 apply(template);
+setMode(canEdit ? savedMode : 'visual', { remember: false });
 
 if (!canEdit) {
   for (const el of form.elements) el.disabled = true;
+  visual.setEditable(false);
   for (const el of document.querySelectorAll('[data-edit-only]')) el.hidden = true;
 }
 

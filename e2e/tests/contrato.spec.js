@@ -15,6 +15,7 @@ test('do template ao contrato assinado, e encontrado pela busca', async ({ page,
   await page.getByLabel('Nome', { exact: true }).fill('Locação residencial');
   await page.getByRole('button', { name: 'Criar e editar' }).click();
   await expect(page).toHaveURL(/template-editor\.html/);
+  await page.getByRole('tab', { name: 'HTML' }).click();
   await page.getByLabel('Texto do contrato em HTML').fill(BODY);
   await page.getByRole('button', { name: 'Cadastrar variáveis do texto' }).click();
   await expect(page.getByRole('textbox', { name: 'Chave' })).toHaveCount(3);
@@ -60,6 +61,8 @@ test('do template ao contrato assinado, e encontrado pela busca', async ({ page,
   // PDF assinado arquivado pelo worker.
   await expect.poll(async () => {
     await page.reload();
+    // A página monta o conteúdo depois do load: espera o status antes de contar os links.
+    await expect(status).toHaveText('Concluído');
     return page.getByRole('link', { name: 'PDF assinado' }).count();
   }, { timeout: 30_000 }).toBe(1);
   const pdf = await page.request.get(await page.getByRole('link', { name: 'PDF assinado' }).getAttribute('href'));
