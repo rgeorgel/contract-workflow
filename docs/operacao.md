@@ -1,5 +1,32 @@
 # Operação
 
+## Qual arquivo do Compose é lido
+
+| Arquivo | Conteúdo | Quando entra |
+| --- | --- | --- |
+| `docker-compose.yml` | app, Gotenberg, S3 (SeaweedFS), backup | Sempre |
+| `docker-compose.override.yml` | Postgres local, Mailpit, portas de debug, ajustes de dev | **Automaticamente**, se o arquivo existir na pasta |
+
+O `docker compose` procura o `docker-compose.override.yml` sozinho e junta com o base. Para usar **só o base**, escolha um jeito:
+
+1. **`COMPOSE_FILE` no `.env`** (recomendado no servidor): com `COMPOSE_FILE=docker-compose.yml`, todo `docker compose ...` naquela pasta ignora o override, sem precisar lembrar de flag. O [.env.server.example](../.env.server.example) já vem assim.
+2. **`-f` explícito**: `docker compose -f docker-compose.yml up -d`. Repita o `-f` em todo comando (`logs`, `ps`, `down`).
+3. **Não copiar o override** para o servidor.
+
+Para conferir o que vai rodar: `docker compose config --services` lista os serviços, e `docker compose config` mostra a configuração final já mesclada.
+
+## Servidor de testes
+
+```bash
+cp .env.server.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, SMTP_*, PUBLIC_BASE_URL
+docker compose up -d --build
+curl -fs http://localhost:7700/health/ready
+```
+
+- O banco é externo: crie o database e o usuário antes. Com `MIGRATE_ON_STARTUP=true`, a app cria as tabelas na subida; o usuário precisa poder criar extensões (`unaccent`, `pg_trgm`) ou elas devem ser criadas antes por um superusuário.
+- Fora de `Development` os cookies são `Secure`: o acesso precisa ser por HTTPS (proxy na frente, com `FORWARDED_HEADERS=true`). Por HTTP o login não funciona.
+- Sem `DB_HOST` ou `DB_PASSWORD` no `.env`, o Compose para com um erro dizendo o que falta.
+
 ## Saúde
 
 | Rota | Para quê | Olha |

@@ -1,3 +1,6 @@
+# Arquivo base: o que roda em qualquer ambiente. O banco fica FORA daqui (externo no servidor;
+# em desenvolvimento, o docker-compose.override.yml sobe um Postgres local).
+# Só este arquivo:  docker compose -f docker-compose.yml up -d   (ou COMPOSE_FILE=docker-compose.yml no .env)
 services:
   app:
     build:
@@ -6,7 +9,7 @@ services:
     ports: ["${APP_PORT:-7700}:7700"]
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
-      ConnectionStrings__Default: Host=db;Database=contratos;Username=contratos;Password=${DB_PASSWORD}
+      ConnectionStrings__Default: Host=${DB_HOST:?Defina DB_HOST no .env - o banco fica fora deste compose};Port=${DB_PORT:-5432};Database=${DB_NAME:-contratos};Username=${DB_USER:-contratos};Password=${DB_PASSWORD:?Defina DB_PASSWORD no .env};SSL Mode=${DB_SSL_MODE:-prefer}
       Database__MigrateOnStartup: ${MIGRATE_ON_STARTUP:-false}
       App__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:7700}
       Gotenberg__Url: http://gotenberg:3000
@@ -31,25 +34,10 @@ services:
     volumes:
       - keys:/data/keys
     depends_on:
-      db:
-        condition: service_healthy
       gotenberg:
         condition: service_started
       s3:
         condition: service_started
-
-  db:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: contratos
-      POSTGRES_USER: contratos
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U contratos"]
-      interval: 5s
-      retries: 10
 
   gotenberg:
     image: gotenberg/gotenberg:8
@@ -70,20 +58,18 @@ services:
     profiles: ["backup"]
     entrypoint: ["/bin/sh", "/scripts/backup-db.sh", "--loop"]
     environment:
-      PGHOST: db
-      PGUSER: contratos
-      PGDATABASE: contratos
+      PGHOST: ${DB_HOST}
+      PGPORT: ${DB_PORT:-5432}
+      PGUSER: ${DB_USER:-contratos}
+      PGDATABASE: ${DB_NAME:-contratos}
       PGPASSWORD: ${DB_PASSWORD}
+      PGSSLMODE: ${DB_SSL_MODE:-prefer}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
     volumes:
       - ${BACKUP_DIR:-./backups}:/backups
       - ./scripts:/scripts:ro
-    depends_on:
-      db:
-        condition: service_healthy
 
 volumes:
-  pgdata:
   s3data:
   keys:
