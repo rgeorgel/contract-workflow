@@ -12,9 +12,11 @@ using Testcontainers.PostgreSql;
 namespace Contratos.Tests.Infrastructure;
 
 /// <summary>Sobe a API inteira contra um Postgres 17 real (Testcontainers) e captura os e-mails.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _db = new PostgreSqlBuilder("postgres:17").Build();
+
+    protected virtual int ApiPermitsPerMinute => 100_000;
 
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
@@ -28,6 +30,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:Default", _db.GetConnectionString());
         builder.UseSetting("Database:MigrateOnStartup", "true");
         builder.UseSetting("RateLimiting:AuthPermitsPerMinute", "10000");
+        builder.UseSetting("RateLimiting:ApiPermitsPerMinute", ApiPermitsPerMinute.ToString());
+        builder.UseSetting("Gotenberg:Url", "http://127.0.0.1:9"); // ninguém escuta: health "degraded"
         builder.UseSetting("App:PublicBaseUrl", "https://app.test");
         builder.UseSetting("Worker:Enabled", "false");
         builder.UseSetting("Storage:CreateBucket", "false");
@@ -50,7 +54,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public Task InitializeAsync() => _db.StartAsync();
 
-    public new async Task DisposeAsync()
+    public new virtual async Task DisposeAsync()
     {
         await base.DisposeAsync();
         await _db.DisposeAsync();
@@ -100,6 +104,12 @@ public sealed class FakePdfRenderer : IPdfRenderer
 {
     public Task<byte[]> RenderAsync(string html, CancellationToken ct) =>
         Task.FromResult(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n%fake\n" + html));
+}
+
+/// <summary>Mesma API com limite baixo, para testar o rate limit geral.</summary>
+public sealed class LowLimitApiFactory : ApiFactory
+{
+    protected override int ApiPermitsPerMinute => 5;
 }
 
 [CollectionDefinition(Name)]

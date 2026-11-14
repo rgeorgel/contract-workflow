@@ -20,7 +20,12 @@ internal static class SecurityHeaders
                 h["Referrer-Policy"] = "strict-origin-when-cross-origin";
                 if (!h.ContainsKey("X-Frame-Options"))
                     h.XFrameOptions = "DENY";
-                h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+                h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()";
+                h["Cross-Origin-Opener-Policy"] = "same-origin";
+                h["Cross-Origin-Resource-Policy"] = "same-origin";
+                // Respostas da API têm dados da organização: nada de cache compartilhado.
+                if (ctx.Request.Path.StartsWithSegments("/api") && !h.ContainsKey("Cache-Control"))
+                    h.CacheControl = "no-store";
                 return Task.CompletedTask;
             });
             await next();

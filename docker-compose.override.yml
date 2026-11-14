@@ -8,6 +8,8 @@ services:
       Smtp__Host: mailpit
       Smtp__Port: "1025"
       Smtp__Security: None
+      # Em dev (e nos testes e2e) o limite de autenticação é folgado; em produção fica o padrão (10/min).
+      RateLimiting__AuthPermitsPerMinute: "100"
     depends_on:
       mailpit:
         condition: service_started

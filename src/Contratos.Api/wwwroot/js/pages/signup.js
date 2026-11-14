@@ -157,7 +157,13 @@ async function confirmFromLink(params) {
   try {
     await api('/auth/confirm-email', { method: 'POST', body: { userId, token } });
     show('confirmed');
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 429 || err.status === 0)) {
+      // O link pode estar bom: não diga que é inválido. Volta a URL para a pessoa tentar de novo.
+      history.replaceState(null, '', `?step=confirm&userId=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`);
+      document.getElementById('failed-title').textContent = 'Não deu para confirmar agora';
+      document.querySelector('[data-state="confirm-failed"] p').textContent = `${err.message} Depois, recarregue esta página.`;
+    }
     show('confirm-failed');
   }
 }

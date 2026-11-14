@@ -43,9 +43,37 @@ public sealed class SecurityTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Health_reports_database()
+    public async Task Liveness_does_not_depend_on_anything()
     {
-        var res = await factory.CreateApiClient().GetAsync("/health");
+        var res = await factory.CreateApiClient().GetAsync("/health/live");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Empty((await res.JsonAsync()).GetProperty("checks").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Readiness_lists_each_dependency_without_internal_details()
+    {
+        var res = await factory.CreateApiClient().GetAsync("/health/ready");
+
+        // Gotenberg fora do ar nos testes: degradado (envio falha), mas a app segue recebendo tráfego.
+        var body = await res.Content.ReadAsStringAsync();
+        Assert.True(res.StatusCode == HttpStatusCode.OK, body);
+        var checks = (await res.JsonAsync()).GetProperty("checks").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("name").GetString()!, c => c.GetProperty("status").GetString());
+        Assert.Equal("Healthy", checks["database"]);
+        Assert.Equal("Degraded", checks["gotenberg"]);
+        Assert.Equal("Healthy", checks["storage"]);
+        Assert.DoesNotContain("127.0.0.1", body);
+        Assert.DoesNotContain("Exception", body);
+    }
+
+    [Fact]
+    public async Task Api_responses_are_not_cached_and_isolate_the_browsing_context()
+    {
+        var admin = await TestAccounts.CreateAdminAsync(factory);
+        var res = await admin.Client.GetAsync("/api/v1/auth/me");
+
+        Assert.Contains("no-store", res.Headers.CacheControl?.ToString());
+        Assert.Equal("same-origin", res.Headers.GetValues("Cross-Origin-Opener-Policy").Single());
     }
 }

@@ -102,6 +102,9 @@ internal sealed class S3FileStorage : IFileStorage, IDisposable
         } while (token is not null);
     }
 
+    public Task PingAsync(CancellationToken ct) =>
+        _s3.ListObjectsV2Async(new ListObjectsV2Request { BucketName = _options.Bucket, MaxKeys = 1 }, ct);
+
     public async Task EnsureBucketAsync(CancellationToken ct)
     {
         try

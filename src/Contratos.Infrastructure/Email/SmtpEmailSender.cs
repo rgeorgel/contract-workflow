@@ -40,7 +40,7 @@ internal sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<Smt
         await client.SendAsync(new SendRequest(mime), ct);
         await client.DisconnectAsync(true, ct);
 
-        // Sem o endereço no log (LGPD): só o assunto.
-        logger.LogInformation("E-mail enviado: {Subject}", message.Subject);
+        // LGPD: nem destinatário nem assunto (que traz nomes) vão para o log.
+        logger.LogInformation("E-mail do sistema enviado");
     }
 }

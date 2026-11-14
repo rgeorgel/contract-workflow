@@ -6,6 +6,7 @@ using Contratos.Application.Common;
 using Contratos.Infrastructure;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -64,14 +65,42 @@ builder.Services.AddAntiforgery(o =>
     o.Cookie.SecurePolicy = secureCookies;
 });
 
+// Limites: rotas de autenticação por IP (força bruta) e a API inteira por usuário ou IP (abuso, scraping).
 var authPermitsPerMinute = builder.Configuration.GetValue("RateLimiting:AuthPermitsPerMinute", 10);
+var apiPermitsPerMinute = builder.Configuration.GetValue("RateLimiting:ApiPermitsPerMinute", 300);
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy(AuthEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
-        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        ClientIp(ctx),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = authPermitsPerMinute, Window = TimeSpan.FromMinutes(1) }));
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+    {
+        if (!ctx.Request.Path.StartsWithSegments("/api"))
+            return RateLimitPartition.GetNoLimiter("static");
+        var key = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } userId
+            ? $"user:{userId}"
+            : $"ip:{ClientIp(ctx)}";
+        return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = apiPermitsPerMinute, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6,
+        });
+    });
 });
+
+// Atrás de proxy reverso (TLS no proxy): IP real do cliente e esquema https vêm dos cabeçalhos X-Forwarded-*.
+if (builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled"))
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        o.ForwardLimit = 1;
+        // A rede do proxy varia (Docker, nuvem); a app não deve ficar exposta sem ele na frente.
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
+builder.Services.AddHsts(o => { o.MaxAge = TimeSpan.FromDays(365); o.IncludeSubDomains = true; });
 
 var app = builder.Build();
 
@@ -81,10 +110,24 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
 }
 
+if (app.Configuration.GetValue<bool>("ForwardedHeaders:Enabled"))
+    app.UseForwardedHeaders();
 app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 app.UseStatusCodePages();
 app.UseSecurityHeaders();
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(o =>
+{
+    // Só identificadores: nada de e-mail, CPF ou telefone no log (LGPD). A query string não é registrada.
+    o.EnrichDiagnosticContext = (diag, http) =>
+    {
+        if (http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } userId)
+            diag.Set("UserId", userId);
+        if (http.User.FindFirst(Contratos.Infrastructure.Identity.AppClaims.OrganizationId)?.Value is { } orgId)
+            diag.Set("OrganizationId", orgId);
+    };
+});
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
@@ -94,8 +137,9 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseAuthentication();
-app.UseAuthorization();
+// Antes da autorização: senão um 401 sai antes do limite e chamadas anônimas não são contadas.
 app.UseRateLimiter();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -103,7 +147,10 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-app.MapHealthChecks("/health");
+// live: o processo responde (para o orquestrador reiniciar). ready: dependências ok (para receber tráfego).
+app.MapHealthChecks("/health/live", HealthResponse.Options(_ => false));
+app.MapHealthChecks("/health/ready", HealthResponse.Options(r => r.Tags.Contains("ready")));
+app.MapHealthChecks("/health", HealthResponse.Options(r => r.Tags.Contains("ready")));
 
 var api = app.MapGroup("/api/v1").AddEndpointFilter<AntiforgeryFilter>();
 api.MapAuthEndpoints();
@@ -117,5 +164,7 @@ if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", Str
 app.MapWebhookEndpoints();
 
 app.Run();
+
+static string ClientIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
 public partial class Program;

@@ -37,6 +37,20 @@ public sealed partial class ContractsApiTests
     }
 
     [Theory]
+    [InlineData("ap 42")]
+    [InlineData("AP-42")]
+    [InlineData("2026")]
+    [InlineData("15")]
+    public async Task Search_finds_codes_with_hyphens_and_slashes(string term)
+    {
+        var (admin, id) = await DraftAsync("Apartamento AP-42 contrato CT-2026/15");
+
+        var res = await (await admin.Client.GetAsync($"/api/v1/contracts?q={Uri.EscapeDataString(term)}")).JsonAsync();
+
+        Assert.Contains(res.GetProperty("items").EnumerateArray(), i => i.GetProperty("id").GetGuid() == id);
+    }
+
+    [Theory]
     [InlineData("a & | ! :* ()")]
     [InlineData("'; DROP TABLE contracts; --")]
     [InlineData("%_\\")]

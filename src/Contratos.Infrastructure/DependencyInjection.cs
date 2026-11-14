@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -100,7 +101,12 @@ public static class DependencyInjection
         services.AddHostedService<BackgroundWorker>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
-        services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
+        // "ready": tudo de que o envio de contratos depende. /health/live não olha dependências.
+        services.AddHttpClient(nameof(GotenbergHealthCheck));
+        services.AddHealthChecks()
+            .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])
+            .AddCheck<GotenbergHealthCheck>("gotenberg", HealthStatus.Degraded, tags: ["ready"])
+            .AddCheck<StorageHealthCheck>("storage", tags: ["ready"]);
 
         return services;
     }

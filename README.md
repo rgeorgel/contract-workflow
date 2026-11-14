@@ -29,6 +29,15 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Busca full-text em português sem acento (`tsvector` com config `pt_unaccent`, prefixo de palavra) em título, número, valores das variáveis e signatários, mais busca parcial por nome/e-mail (trigram)
 - Filtros na URL: status, template, criado por, período de criação ou de conclusão
 
+**Fase 6 (endurecimento)**
+- `/health/live` e `/health/ready` (banco, storage, Gotenberg), sem detalhes internos na resposta
+- Rate limit em toda a API (por usuário ou IP) além das rotas de autenticação; suporte a proxy reverso (`X-Forwarded-*`), HSTS, COOP/CORP, `no-store` nas respostas da API
+- Logs sem dados pessoais (só ids de usuário e organização); revisão LGPD em [docs/lgpd.md](docs/lgpd.md)
+- Backup diário do banco com retenção e script de restauração (serviço `backup` do Compose)
+- Testes de ponta a ponta com Playwright (cadastro, template, contrato até o PDF assinado, busca, celular), também no CI
+
+**Fase 4 (Autentique)**: adiada; até lá o provedor fake simula a assinatura.
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):
@@ -47,12 +56,23 @@ dotnet run --project src/Contratos.Api
 
 As migrations são aplicadas na subida em desenvolvimento. A documentação da API fica em `/scalar` (só em Development).
 
+## Documentação
+
+- [docs/operacao.md](docs/operacao.md): health checks, proxy, limites, backup e restauração
+- [docs/lgpd.md](docs/lgpd.md): dados pessoais, retenção e medidas técnicas
+
 ## Testes
 
-Precisam do Docker rodando (Testcontainers sobe um Postgres real):
+Unitários e de integração (precisam do Docker: Testcontainers sobe um Postgres real):
 
 ```bash
 dotnet test
+```
+
+De ponta a ponta, com o sistema rodando (`docker compose up -d --build`):
+
+```bash
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
 
 ## Portas locais

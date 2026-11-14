@@ -26,6 +26,8 @@ services:
       Smtp__Password: ${SMTP_PASSWORD}
       Smtp__FromAddress: ${SMTP_FROM:-nao-responda@contratos.local}
       DataProtection__KeysPath: /data/keys
+      ForwardedHeaders__Enabled: ${FORWARDED_HEADERS:-false}
+      RateLimiting__ApiPermitsPerMinute: ${API_RATE_LIMIT_PER_MINUTE:-300}
     volumes:
       - keys:/data/keys
     depends_on:
@@ -61,6 +63,25 @@ services:
     command: server -dir=/data -s3 -s3.port=8333
     volumes:
       - s3data:/data
+
+  # Backup diário do banco com retenção: docker compose --profile backup up -d backup
+  backup:
+    image: postgres:17
+    profiles: ["backup"]
+    entrypoint: ["/bin/sh", "/scripts/backup-db.sh", "--loop"]
+    environment:
+      PGHOST: db
+      PGUSER: contratos
+      PGDATABASE: contratos
+      PGPASSWORD: ${DB_PASSWORD}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./scripts:/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:
