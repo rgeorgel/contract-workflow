@@ -20,6 +20,13 @@ public sealed class WorkerOptions
     public int[]? RetryDelaysSeconds { get; set; }
 
     public int[] Delays => RetryDelaysSeconds is { Length: > 0 } d ? d : [60, 300, 900, 3600];
+
+    /// <summary>De quanto em quanto tempo procurar contratos que podem ter perdido webhooks.</summary>
+    public int ReconcileIntervalMinutes { get; set; } = 30;
+    /// <summary>Contrato enviado (ou consultado) há mais que isso, ainda em aberto, é consultado no provedor.</summary>
+    public int ReconcileAfterHours { get; set; } = 24;
+    /// <summary>Consultas por rodada: a Autentique aceita 60 requisições por minuto para a plataforma inteira.</summary>
+    public int ReconcileBatch { get; set; } = 20;
 }
 
 /// <summary>Recebe webhooks: valida a assinatura e grava em webhook_inbox; o processamento é assíncrono.</summary>
@@ -67,6 +74,7 @@ public sealed class BackgroundProcessor(
 {
     private const int BatchLimit = 50;
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private DateTimeOffset _nextReconcile = DateTimeOffset.MinValue;
 
     public async Task ProcessAllAsync(CancellationToken ct)
     {
@@ -76,6 +84,7 @@ public sealed class BackgroundProcessor(
             for (var i = 0; i < BatchLimit && await ProcessNextInboxAsync(ct); i++) { }
             for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
             await ExpireContractsAsync(ct);
+            await ReconcileAsync(ct);
         }
         finally
         {
@@ -129,12 +138,18 @@ public sealed class BackgroundProcessor(
 
     private async Task ApplyEventAsync(AppDbContext db, SignatureEvent ev, CancellationToken ct)
     {
-        // Webhook não tem tenant: acha o contrato (e a organização) pelo id do documento.
-        var contract = await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers)
-            .SingleOrDefaultAsync(c => c.AutentiqueDocumentId == ev.DocumentId, ct);
+        // Webhook não tem tenant: acha o contrato (e a organização) pelo id do documento,
+        // ou pela assinatura quando o evento não traz o documento.
+        var contract = !string.IsNullOrEmpty(ev.DocumentId)
+            ? await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers)
+                .SingleOrDefaultAsync(c => c.AutentiqueDocumentId == ev.DocumentId, ct)
+            : ev.SignaturePublicId is { } publicId
+                ? await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers)
+                    .SingleOrDefaultAsync(c => c.Signers.Any(s => s.AutentiquePublicId == publicId), ct)
+                : null;
         if (contract is null)
         {
-            logger.LogWarning("Webhook para documento desconhecido {DocumentId}", ev.DocumentId);
+            logger.LogWarning("Webhook para documento desconhecido {DocumentId} {SignatureId}", ev.DocumentId, ev.SignaturePublicId);
             return;
         }
 
@@ -324,6 +339,53 @@ public sealed class BackgroundProcessor(
             db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Expired));
         if (expired.Count > 0)
             await db.SaveChangesAsync(ct);
+    }
+
+    // ---------- Reconciliação ----------
+
+    /// <summary>
+    /// A Autentique tenta entregar um webhook 4 vezes em ~8 min. Para não depender só disso, contratos em aberto
+    /// há mais de um dia são consultados na API (no máximo um lote por rodada) e os eventos que faltaram são aplicados.
+    /// </summary>
+    private async Task ReconcileAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        if (now < _nextReconcile)
+            return;
+        var o = options.Value;
+        _nextReconcile = now.AddMinutes(Math.Max(0, o.ReconcileIntervalMinutes)); // 0: toda rodada (testes)
+        var cutoff = now.AddHours(-o.ReconcileAfterHours);
+
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var provider = scope.ServiceProvider.GetRequiredService<ISignatureProvider>();
+        var due = await db.Contracts.IgnoreQueryFilters()
+            .Where(c => (c.Status == ContractStatus.Sent || c.Status == ContractStatus.PartiallySigned)
+                && c.AutentiqueDocumentId != null && c.SentAt < cutoff
+                && (c.ProviderCheckedAt == null || c.ProviderCheckedAt < cutoff))
+            .OrderBy(c => c.ProviderCheckedAt ?? c.SentAt)
+            .Select(c => c.Id)
+            .Take(Math.Max(1, o.ReconcileBatch))
+            .ToListAsync(ct);
+
+        foreach (var id in due)
+        {
+            var contract = await LoadContractAsync(db, id, ct);
+            if (contract?.AutentiqueDocumentId is not { } documentId)
+                continue;
+            try
+            {
+                var status = await provider.GetDocumentAsync(documentId, ct);
+                foreach (var ev in status.Events.OrderBy(e => e.OccurredAt))
+                    await ApplyEventAsync(db, ev, ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                logger.LogWarning(e, "Reconciliação do contrato {ContractId} falhou", id);
+            }
+            contract.MarkProviderChecked(now);
+            await db.SaveChangesAsync(ct);
+        }
     }
 
     private static Task<Contract?> LoadContractAsync(AppDbContext db, Guid id, CancellationToken ct) =>

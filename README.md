@@ -22,7 +22,7 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Envio pela outbox com retentativa (1, 5, 15, 60 min); depois de 5 falhas o contrato mostra "Erro no envio" com "Tentar de novo"
 - Webhooks em `/api/v1/webhooks/autentique` (HMAC-SHA256, idempotentes via `webhook_inbox`); expiração automática
 - Tela de detalhe com progresso, linha do tempo, downloads, cancelar, reenviar link e exclusão com confirmação pelo número (`deletion_log`)
-- Provedor **fake** até a fase 4: na tela do contrato, a faixa "Simular" faz o papel do signatário (abrir, assinar, recusar, falha na entrega)
+- Provedor **fake** para desenvolvimento: na tela do contrato, a faixa "Simular" faz o papel do signatário (abrir, assinar, recusar, falha na entrega)
 
 **Fase 5 (painel e busca)**
 - Painel com contadores por status, pendentes há mais de 3 dias e concluídos recentes (`GET /api/v1/dashboard/summary`)
@@ -36,7 +36,12 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Backup diário do banco com retenção e script de restauração (serviço `backup` do Compose)
 - Testes de ponta a ponta com Playwright (cadastro, template, contrato até o PDF assinado, busca, celular), também no CI
 
-**Fase 4 (Autentique)**: adiada; até lá o provedor fake simula a assinatura.
+**Fase 4 (Autentique)**
+- `SIGNATURE_PROVIDER=Autentique`: envio pela API GraphQL (upload multipart do PDF, e-mail/WhatsApp/SMS, CPF, ordem, prazo, lembrete), sandbox por configuração
+- Webhooks reais (`signature.viewed/accepted/rejected/delivery_failed`, `document.finished/deleted`), com HMAC sobre o corpo bruto
+- PDF assinado baixado e arquivado; cancelar vence o prazo e exclui o documento lá
+- Reconciliação a cada 30 min para contratos em aberto há mais de 24 h (webhooks perdidos)
+- Configuração em [docs/operacao.md](docs/operacao.md#assinatura-autentique)
 
 ## Rodando
 

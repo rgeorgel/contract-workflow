@@ -16,11 +16,15 @@ internal static class WebhooksEndpoints
     /// <summary>Fora do grupo /api/v1 com antiforgery: quem chama é o provedor, sem cookie.</summary>
     public static void MapWebhookEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/v1/webhooks/autentique", async (HttpRequest request, WebhookReceiver receiver, CancellationToken ct) =>
+        app.MapPost("/api/v1/webhooks/autentique", async (HttpRequest request, WebhookReceiver receiver, ILoggerFactory loggers, CancellationToken ct) =>
             {
                 using var reader = new StreamReader(request.Body);
                 var raw = await reader.ReadToEndAsync(ct); // corpo bruto: é sobre ele que o HMAC é calculado
-                return await receiver.ReceiveAsync(raw, request.Headers[SignatureHeader].ToString(), ct) switch
+                var signature = request.Headers[SignatureHeader].ToString();
+                var outcome = await receiver.ReceiveAsync(raw, signature, ct);
+                if (outcome == WebhookReceiver.Outcome.InvalidSignature)
+                    LogRejected(loggers.CreateLogger("Contratos.Webhooks"), request, signature);
+                return outcome switch
                 {
                     WebhookReceiver.Outcome.InvalidSignature => Results.Unauthorized(),
                     WebhookReceiver.Outcome.Malformed => Results.BadRequest(),
@@ -30,6 +34,22 @@ internal static class WebhooksEndpoints
             .AllowAnonymous()
             .WithTags("Webhooks")
             .WithSummary("Eventos do provedor de assinatura (valida HMAC-SHA256)");
+    }
+
+    /// <summary>
+    /// Diz por que o webhook foi recusado, sem valores: se o cabeçalho de assinatura nem veio (o provedor não
+    /// assina, e a lista de nomes de cabeçalho mostra o que veio no lugar) ou se veio e não bate com o secret.
+    /// </summary>
+    private static void LogRejected(ILogger logger, HttpRequest request, string signature)
+    {
+        if (string.IsNullOrWhiteSpace(signature))
+            logger.LogWarning(
+                "Webhook recusado: sem o cabeçalho {Header}. Cabeçalhos recebidos: {Headers}",
+                SignatureHeader, string.Join(", ", request.Headers.Keys.Order(StringComparer.OrdinalIgnoreCase)));
+        else
+            logger.LogWarning(
+                "Webhook recusado: o cabeçalho {Header} veio ({Length} caracteres) mas não confere com nenhum secret configurado em Autentique__WebhookSecret",
+                SignatureHeader, signature.Length);
     }
 
     /// <summary>

@@ -22,8 +22,8 @@ public sealed record SignatureEvent(
 public sealed record DocumentStatus(string DocumentId, bool Finished, IReadOnlyList<SignatureEvent> Events);
 
 /// <summary>
-/// Provedor de assinatura. O domínio não conhece a Autentique: ela entra na fase 4 por trás desta interface;
-/// até lá o <c>FakeSignatureProvider</c> simula tudo.
+/// Provedor de assinatura. O domínio não conhece a Autentique: ela fica por trás desta interface
+/// (<c>AutentiqueSignatureProvider</c>); o <c>FakeSignatureProvider</c> simula tudo em desenvolvimento e testes.
 /// </summary>
 public interface ISignatureProvider
 {

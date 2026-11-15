@@ -92,11 +92,7 @@ public static class DependencyInjection
             http.Timeout = TimeSpan.FromSeconds(60);
         });
 
-        var signatureProvider = config["Signature:Provider"] ?? "Fake";
-        if (!string.Equals(signatureProvider, "Fake", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Provedor de assinatura '{signatureProvider}' ainda não implementado (Autentique entra na fase 4). Use Signature__Provider=Fake.");
-        services.AddSingleton<FakeSignatureProvider>();
-        services.AddSingleton<ISignatureProvider>(sp => sp.GetRequiredService<FakeSignatureProvider>());
+        AddSignatureProvider(services, config);
 
         services.AddScoped<WebhookReceiver>();
         services.AddSingleton<BackgroundProcessor>();
@@ -111,6 +107,35 @@ public static class DependencyInjection
             .AddCheck<StorageHealthCheck>("storage", tags: ["ready"]);
 
         return services;
+    }
+
+    /// <summary>Signature__Provider: Fake (desenvolvimento e testes, com simulador) ou Autentique.</summary>
+    private static void AddSignatureProvider(IServiceCollection services, IConfiguration config)
+    {
+        services.AddOptions<AutentiqueOptions>().Bind(config.GetSection(AutentiqueOptions.Section));
+        var provider = config["Signature:Provider"] ?? "Fake";
+
+        if (string.Equals(provider, "Fake", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<FakeSignatureProvider>();
+            services.AddSingleton<ISignatureProvider>(sp => sp.GetRequiredService<FakeSignatureProvider>());
+            return;
+        }
+        if (!string.Equals(provider, "Autentique", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Provedor de assinatura '{provider}' desconhecido. Use Signature__Provider=Fake ou Autentique.");
+
+        var autentique = config.GetSection(AutentiqueOptions.Section).Get<AutentiqueOptions>() ?? new AutentiqueOptions();
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(autentique.ApiKey)) missing.Add("Autentique__ApiKey (AUTENTIQUE_API_KEY)");
+        if (autentique.WebhookSecrets.Count == 0) missing.Add("Autentique__WebhookSecret (AUTENTIQUE_WEBHOOK_SECRET)");
+        if (missing.Count > 0)
+            throw new InvalidOperationException($"Signature__Provider=Autentique exige {string.Join(" e ", missing)}.");
+
+        services.AddHttpClient<ISignatureProvider, AutentiqueSignatureProvider>(http =>
+        {
+            // Upload de até 20 MB; a outbox tenta de novo se passar disso.
+            http.Timeout = TimeSpan.FromSeconds(90);
+        });
     }
 
     private static void AddEmailSender(IServiceCollection services, IConfiguration config)

@@ -18,7 +18,7 @@ Para conferir o que vai rodar: `docker compose config --services` lista os servi
 ## Servidor de testes
 
 ```bash
-cp .env.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, RESEND_API_KEY, EMAIL_FROM, PUBLIC_BASE_URL
+cp .env.example .env   # preencha DB_HOST, DB_PASSWORD, S3_*, RESEND_API_KEY, EMAIL_FROM, AUTENTIQUE_*, PUBLIC_BASE_URL
 docker compose up -d --build
 curl -fs http://localhost:7700/health/ready
 ```
@@ -38,6 +38,30 @@ Confirmação de cadastro, convites e nova senha saem pela [Resend](https://rese
 Sem `RESEND_API_KEY` a app não sobe e o log diz o que falta. Se a Resend devolver 429 ou 5xx, a app tenta de novo até 3 vezes com a mesma chave de idempotência (o e-mail não sai duplicado); outros erros (remetente não verificado, chave inválida) aparecem no log com o código e o nome do erro da Resend, sem o destinatário. Para usar um SMTP qualquer no lugar: `EMAIL_PROVIDER=Smtp` e as variáveis `SMTP_*`.
 
 Em desenvolvimento o `docker-compose.override.yml` força `Email__Provider=Smtp` com o Mailpit (http://localhost:8026): nada sai para a Resend.
+
+## Assinatura (Autentique)
+
+Uma conta Autentique da plataforma atende todos os clientes. `SIGNATURE_PROVIDER=Autentique` liga a integração; `Fake` mantém o simulador (botões "Abrir/Assinar/Recusar" na tela do contrato) e não fala com a Autentique.
+
+1. **Chave da API**: no painel da Autentique, em painel.autentique.com.br/perfil/api, gere a chave e ponha em `AUTENTIQUE_API_KEY`.
+2. **Webhooks**: em painel.autentique.com.br/perfil/webhooks, cada endpoint ouve um tipo de entidade só, então cadastre dois, os dois com a URL `https://<seu-domínio>/api/v1/webhooks/autentique` e formato JSON:
+   - **Document**: `document.finished` e `document.deleted`;
+   - **Signature**: `signature.viewed`, `signature.accepted`, `signature.rejected` e `signature.delivery_failed`.
+
+   Ponha o código de cada endpoint em `AUTENTIQUE_WEBHOOK_SECRET`, separados por vírgula (`codigo-documentos,codigo-assinaturas`). A URL precisa ser pública e HTTPS (em dev, use um túnel como Cloudflare Tunnel ou ngrok).
+3. **Sandbox**: `AUTENTIQUE_SANDBOX=true` cria documentos de teste, que não gastam créditos e somem depois de alguns dias. Em produção, `false`.
+
+Sem a chave ou o secret, a app não sobe e o log diz o que falta.
+
+Como funciona:
+
+- **Envio**: o worker manda o PDF (`createDocument`, upload multipart) com os signatários (e-mail, WhatsApp ou SMS, CPF quando informado), a ordem, o prazo e o lembrete da organização. Falha (rede, limite de 60 requisições por minuto, falta de créditos) volta para a fila: 1, 5, 15 e 60 min; depois disso o contrato fica como "Erro no envio" com a mensagem da Autentique.
+- **Webhooks**: validados por HMAC-SHA256 do corpo bruto (cabeçalho `X-Autentique-Signature`), gravados e processados em segundo plano; reentregas do mesmo evento são ignoradas. Webhook com assinatura inválida recebe 401.
+- **Reconciliação**: a cada 30 min, até 20 contratos em aberto há mais de 24 h (sem consulta nas últimas 24 h) são consultados na API, e o que faltou (visualização, assinatura, recusa, conclusão) é aplicado. Cobre webhooks perdidos.
+- **PDF assinado**: quando o documento termina, o worker baixa o PDF assinado e guarda no storage.
+- **Cancelar ou excluir**: o prazo do documento na Autentique vence na hora (para ninguém mais assinar) e o documento é excluído lá.
+
+Para conferir depois de configurar: crie um contrato com o seu próprio e-mail como signatário, envie, assine pelo link da Autentique e veja o status mudar para Concluído e o "PDF assinado" aparecer. Se o status não mudar, veja os "Error Logs" na tela de webhooks da Autentique e procure por `Webhook recusado` no log da app. A mensagem diz se o cabeçalho `X-Autentique-Signature` não veio (a Autentique não está assinando; o log lista os cabeçalhos que vieram) ou se veio e não confere com nenhum secret configurado.
 
 ## Saúde
 

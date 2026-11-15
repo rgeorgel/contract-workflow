@@ -30,7 +30,7 @@ Nada é apagado por prazo: a exclusão é sempre pedida por um Admin ou por quem
 
 | Serviço | Dados que recebe | Observação |
 | --- | --- | --- |
-| Autentique (fase 4) | PDF, nome, e-mail/telefone, CPF dos signatários | Uma conta da plataforma para todos os clientes |
+| Autentique | PDF, nome, e-mail/telefone, CPF dos signatários | Uma conta da plataforma para todos os clientes |
 | Storage S3 | PDFs | Preferir região no Brasil (AWS sa-east-1, por exemplo) |
 | SMTP | Nome e e-mail dos usuários internos | Confirmação de cadastro, convites, nova senha |
 

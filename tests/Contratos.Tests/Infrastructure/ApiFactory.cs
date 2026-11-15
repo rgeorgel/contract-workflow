@@ -117,3 +117,28 @@ public sealed class ApiCollection : ICollectionFixture<ApiFactory>
 {
     public const string Name = "api";
 }
+
+/// <summary>Mesma API com o provedor Autentique de verdade, falando com a <see cref="FakeAutentique"/> por HTTP.</summary>
+public sealed class AutentiqueApiFactory : ApiFactory
+{
+    public FakeAutentique Autentique { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Signature:Provider", "Autentique");
+        builder.UseSetting("Autentique:ApiKey", FakeAutentique.ApiKey);
+        builder.UseSetting("Autentique:WebhookSecret", $"{FakeAutentique.WebhookSecret}, {FakeAutentique.SecondWebhookSecret}");
+        builder.UseSetting("Autentique:Sandbox", "true");
+        builder.UseSetting("Worker:ReconcileIntervalMinutes", "0");
+        builder.ConfigureTestServices(services =>
+            services.AddHttpClient<Contratos.Application.Signatures.ISignatureProvider, Contratos.Infrastructure.Signatures.AutentiqueSignatureProvider>()
+                .ConfigurePrimaryHttpMessageHandler(() => Autentique));
+    }
+}
+
+[CollectionDefinition(Name)]
+public sealed class AutentiqueCollection : ICollectionFixture<AutentiqueApiFactory>
+{
+    public const string Name = "autentique";
+}

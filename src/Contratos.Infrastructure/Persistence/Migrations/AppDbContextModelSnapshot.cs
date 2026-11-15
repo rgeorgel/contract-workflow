@@ -79,6 +79,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("organization_id");
 
+                    b.Property<DateTimeOffset?>("ProviderCheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("provider_checked_at");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()

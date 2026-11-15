@@ -45,6 +45,8 @@ public sealed class Contract
     public string? SendIdempotencyKey { get; private set; }
 
     public DateTimeOffset? SentAt { get; private set; }
+    /// <summary>Última consulta do documento no provedor (reconciliação de webhooks perdidos).</summary>
+    public DateTimeOffset? ProviderCheckedAt { get; private set; }
     public DateTimeOffset? CompletedAt { get; private set; }
     public DateTimeOffset? CancelledAt { get; private set; }
     public Guid CreatedBy { get; private set; }
@@ -125,6 +127,9 @@ public sealed class Contract
             ordered[i].AttachProvider(signatures[i].PublicId, signatures[i].ShortLink);
         Touch();
     }
+
+    /// <summary>Marca a consulta ao provedor. Não mexe em UpdatedAt: não é uma mudança do contrato.</summary>
+    public void MarkProviderChecked(DateTimeOffset at) => ProviderCheckedAt = at;
 
     public void RecordSendFailure(string error)
     {
