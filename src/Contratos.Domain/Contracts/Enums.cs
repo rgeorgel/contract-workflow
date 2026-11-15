@@ -15,6 +15,7 @@ public static class ContractEventTypes
     public const string SentToProvider = "SentToProvider";
     public const string SendFailed = "SendFailed";
     public const string SendRetried = "SendRetried";
+    public const string ReturnedToDraft = "ReturnedToDraft";
     public const string SignerViewed = "SignerViewed";
     public const string SignerSigned = "SignerSigned";
     public const string SignerDeclined = "SignerDeclined";

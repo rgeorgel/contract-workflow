@@ -63,6 +63,7 @@ public sealed class SecurityTests(ApiFactory factory)
         Assert.Equal("Healthy", checks["database"]);
         Assert.Equal("Degraded", checks["gotenberg"]);
         Assert.Equal("Healthy", checks["storage"]);
+        Assert.Equal("Healthy", checks["signature-balance"]); // provedor fake: sem saldo a vigiar
         Assert.DoesNotContain("127.0.0.1", body);
         Assert.DoesNotContain("Exception", body);
     }

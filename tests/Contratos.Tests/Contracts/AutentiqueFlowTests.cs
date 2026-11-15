@@ -225,5 +225,101 @@ public sealed class AutentiqueFlowTests(AutentiqueApiFactory factory)
 
         var failed = await (await admin.Client.GetAsync($"/api/v1/contracts/{draftId}")).JsonAsync();
         Assert.Contains("sem créditos", failed.GetProperty("sendError").GetString());
+        // A equipe da plataforma foi avisada (cinco recusas, no máximo um e-mail por dia).
+        Assert.InRange(factory.Emails.To(AutentiqueApiFactory.AlertEmail).Count, 1, 2);
+    }
+
+    private async Task<(TestAccount Admin, Guid Id)> DraftWithBadEmailAsync()
+    {
+        var admin = await TestAccounts.CreateAdminAsync(factory);
+        var templateId = (await TemplatesApiTests.CreatePublishedAsync(admin)).GetProperty("id").GetGuid();
+        var id = (await (await admin.Client.PostAsync("/api/v1/contracts", new { templateId, title = "Com e-mail recusado" })).JsonAsync()).GetProperty("id").GetGuid();
+        await admin.Client.PutAsync($"/api/v1/contracts/{id}", new
+        {
+            title = "Com e-mail recusado",
+            variableValues = new Dictionary<string, string> { ["contratante.nome"] = "X", ["contratante.cpf"] = "529.982.247-25", ["valor"] = "10" },
+        });
+        await admin.Client.PostAsync($"/api/v1/contracts/{id}/signers", new { name = "Ana Souza", email = "ana+teste@cliente.com.br", deliveryMethod = "Email", role = "Parte" });
+        return (admin, id);
+    }
+
+    [Fact]
+    public async Task Rejected_data_fails_at_once_with_a_readable_message_and_can_be_fixed_in_draft()
+    {
+        var (admin, id) = await DraftWithBadEmailAsync();
+        var before = Autentique.Mutations("createDocument").Count();
+        Autentique.FailCreateDocument = () => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"errors":[{"message":"validation","extensions":{"validation":{"signers.0.email":["format_is_invalid"]},"category":"validation"}}],"data":{"createDocument":null}}""", Encoding.UTF8, "application/json"),
+        };
+        try
+        {
+            Assert.Equal(HttpStatusCode.Accepted, (await admin.Client.SendAsync(HttpMethod.Post, $"/api/v1/contracts/{id}/send", null)).StatusCode);
+            await factory.ProcessBackgroundAsync();
+        }
+        finally
+        {
+            Autentique.FailCreateDocument = null;
+        }
+
+        // Uma tentativa só: repetir os mesmos dados daria o mesmo erro.
+        Assert.Equal(before + 1, Autentique.Mutations("createDocument").Count());
+        var failed = await (await admin.Client.GetAsync($"/api/v1/contracts/{id}")).JsonAsync();
+        var error = failed.GetProperty("sendError").GetString();
+        Assert.Contains("o e-mail de Ana Souza (formato inválido)", error);
+        Assert.True(failed.GetProperty("permissions").GetProperty("canReturnToDraft").GetBoolean());
+
+        // Volta para rascunho, corrige o signatário e envia de novo.
+        var draft = await admin.Client.PostAsync($"/api/v1/contracts/{id}/return-to-draft");
+        Assert.Equal(HttpStatusCode.OK, draft.StatusCode);
+        var body = await draft.JsonAsync();
+        Assert.Equal("Draft", body.GetProperty("status").GetString());
+        Assert.False(body.GetProperty("hasDocument").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("sendError").ValueKind);
+        Assert.Equal(1, await EventCountAsync(id, ContractEventTypes.ReturnedToDraft));
+        // De novo não dá: já é rascunho.
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.Client.PostAsync($"/api/v1/contracts/{id}/return-to-draft")).StatusCode);
+
+        var signerId = body.GetProperty("signers")[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await admin.Client.PutAsync($"/api/v1/contracts/{id}/signers/{signerId}",
+            new { name = "Ana Souza", email = "ana@cliente.com.br", deliveryMethod = "Email", role = "Parte" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await admin.Client.SendAsync(HttpMethod.Post, $"/api/v1/contracts/{id}/send", null)).StatusCode);
+        await factory.ProcessBackgroundAsync();
+
+        var contract = await LoadAsync(id);
+        Assert.NotNull(contract.AutentiqueDocumentId);
+        Assert.Equal("ana@cliente.com.br", Autentique.Mutations("createDocument").Last().Variables!["signers"]![0]!["email"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Low_balance_degrades_readiness_and_alerts_the_team_once_a_day()
+    {
+        // Outro teste da coleção (falta de créditos) pode já ter mandado o alerta do dia.
+        var before = factory.Emails.To(AutentiqueApiFactory.AlertEmail).Count;
+        Autentique.Balance = (3, 30);
+        try
+        {
+            await factory.ProcessBackgroundAsync();
+            var afterFirst = factory.Emails.To(AutentiqueApiFactory.AlertEmail);
+            Assert.InRange(afterFirst.Count, Math.Max(before, 1), before + 1);
+            if (afterFirst.Count > before)
+                Assert.Contains("restam 3 documentos", afterFirst[^1].TextBody);
+
+            await factory.ProcessBackgroundAsync(); // saldo ainda baixo: sem e-mail novo no mesmo dia
+            Assert.Equal(afterFirst.Count, factory.Emails.To(AutentiqueApiFactory.AlertEmail).Count);
+            Assert.All(afterFirst, m => Assert.Equal("Saldo baixo na Autentique", m.Subject));
+
+            var ready = await (await factory.CreateApiClient().GetAsync("/health/ready")).JsonAsync();
+            var checks = ready.GetProperty("checks").EnumerateArray().ToDictionary(c => c.GetProperty("name").GetString()!, c => c.GetProperty("status").GetString());
+            Assert.Equal("Degraded", checks["signature-balance"]);
+        }
+        finally
+        {
+            Autentique.Balance = (100, 1000);
+            await factory.ProcessBackgroundAsync();
+        }
+
+        var after = await (await factory.CreateApiClient().GetAsync("/health/ready")).JsonAsync();
+        Assert.Contains(after.GetProperty("checks").EnumerateArray(), c => c.GetProperty("name").GetString() == "signature-balance" && c.GetProperty("status").GetString() == "Healthy");
     }
 }

@@ -319,6 +319,23 @@ internal sealed class ContractService(
         return await DetailAsync(contract, ct);
     }
 
+    public async Task<Result<ContractDetail>> ReturnToDraftAsync(Guid id, CancellationToken ct)
+    {
+        if (!tenant.CanEditContracts())
+            return CannotEdit;
+        var contract = await LoadAsync(id, ct);
+        if (contract is null)
+            return NotFound;
+        var documentKey = contract.DocumentKey;
+        if (!contract.ReturnToDraft())
+            return Error.Conflict("Só um contrato com erro no envio, que ainda não chegou ao provedor, volta para rascunho.", "cannot_return_to_draft");
+
+        if (documentKey is not null)
+            await storage.DeletePrefixAsync(documentKey, ct);
+        db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.ReturnedToDraft, actorUserId: tenant.UserId));
+        return await SaveAndDetailAsync(contract, ct);
+    }
+
     public async Task<Result<ContractDetail>> RetrySendAsync(Guid id, CancellationToken ct)
     {
         if (!tenant.CanEditContracts())
@@ -504,7 +521,8 @@ internal sealed class ContractService(
             CanCancel: canEdit && !c.IsFinal,
             CanDelete: tenant.IsAdmin() || c.CreatedBy == tenant.UserId,
             CanResend: canEdit && c.IsOpen,
-            CanSimulate: canEdit && c.IsOpen && provider.Name == FakeSignatureProvider.ProviderName && c.AutentiqueDocumentId is not null);
+            CanSimulate: canEdit && c.IsOpen && provider.Name == FakeSignatureProvider.ProviderName && c.AutentiqueDocumentId is not null,
+            CanReturnToDraft: canEdit && c.CanReturnToDraft);
 
         return new ContractDetail(
             c.Id, c.Number, c.Title, c.Status, c.SigningMode, c.ExpiresAt, c.Message, c.VariableValues,

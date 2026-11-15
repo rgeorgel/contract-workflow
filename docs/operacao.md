@@ -60,6 +60,8 @@ Como funciona:
 - **Reconciliação**: a cada 30 min, até 20 contratos em aberto há mais de 24 h (sem consulta nas últimas 24 h) são consultados na API, e o que faltou (visualização, assinatura, recusa, conclusão) é aplicado. Cobre webhooks perdidos.
 - **PDF assinado**: quando o documento termina, o worker baixa o PDF assinado e guarda no storage.
 - **Cancelar ou excluir**: o prazo do documento na Autentique vence na hora (para ninguém mais assinar) e o documento é excluído lá.
+- **Dados recusados** (e-mail em formato que a Autentique não aceita, SMS para telefone de fora do Brasil): sem retentativa, o contrato vai direto para "Erro no envio" com uma mensagem que diz qual signatário e qual campo. O botão "Voltar para rascunho e corrigir" leva à etapa de signatários; o PDF é gerado de novo no envio.
+- **Saldo**: a cada 6 h o worker consulta o saldo da conta (`me { subscription }`). Abaixo de `AUTENTIQUE_LOW_DOCUMENTS` documentos, ou quando um envio é recusado por falta de créditos, o `/health/ready` fica degradado (`signature-balance`) e `AUTENTIQUE_ALERT_EMAIL` recebe um e-mail, no máximo um por dia. Sem créditos, os envios continuam na fila tentando de novo.
 
 Para conferir depois de configurar: crie um contrato com o seu próprio e-mail como signatário, envie, assine pelo link da Autentique e veja o status mudar para Concluído e o "PDF assinado" aparecer. Se o status não mudar, veja os "Error Logs" na tela de webhooks da Autentique e procure por `Webhook recusado` no log da app. A mensagem diz se o cabeçalho `X-Autentique-Signature` não veio (a Autentique não está assinando; o log lista os cabeçalhos que vieram) ou se veio e não confere com nenhum secret configurado.
 

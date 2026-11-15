@@ -179,6 +179,53 @@ public sealed class AutentiqueProviderTests
     }
 
     [Fact]
+    public async Task Rejected_signer_data_becomes_a_permanent_error_naming_the_signer()
+    {
+        var handler = new Respond(_ => Json("""{"errors":[{"message":"validation","extensions":{"validation":{"signers.1.phone":["format_is_invalid"],"signers.1.email":["field_required"]},"category":"validation"}}],"data":null}"""));
+        var request = new DocumentRequest("Contrato", null, false, null, null, null,
+        [
+            new DocumentSigner("Marina", "marina@x.com.br", null, Contratos.Domain.Contracts.DeliveryMethod.Email, Contratos.Domain.Templates.SignerAction.Sign, null),
+            new DocumentSigner("João", null, "+5511", Contratos.Domain.Contracts.DeliveryMethod.WhatsApp, Contratos.Domain.Templates.SignerAction.Sign, null),
+        ]);
+
+        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).CreateDocumentAsync(request, new MemoryStream("%PDF"u8.ToArray()), CancellationToken.None));
+
+        Assert.True(ex.Permanent);
+        Assert.Contains("o telefone de João (formato inválido)", ex.Message);
+        Assert.Contains("o e-mail de João (obrigatório)", ex.Message);
+        Assert.Contains("Volte o contrato para rascunho", ex.Message);
+    }
+
+    [Fact]
+    public async Task Foreign_sms_gets_its_own_explanation()
+    {
+        var handler = new Respond(_ => Json("""{"errors":[{"message":"validation","extensions":{"validation":{"signers.0.delivery_method":["sms_delivery_not_allowed_on_foreign_documents"]}}}],"data":null}"""));
+        var request = new DocumentRequest("Contrato", null, false, null, null, null,
+            [new DocumentSigner("Ana", null, "+17783868302", Contratos.Domain.Contracts.DeliveryMethod.Sms, Contratos.Domain.Templates.SignerAction.Sign, null)]);
+
+        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).CreateDocumentAsync(request, new MemoryStream("%PDF"u8.ToArray()), CancellationToken.None));
+
+        Assert.True(ex.Permanent);
+        Assert.Contains("só envia SMS para telefones do Brasil", ex.Message);
+    }
+
+    [Fact]
+    public async Task Out_of_credits_and_rate_limit_are_retried_not_permanent()
+    {
+        var credits = new Respond(_ => Json("""{"errors":[{"message":"unavailable_credits"}],"data":null}"""));
+        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(credits).ResendAsync(["s"], CancellationToken.None));
+        Assert.False(ex.Permanent);
+        Assert.True(ex.OutOfCredits);
+    }
+
+    [Fact]
+    public async Task Balance_comes_from_the_subscription()
+    {
+        var fake = new FakeAutentique { Balance = (7, 70) };
+        Assert.Equal(new ProviderBalance(7, 70), await Provider(fake).GetBalanceAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Rate_limit_and_bad_key_are_errors()
     {
         var limited = new Respond(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("""{"message":"Too Many Attempts."}""") });

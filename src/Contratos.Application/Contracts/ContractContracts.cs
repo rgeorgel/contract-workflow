@@ -22,7 +22,7 @@ public sealed record SignerDto(
 public sealed record ContractTemplateInfo(Guid Id, string Name, Guid VersionId, int Version,
     IReadOnlyList<TemplateVariable> Variables, IReadOnlyList<SignerRoleSuggestion> SuggestedRoles);
 
-public sealed record ContractPermissions(bool CanEdit, bool CanSend, bool CanCancel, bool CanDelete, bool CanResend, bool CanSimulate);
+public sealed record ContractPermissions(bool CanEdit, bool CanSend, bool CanCancel, bool CanDelete, bool CanResend, bool CanSimulate, bool CanReturnToDraft);
 
 public sealed record ContractDetail(
     Guid Id, int Number, string Title, ContractStatus Status, SigningMode SigningMode,
@@ -58,6 +58,8 @@ public interface IContractService
     Task<Result<ContractDetail>> RemoveSignerAsync(Guid id, Guid signerId, CancellationToken ct);
     Task<Result<ContractDetail>> SendAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<Result<ContractDetail>> RetrySendAsync(Guid id, CancellationToken ct);
+    /// <summary>Envio que falhou antes de chegar ao provedor volta a rascunho, para corrigir e enviar de novo.</summary>
+    Task<Result<ContractDetail>> ReturnToDraftAsync(Guid id, CancellationToken ct);
     Task<Result<ContractDetail>> CancelAsync(Guid id, CancellationToken ct);
     Task<Result<ContractDetail>> ResendAsync(Guid id, Guid signerId, CancellationToken ct);
     Task<Result> DeleteAsync(Guid id, int confirmNumber, bool alsoInProvider, CancellationToken ct);

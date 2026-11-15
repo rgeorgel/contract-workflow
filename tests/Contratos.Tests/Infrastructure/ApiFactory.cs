@@ -121,6 +121,8 @@ public sealed class ApiCollection : ICollectionFixture<ApiFactory>
 /// <summary>Mesma API com o provedor Autentique de verdade, falando com a <see cref="FakeAutentique"/> por HTTP.</summary>
 public sealed class AutentiqueApiFactory : ApiFactory
 {
+    public const string AlertEmail = "alertas@plataforma.test";
+
     public FakeAutentique Autentique { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -131,6 +133,8 @@ public sealed class AutentiqueApiFactory : ApiFactory
         builder.UseSetting("Autentique:WebhookSecret", $"{FakeAutentique.WebhookSecret}, {FakeAutentique.SecondWebhookSecret}");
         builder.UseSetting("Autentique:Sandbox", "true");
         builder.UseSetting("Worker:ReconcileIntervalMinutes", "0");
+        builder.UseSetting("SignatureBalance:CheckIntervalHours", "0");
+        builder.UseSetting("SignatureBalance:AlertEmail", AlertEmail);
         builder.ConfigureTestServices(services =>
             services.AddHttpClient<Contratos.Application.Signatures.ISignatureProvider, Contratos.Infrastructure.Signatures.AutentiqueSignatureProvider>()
                 .ConfigurePrimaryHttpMessageHandler(() => Autentique));

@@ -93,6 +93,8 @@ public static class DependencyInjection
         });
 
         AddSignatureProvider(services, config);
+        services.AddOptions<BalanceAlertOptions>().Bind(config.GetSection(BalanceAlertOptions.Section));
+        services.AddSingleton<ProviderBalanceMonitor>();
 
         services.AddScoped<WebhookReceiver>();
         services.AddSingleton<BackgroundProcessor>();
@@ -104,7 +106,8 @@ public static class DependencyInjection
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])
             .AddCheck<GotenbergHealthCheck>("gotenberg", HealthStatus.Degraded, tags: ["ready"])
-            .AddCheck<StorageHealthCheck>("storage", tags: ["ready"]);
+            .AddCheck<StorageHealthCheck>("storage", tags: ["ready"])
+            .AddCheck<SignatureBalanceHealthCheck>("signature-balance", HealthStatus.Degraded, tags: ["ready"]);
 
         return services;
     }

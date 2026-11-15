@@ -2,6 +2,7 @@ using Contratos.Application.Signatures;
 using Contratos.Application.Storage;
 using Contratos.Domain.Contracts;
 using Contratos.Infrastructure.Persistence;
+using Contratos.Infrastructure.Signatures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -70,6 +71,7 @@ public sealed class BackgroundProcessor(
     IServiceScopeFactory scopes,
     TimeProvider clock,
     IOptions<WorkerOptions> options,
+    ProviderBalanceMonitor balance,
     ILogger<BackgroundProcessor> logger)
 {
     private const int BatchLimit = 50;
@@ -85,6 +87,7 @@ public sealed class BackgroundProcessor(
             for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
             await ExpireContractsAsync(ct);
             await ReconcileAsync(ct);
+            await balance.CheckIfDueAsync(ct);
         }
         finally
         {
@@ -221,24 +224,29 @@ public sealed class BackgroundProcessor(
             {
                 await tx.RollbackAsync(ct);
                 logger.LogWarning(e, "Falha na mensagem {Type} #{Id} (tentativa {Attempt})", type, messageId, attempts + 1);
-                await RecordOutboxFailureAsync(messageId, e.Message, ct);
+                await RecordOutboxFailureAsync(messageId, e, ct);
+                if (e is SignatureProviderException { OutOfCredits: true })
+                    await balance.ReportOutOfCreditsAsync(ct);
                 return true;
             }
         }
     }
 
-    private async Task RecordOutboxFailureAsync(long id, string error, CancellationToken ct)
+    private async Task RecordOutboxFailureAsync(long id, Exception failure, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var message = await db.OutboxMessages.SingleAsync(m => m.Id == id, ct);
         var delays = options.Value.Delays;
+        var error = failure.Message;
         message.Attempts++;
         message.LastError = Truncate(error);
 
-        if (message.Attempts > delays.Length)
+        // Dados recusados pelo provedor: repetir dá o mesmo erro; vai direto para "Erro no envio".
+        var permanent = failure is SignatureProviderException { Permanent: true };
+        if (permanent || message.Attempts > delays.Length)
         {
-            // Esgotou (5 tentativas): desiste e deixa o erro visível no contrato.
+            // Esgotou (5 tentativas) ou não adianta tentar: desiste e deixa o erro visível no contrato.
             message.ProcessedAt = clock.GetUtcNow();
             if (message.Type == OutboxTypes.SendContract)
             {
@@ -269,8 +277,8 @@ public sealed class BackgroundProcessor(
             case OutboxTypes.SendContract:
             {
                 var contract = await LoadContractAsync(db, message.Read<ContractMessage>().ContractId, ct);
-                // Cancelado antes de sair, excluído ou já entregue: nada a fazer.
-                if (contract is null || contract.Status == ContractStatus.Cancelled || contract.AutentiqueDocumentId is not null)
+                // Cancelado ou de volta a rascunho antes de sair, excluído ou já entregue: nada a fazer.
+                if (contract is null || contract.Status != ContractStatus.Sent || contract.AutentiqueDocumentId is not null)
                     return;
 
                 var org = await db.Organizations.SingleAsync(o => o.Id == contract.OrganizationId, ct);

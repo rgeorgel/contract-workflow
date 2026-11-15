@@ -24,6 +24,8 @@ services:
       Autentique__ApiKey: ${AUTENTIQUE_API_KEY}
       Autentique__WebhookSecret: ${AUTENTIQUE_WEBHOOK_SECRET}
       Autentique__Sandbox: ${AUTENTIQUE_SANDBOX:-true}
+      SignatureBalance__AlertEmail: ${AUTENTIQUE_ALERT_EMAIL:-}
+      SignatureBalance__LowDocuments: ${AUTENTIQUE_LOW_DOCUMENTS:-20}
       # E-mails do sistema: Resend por padrão (EMAIL_PROVIDER=Smtp usa as variáveis SMTP_*).
       Email__Provider: ${EMAIL_PROVIDER:-Resend}
       Email__FromAddress: ${EMAIL_FROM:-${SMTP_FROM:-nao-responda@contratos.local}}

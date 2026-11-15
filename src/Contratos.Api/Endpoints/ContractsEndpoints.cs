@@ -54,6 +54,9 @@ internal static class ContractsEndpoints
         g.MapPost("/{id:guid}/retry-send", async (Guid id, IContractService contracts, CancellationToken ct) =>
                 (await contracts.RetrySendAsync(id, ct)).ToHttp())
             .WithSummary("Repete um envio que falhou");
+        g.MapPost("/{id:guid}/return-to-draft", async (Guid id, IContractService contracts, CancellationToken ct) =>
+                (await contracts.ReturnToDraftAsync(id, ct)).ToHttp())
+            .WithSummary("Envio com erro volta a rascunho para corrigir e enviar de novo");
         g.MapPost("/{id:guid}/cancel", async (Guid id, IContractService contracts, CancellationToken ct) =>
                 (await contracts.CancelAsync(id, ct)).ToHttp())
             .WithSummary("Cancela no sistema e remove no provedor");

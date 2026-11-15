@@ -137,6 +137,26 @@ public sealed class Contract
         Touch();
     }
 
+    /// <summary>
+    /// O envio falhou antes de chegar ao provedor (dados recusados ou tentativas esgotadas): volta a rascunho para
+    /// corrigir signatários ou dados e enviar de novo. O PDF congelado é descartado e gerado outra vez no envio.
+    /// </summary>
+    public bool CanReturnToDraft => Status == ContractStatus.Sent && AutentiqueDocumentId is null && SendError is not null;
+
+    public bool ReturnToDraft()
+    {
+        if (!CanReturnToDraft)
+            return false;
+        Status = ContractStatus.Draft;
+        DocumentKey = null;
+        DocumentSha256 = null;
+        SendIdempotencyKey = null;
+        SendError = null;
+        SentAt = null;
+        Touch();
+        return true;
+    }
+
     public void ClearSendFailure()
     {
         SendError = null;

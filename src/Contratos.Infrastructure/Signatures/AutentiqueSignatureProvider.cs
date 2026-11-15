@@ -33,9 +33,21 @@ public sealed class AutentiqueOptions
 }
 
 /// <summary>Erro devolvido pela Autentique. <see cref="Code"/> é a chave da mensagem (ex.: document_not_found).</summary>
-public sealed class AutentiqueException(string message, string? code = null, Exception? inner = null) : Exception(message, inner)
+public sealed class AutentiqueException(
+    string message, string? code = null, Exception? inner = null,
+    IReadOnlyDictionary<string, string[]>? validation = null, bool permanent = false)
+    : SignatureProviderException(message, permanent || IsPermanentCode(code), code == "unavailable_credits", inner)
 {
     public string? Code { get; } = code;
+
+    /// <summary>Erros de validação por campo, como a Autentique manda (ex.: "signers.0.email": ["format_is_invalid"]).</summary>
+    public IReadOnlyDictionary<string, string[]> Validation { get; } = validation ?? new Dictionary<string, string[]>();
+
+    /// <summary>Dados recusados: tentar de novo com os mesmos dados dá o mesmo erro.</summary>
+    private static bool IsPermanentCode(string? code) => code is "validation" or "format_is_invalid" or "field_required"
+        or "must_be_a_valid_email_address" or "must_be_a_string" or "must_be_an_array" or "not_a_valid_date" or "invalid_date"
+        or "must_be_a_file" or "must_be_a_valid_file" or "may_not_be_greater_than" or "must_be_at_least"
+        or "sms_delivery_not_allowed_on_foreign_documents";
 }
 
 /// <summary>
@@ -93,7 +105,15 @@ internal sealed class AutentiqueSignatureProvider(
         file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         content.Add(file, FileField, "contrato.pdf");
 
-        var data = await SendAsync(content, ct);
+        JsonElement data;
+        try
+        {
+            data = await SendAsync(content, ct);
+        }
+        catch (AutentiqueException e) when (e.Permanent)
+        {
+            throw new AutentiqueException(Explain(e, req), e.Code, e, e.Validation, permanent: true);
+        }
         var document = data.GetProperty("createDocument");
         var documentId = NormalizeId(document.GetProperty("id").GetString()
             ?? throw new AutentiqueException("A Autentique não devolveu o id do documento."));
@@ -199,6 +219,68 @@ internal sealed class AutentiqueSignatureProvider(
             throw new AutentiqueException("O arquivo assinado baixado da Autentique não é um PDF.", "download_failed");
         return buffer;
     }
+
+    public async Task<ProviderBalance?> GetBalanceAsync(CancellationToken ct)
+    {
+        var data = await QueryAsync("query { me { subscription { documents credits } } }", [], ct);
+        if (!data.TryGetProperty("me", out var me) || !me.TryGetProperty("subscription", out var sub) || sub.ValueKind != JsonValueKind.Object)
+            return new ProviderBalance(null, null);
+        static int? Int(JsonElement el, string name) =>
+            el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : null;
+        return new ProviderBalance(Int(sub, "documents"), Int(sub, "credits"));
+    }
+
+    // ---------- Mensagens para o usuário ----------
+
+    /// <summary>
+    /// "signers.1.email: format_is_invalid" vira "A Autentique recusou o e-mail de Carol (formato inválido)."
+    /// O índice é a posição em <see cref="DocumentRequest.Signers"/> (a ordem de envio).
+    /// </summary>
+    internal static string Explain(AutentiqueException e, DocumentRequest req)
+    {
+        const string foreignSms = "sms_delivery_not_allowed_on_foreign_documents";
+        if (e.Code == foreignSms || e.Validation.Values.Any(codes => codes.Any(c => c.StartsWith(foreignSms, StringComparison.Ordinal))))
+            return "A Autentique só envia SMS para telefones do Brasil. Troque o canal desse signatário para WhatsApp ou e-mail e envie de novo.";
+
+        var parts = new List<string>();
+        foreach (var (field, codes) in e.Validation)
+        {
+            var reason = string.Join(", ", codes.Select(Reason).Distinct());
+            var segments = field.Split('.');
+            if (segments is ["signers", var index, ..] && int.TryParse(index, out var i) && i >= 0 && i < req.Signers.Count)
+                parts.Add($"{Field(segments[^1])} de {req.Signers[i].Name} ({reason})");
+            else
+                parts.Add($"{Field(segments[^1])} ({reason})");
+        }
+        if (parts.Count == 0)
+            parts.Add(e.Code is { } c ? Reason(c) : "dados inválidos");
+        return $"A Autentique recusou {string.Join("; ", parts)}. Volte o contrato para rascunho, corrija e envie de novo.";
+    }
+
+    private static string Field(string name) => name switch
+    {
+        "email" => "o e-mail",
+        "phone" => "o telefone",
+        "name" => "o nome",
+        "cpf" => "o CPF",
+        "delivery_method" => "o canal de envio",
+        "file" => "o PDF",
+        "deadline_at" => "a data limite",
+        "message" => "a mensagem",
+        _ => $"o campo {name}",
+    };
+
+    private static string Reason(string code) => code.Split(':')[0] switch
+    {
+        "format_is_invalid" or "must_be_a_valid_email_address" => "formato inválido",
+        "field_required" => "obrigatório",
+        "may_not_be_greater_than" => "longo demais",
+        "must_be_at_least" => "curto demais",
+        "not_a_valid_date" or "invalid_date" => "data inválida",
+        "must_be_a_valid_file" or "must_be_a_file" => "arquivo inválido",
+        "validation" => "dados inválidos",
+        var other => other,
+    };
 
     // ---------- Webhook ----------
 
@@ -467,11 +549,18 @@ internal sealed class AutentiqueSignatureProvider(
         var first = items[0];
         var code = Str(first, "message") ?? "unknown";
         var details = new List<string>();
+        var fields = new Dictionary<string, string[]>();
         if (first.TryGetProperty("extensions", out var ext) && ext.TryGetProperty("validation", out var validation)
             && validation.ValueKind == JsonValueKind.Object)
         {
             foreach (var field in validation.EnumerateObject())
-                details.Add($"{field.Name}: {string.Join(", ", field.Value.EnumerateArray().Select(v => v.GetString()))}");
+            {
+                var codes = field.Value.ValueKind == JsonValueKind.Array
+                    ? field.Value.EnumerateArray().Select(v => v.ToString()).ToArray()
+                    : [field.Value.ToString()];
+                fields[field.Name] = codes;
+                details.Add($"{field.Name}: {string.Join(", ", codes)}");
+            }
         }
         var message = code switch
         {
@@ -481,7 +570,7 @@ internal sealed class AutentiqueSignatureProvider(
         };
         if (details.Count > 0)
             message += $" ({string.Join("; ", details)})";
-        return new AutentiqueException(message, code);
+        return new AutentiqueException(message, code, validation: fields);
     }
 
     private static bool IsAutentiqueHost(Uri uri) =>

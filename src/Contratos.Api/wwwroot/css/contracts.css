@@ -99,6 +99,7 @@
 .timeline time { display: block; color: var(--color-subtle); font-size: .8rem; }
 .timeline .muted { font-size: .85rem; }
 .banner { margin-bottom: 16px; }
+.banner__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .is-danger-text { color: var(--color-danger); }
 .is-danger-text:hover { background: var(--color-danger-soft); color: var(--color-danger); }
 .check { display: inline-flex; gap: 8px; align-items: center; font-size: .925rem; }

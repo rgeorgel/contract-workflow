@@ -26,6 +26,7 @@ const EVENT_TEXT = {
   SentToProvider: () => ['Links entregues ao provedor de assinatura', null, 'info'],
   SendFailed: (e) => ['Erro no envio', e.payload.error, 'danger'],
   SendRetried: () => ['Envio repetido', null, 'info'],
+  ReturnedToDraft: () => ['Voltou para rascunho para correção', null, 'info'],
   SignerViewed: (e) => [`${e.signerName} abriu o documento`, null, 'warning'],
   SignerSigned: (e) => [`${e.signerName} assinou`, null, 'success'],
   SignerDeclined: (e) => [`${e.signerName} recusou`, e.payload.reason, 'danger'],
@@ -128,13 +129,20 @@ function renderBanner() {
   const banner = document.querySelector('[data-banner]');
   clear(banner);
   if (contract.sendError) {
+    const p = contract.permissions;
     banner.append(h('div', { class: 'alert alert--error banner' }, h('div', { class: 'alert__body' },
       h('strong', {}, 'Erro no envio'),
-      h('span', {}, 'O provedor de assinatura não aceitou o documento depois de várias tentativas.'),
-      contract.permissions.canResend
-        ? h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: (e) => retrySend(e.currentTarget) }, 'Tentar de novo')
+      h('span', {}, contract.sendError),
+      p.canResend || p.canReturnToDraft
+        ? h('div', { class: 'banner__actions' },
+          p.canReturnToDraft
+            ? h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: (e) => returnToDraft(e.currentTarget) }, 'Voltar para rascunho e corrigir')
+            : null,
+          p.canResend
+            ? h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: (e) => retrySend(e.currentTarget) }, 'Tentar de novo')
+            : null)
         : null)));
-  } else if (contract.status === 'Sent' && !contract.signers.some((s) => s.status !== 'Pending') && contract.permissions.canSimulate === false && contract.permissions.canResend) {
+  } else if (contract.status === 'Sent' && !contract.signers.some((s) => s.status !== 'Pending' || s.canResend) && contract.permissions.canSimulate === false && contract.permissions.canResend) {
     banner.append(h('div', { class: 'alert alert--info banner' }, 'Entregando os links ao provedor de assinatura…'));
   }
 }
@@ -208,6 +216,18 @@ async function act(button, fn, success) {
 }
 
 const resend = (s, btn) => act(btn, () => api(`/contracts/${id}/signers/${s.id}/resend`, { method: 'POST' }), `Link reenviado para ${s.name}.`);
+async function returnToDraft(btn) {
+  setBusy(btn, true);
+  try {
+    await api(`/contracts/${id}/return-to-draft`, { method: 'POST' });
+    // Os erros do provedor costumam ser de signatário: abre direto nessa etapa.
+    location.assign(`/contract-new.html?id=${id}&step=3`);
+  } catch (err) {
+    setBusy(btn, false);
+    toast(err.message, 'error');
+  }
+}
+
 const retrySend = (btn) => act(btn, () => api(`/contracts/${id}/retry-send`, { method: 'POST' }), 'Envio repetido.');
 const simulate = (s, action, btn) => act(btn, () => api(`/dev/fake-provider/contracts/${id}/signers/${s.id}/${action}`, { method: 'POST' }));
 

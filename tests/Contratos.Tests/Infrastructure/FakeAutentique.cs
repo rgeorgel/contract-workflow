@@ -33,6 +33,9 @@ public sealed class FakeAutentique : HttpMessageHandler
     /// <summary>Próxima resposta de erro (uma vez), para simular falhas.</summary>
     public Func<HttpResponseMessage>? FailNext { get; set; }
 
+    /// <summary>Saldo devolvido por me { subscription }.</summary>
+    public (int Documents, int Credits) Balance { get; set; } = (100, 1000);
+
     /// <summary>Enquanto definido, todo createDocument responde com isto.</summary>
     public Func<HttpResponseMessage>? FailCreateDocument { get; set; }
 
@@ -80,6 +83,11 @@ public sealed class FakeAutentique : HttpMessageHandler
         if (auth != $"Bearer {ApiKey}")
             return Json("""{"errors":[{"message":"unauthorized"}],"data":null}""");
 
+        if (query.Contains("subscription", StringComparison.Ordinal))
+            return Json(new JsonObject { ["data"] = new JsonObject { ["me"] = new JsonObject { ["subscription"] = new JsonObject
+            {
+                ["has_premium_features"] = false, ["documents"] = Balance.Documents, ["credits"] = Balance.Credits,
+            } } } }.ToJsonString());
         if (query.Contains("createDocument", StringComparison.Ordinal))
             return FailCreateDocument?.Invoke() ?? CreateDocument(variables!);
         if (query.Contains("updateDocument", StringComparison.Ordinal))
