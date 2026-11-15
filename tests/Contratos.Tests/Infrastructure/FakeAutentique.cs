@@ -97,18 +97,18 @@ public sealed class FakeAutentique : HttpMessageHandler
 
     private HttpResponseMessage CreateDocument(JsonNode variables)
     {
-        var documentId = Guid.NewGuid().ToString();
+        var documentId = Guid.NewGuid().ToString("N") + "a1b2c3d4e5f6a7b8c9"; // como a real: hex sem hífen, 50 caracteres
         var signers = variables["signers"]!.AsArray();
         var ids = new List<string>();
         var signatures = new JsonArray
         {
             // O dono da conta aparece como assinatura sem ação: não pode ser ligado a um signatário.
-            new JsonObject { ["public_id"] = Guid.NewGuid().ToString(), ["name"] = "Plataforma", ["email"] = "conta@plataforma.test", ["action"] = null, ["link"] = null },
+            new JsonObject { ["public_id"] = Guid.NewGuid().ToString("N"), ["name"] = "Plataforma", ["email"] = "conta@plataforma.test", ["action"] = null, ["link"] = null },
         };
         // Devolve em ordem invertida: o provedor precisa ligar por e-mail/telefone, não pela posição.
         foreach (var signer in signers.Reverse())
         {
-            var publicId = Guid.NewGuid().ToString();
+            var publicId = Guid.NewGuid().ToString("N"); // a API devolve sem hífen; o webhook manda com
             signatures.Add(new JsonObject
             {
                 ["public_id"] = publicId,
@@ -154,6 +154,9 @@ public sealed class FakeAutentique : HttpMessageHandler
         }
         return Json(new JsonObject { ["data"] = new JsonObject { ["document"] = new JsonObject { ["id"] = documentId, ["signatures"] = signatures } } }.ToJsonString());
     }
+
+    /// <summary>O mesmo id de assinatura no formato do webhook: UUID com hífens.</summary>
+    public static string Dashed(string publicId) => Guid.ParseExact(publicId, "N").ToString("D");
 
     /// <summary>Webhook no formato da documentação, com o recurso em event.data.object (ou direto em data).</summary>
     public static (string Body, string Signature) Webhook(string type, JsonObject resource, bool resourceUnderObject = true, string? eventId = null)

@@ -108,7 +108,7 @@ public sealed class AutentiqueFlowTests(AutentiqueApiFactory factory)
         var ids = Autentique.Documents[docId];
 
         // Assinatura inválida: recusado, nada gravado.
-        var (viewed, viewedSig) = FakeAutentique.Webhook("signature.viewed", new JsonObject { ["public_id"] = ids[0], ["document"] = docId });
+        var (viewed, viewedSig) = FakeAutentique.Webhook("signature.viewed", new JsonObject { ["public_id"] = FakeAutentique.Dashed(ids[0]), ["document"] = docId });
         Assert.Equal(HttpStatusCode.Unauthorized, await PostWebhookAsync(viewed, FakeAutentique.Sign(viewed, "outro-secret")));
         Assert.Equal(HttpStatusCode.Unauthorized, await PostWebhookAsync(viewed, ""));
 
@@ -121,10 +121,10 @@ public sealed class AutentiqueFlowTests(AutentiqueApiFactory factory)
         // Formato alternativo da documentação: recurso direto em data, documento como objeto.
         // Assinado com o secret do segundo endpoint (o de eventos de assinatura).
         var (signed1, _) = FakeAutentique.Webhook("signature.accepted",
-            new JsonObject { ["public_id"] = ids[0], ["document"] = new JsonObject { ["id"] = docId } }, resourceUnderObject: false);
+            new JsonObject { ["public_id"] = FakeAutentique.Dashed(ids[0]), ["document"] = new JsonObject { ["id"] = docId } }, resourceUnderObject: false);
         Assert.Equal(HttpStatusCode.OK, await PostWebhookAsync(signed1, FakeAutentique.Sign(signed1, FakeAutentique.SecondWebhookSecret)));
         // Sem o documento no evento: o contrato é achado pela assinatura.
-        var (signed2, sig2) = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = ids[1] });
+        var (signed2, sig2) = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = FakeAutentique.Dashed(ids[1]) });
         Assert.Equal(HttpStatusCode.OK, await PostWebhookAsync(signed2, sig2));
         // Evento que o sistema não usa: aceito e ignorado.
         var (updated, updatedSig) = FakeAutentique.Webhook("document.updated", new JsonObject { ["id"] = docId });

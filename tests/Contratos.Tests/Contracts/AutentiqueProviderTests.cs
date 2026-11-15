@@ -81,15 +81,15 @@ public sealed class AutentiqueProviderTests
     {
         var resource = new JsonObject
         {
-            ["public_id"] = "sig-1",
-            ["document"] = "doc-1",
+            ["public_id"] = "sig1",
+            ["document"] = "doc1",
             ["rejected"] = type == "signature.rejected" ? new JsonObject { ["reason"] = "Valor errado", ["created_at"] = "2026-11-15 10:00:00" } : null,
         };
         foreach (var underObject in new[] { true, false })
         {
             var (body, _) = FakeAutentique.Webhook(type, (JsonObject)resource.DeepClone(), underObject, eventId: "evt-1");
             var ev = Assert.Single(Provider().ParseWebhook(body));
-            Assert.Equal(("evt-1", expected, "doc-1", "sig-1"), (ev.ExternalEventId, ev.Type, ev.DocumentId, ev.SignaturePublicId));
+            Assert.Equal(("evt-1", expected, "doc1", "sig1"), (ev.ExternalEventId, ev.Type, ev.DocumentId, ev.SignaturePublicId));
             Assert.Equal(new DateTimeOffset(2026, 11, 15, 13, 45, 10, TimeSpan.Zero), ev.OccurredAt);
             if (expected == SignatureEventType.Declined)
                 Assert.Equal("Valor errado", ev.Reason);
@@ -100,11 +100,11 @@ public sealed class AutentiqueProviderTests
     public void Document_events_and_ignored_types()
     {
         var provider = Provider();
-        var (finished, _) = FakeAutentique.Webhook("document.finished", new JsonObject { ["id"] = "doc-9" });
+        var (finished, _) = FakeAutentique.Webhook("document.finished", new JsonObject { ["id"] = "doc9" });
         var ev = Assert.Single(provider.ParseWebhook(finished));
-        Assert.Equal((SignatureEventType.DocumentFinished, "doc-9", (string?)null), (ev.Type, ev.DocumentId, ev.SignaturePublicId));
+        Assert.Equal((SignatureEventType.DocumentFinished, "doc9", (string?)null), (ev.Type, ev.DocumentId, ev.SignaturePublicId));
 
-        var (deleted, _) = FakeAutentique.Webhook("document.deleted", new JsonObject { ["id"] = "doc-9" });
+        var (deleted, _) = FakeAutentique.Webhook("document.deleted", new JsonObject { ["id"] = "doc9" });
         Assert.Equal(SignatureEventType.DocumentDeleted, Assert.Single(provider.ParseWebhook(deleted)).Type);
 
         foreach (var type in new[] { "document.created", "document.updated", "signature.created", "member.created" })
@@ -115,11 +115,47 @@ public sealed class AutentiqueProviderTests
     public void Document_given_as_object_or_missing()
     {
         var provider = Provider();
-        var asObject = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = "s", ["document"] = new JsonObject { ["id"] = "doc-2" } }).Body;
-        Assert.Equal("doc-2", Assert.Single(provider.ParseWebhook(asObject)).DocumentId);
+        var asObject = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = "s", ["document"] = new JsonObject { ["id"] = "doc2" } }).Body;
+        Assert.Equal("doc2", Assert.Single(provider.ParseWebhook(asObject)).DocumentId);
 
         var missing = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = "s" }).Body;
         Assert.Equal("", Assert.Single(provider.ParseWebhook(missing)).DocumentId); // o processador acha pela assinatura
+    }
+
+    /// <summary>Formato real recebido no sandbox (15/11/2026), sem os dados pessoais.</summary>
+    [Fact]
+    public void Real_sandbox_payloads()
+    {
+        const string accepted = """
+            {"id":"MTUwNjF8YmNh","url":"https://contratos-teste.example/api/v1/webhooks/autentique","name":"Assinaturas - teste",
+             "event":{"id":"bca385c8-7198-4d0c-a5c0-266c5143049b",
+               "data":{"mail":{"sent":"2026-11-15 00:49:40","refused":null},"user":{"name":"Fulana","email":null,"phone":"+15550000000"},
+                 "action":"Sign","events":[{"type":"viewed","document":"27fca02794d5fe8467965558ab8fc5d1583c3fadeb3294a58","created_at":"2026-11-15T03:50:23.000000Z"}],
+                 "object":"signature","reason":null,"signed":"2026-11-15T03:51:35.000000Z","viewed":"2026-11-15T03:50:23.000000Z",
+                 "document":"27fca02794d5fe8467965558ab8fc5d1583c3fadeb3294a58","rejected":null,
+                 "public_id":"9322bc10-e0a7-11f1-818d-42010a2b6021","created_at":"2026-11-15T03:49:35.000000Z"},
+               "type":"signature.accepted","object":"event","created_at":"2026-11-15T03:51:35.472985Z","organization":25725066,"previous_attributes":[]},
+             "format":"json","object":"webhook"}
+            """;
+        var ev = Assert.Single(Provider().ParseWebhook(accepted));
+        Assert.Equal(SignatureEventType.Signed, ev.Type);
+        // A API devolve "9322bc10e0a711f1818d42010a2b6021" (sem hífen) na criação: o webhook precisa bater com isso.
+        Assert.Equal("9322bc10e0a711f1818d42010a2b6021", ev.SignaturePublicId);
+        Assert.Equal("27fca02794d5fe8467965558ab8fc5d1583c3fadeb3294a58", ev.DocumentId);
+        Assert.Equal("bca385c8-7198-4d0c-a5c0-266c5143049b", ev.ExternalEventId);
+
+        const string finished = """
+            {"id":"MTUwNjB8ZTVi","name":"Contratos - teste",
+             "event":{"id":"e5b660b5-72f6-4385-8f27-ab9402bb81d9",
+               "data":{"id":"62d199cd8432e8c515c0867f06eee63f0f86d18b7be355944","api":true,"object":"document","sandbox":true,
+                 "files":{"signed":"https://api.autentique.com.br/documentos/62d199cd8432e8c515c0867f06eee63f0f86d18b7be355944/assinado.pdf"},
+                 "signatures":[{"object":"signature","public_id":"efc92719-e0a2-11f1-818d-42010a2b6021","action":"Sign"}],
+                 "signed_count":2,"signatures_count":2},
+               "type":"document.finished","object":"event","created_at":"2026-11-15T03:37:39.545632Z","previous_attributes":{"signed_count":2}},
+             "format":"json","object":"webhook"}
+            """;
+        var done = Assert.Single(Provider().ParseWebhook(finished));
+        Assert.Equal((SignatureEventType.DocumentFinished, "62d199cd8432e8c515c0867f06eee63f0f86d18b7be355944"), (done.Type, done.DocumentId));
     }
 
     [Theory]
@@ -175,7 +211,7 @@ public sealed class AutentiqueProviderTests
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>login</html>") }
             : Json(new JsonObject { ["data"] = new JsonObject { ["document"] = new JsonObject { ["files"] = new JsonObject { ["signed"] = url } } } }.ToJsonString()));
 
-        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).DownloadSignedPdfAsync("doc-1", CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).DownloadSignedPdfAsync("doc1", CancellationToken.None));
 
         Assert.Equal("download_failed", ex.Code);
         var get = handler.Seen.Single(r => r.Method == HttpMethod.Get);
@@ -186,7 +222,7 @@ public sealed class AutentiqueProviderTests
     public async Task Signed_pdf_not_ready_yet_is_retried_later()
     {
         var handler = new Respond(_ => Json("""{"data":{"document":{"files":{"original":"https://x.test/o.pdf","signed":null}}}}"""));
-        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).DownloadSignedPdfAsync("doc-1", CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<AutentiqueException>(() => Provider(handler).DownloadSignedPdfAsync("doc1", CancellationToken.None));
         Assert.Equal("signed_file_unavailable", ex.Code);
     }
 

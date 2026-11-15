@@ -95,8 +95,8 @@ internal sealed class AutentiqueSignatureProvider(
 
         var data = await SendAsync(content, ct);
         var document = data.GetProperty("createDocument");
-        var documentId = document.GetProperty("id").GetString()
-            ?? throw new AutentiqueException("A Autentique não devolveu o id do documento.");
+        var documentId = NormalizeId(document.GetProperty("id").GetString()
+            ?? throw new AutentiqueException("A Autentique não devolveu o id do documento."));
         return new CreatedDocument(documentId, MatchSignatures(req.Signers, Signatures(document)));
     }
 
@@ -240,11 +240,11 @@ internal sealed class AutentiqueSignatureProvider(
         var occurredAt = Date(ev, "created_at") ?? clock.GetUtcNow();
 
         SignatureEvent Signature(SignatureEventType kind, string? reason = null) => new(
-            eventId, kind, SignatureDocumentId(resource),
-            Str(resource, "public_id") ?? throw new FormatException("Evento de assinatura sem public_id."),
+            eventId, kind, NormalizeId(SignatureDocumentId(resource)),
+            NormalizeId(Str(resource, "public_id") ?? throw new FormatException("Evento de assinatura sem public_id.")),
             reason, occurredAt);
         SignatureEvent Document(SignatureEventType kind) => new(
-            eventId, kind, Str(resource, "id") ?? throw new FormatException("Evento de documento sem id."), null, null, occurredAt);
+            eventId, kind, NormalizeId(Str(resource, "id") ?? throw new FormatException("Evento de documento sem id.")), null, null, occurredAt);
 
         return type switch
         {
@@ -342,9 +342,9 @@ internal sealed class AutentiqueSignatureProvider(
             return list;
         foreach (var s in signatures.EnumerateArray())
         {
-            var publicId = Str(s, "public_id");
-            if (publicId is null)
+            if (Str(s, "public_id") is not { } rawId)
                 continue;
+            var publicId = NormalizeId(rawId);
             var user = s.TryGetProperty("user", out var u) && u.ValueKind == JsonValueKind.Object ? u : default;
             list.Add(new ReturnedSignature(
                 publicId,
@@ -490,6 +490,12 @@ internal sealed class AutentiqueSignatureProvider(
 
     private static string Iso(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A API devolve ids sem hífen ("9322bc10e0a711f1…") e o webhook manda os mesmos ids como UUID com hífen
+    /// ("9322bc10-e0a7-11f1-…"). Tudo o que é guardado ou comparado passa por aqui.
+    /// </summary>
+    internal static string NormalizeId(string id) => id.Replace("-", "", StringComparison.Ordinal).Trim().ToLowerInvariant();
 
     /// <summary>String GraphQL com escape (a sintaxe de string JSON vale em GraphQL).</summary>
     private static string Literal(string value) => JsonSerializer.Serialize(value);
