@@ -14,7 +14,10 @@ let page = 1;
 let controller = null;
 let timer = null;
 
-if (canEditContracts(me)) document.querySelector('[data-new]').hidden = false;
+if (canEditContracts(me)) {
+  document.querySelector('[data-new]').hidden = false;
+  document.querySelector('[data-bulk]').hidden = false;
+}
 
 for (const [value, s] of Object.entries(CONTRACT_STATUS)) form.elements.status.append(h('option', { value }, s.label));
 api('/templates').then((templates) => {

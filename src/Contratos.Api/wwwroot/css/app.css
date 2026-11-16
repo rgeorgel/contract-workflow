@@ -217,3 +217,12 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .overdue-banner__inner > span { flex: 1 1 420px; }
 .overdue-banner__btn { background: var(--color-danger); color: #fff; flex: none; }
 .overdue-banner__btn:hover { background: #9a1d23; color: #fff; }
+
+/* Configurações: alertas e lembretes */
+.alerts-fieldset { margin-top: 28px; display: grid; gap: 12px; }
+.settings-legend { font-weight: 700; font-size: 1rem; }
+.input-suffix { display: flex; align-items: center; gap: 8px; }
+.input-suffix .input { max-width: 110px; }
+.input-suffix span { color: var(--color-muted); }
+.checkbox { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.checkbox input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--color-primary); flex: none; }

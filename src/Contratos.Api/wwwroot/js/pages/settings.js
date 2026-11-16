@@ -15,6 +15,9 @@ function fill(org) {
   form.elements.reminder.value = org.settings.reminder ?? '';
   form.elements.language.value = org.settings.language;
   form.elements.defaultMessage.value = org.settings.defaultMessage ?? '';
+  form.elements.staleAlertDays.value = String(org.settings.staleAlertDays);
+  form.elements.expiryAlertDays.value = String(org.settings.expiryAlertDays);
+  form.elements.autoResendBeforeExpiry.checked = org.settings.autoResendBeforeExpiry;
 }
 
 // ---------- Plano e uso ----------
@@ -153,7 +156,8 @@ function renderBilling(b) {
           : h('li', {}, `Sem mensalidade: compre contratos a partir de ${formatMoney(Math.min(...b.packs.map((k) => k.unitPrice)))}`),
         h('li', {}, limitLabel(p.maxUsers, 'usuário', 'usuários')),
         h('li', {}, limitLabel(p.maxTemplates, 'template', 'templates')),
-        h('li', {}, `Envio por ${channelsLabel(p.channels)}`)),
+        h('li', {}, `Envio por ${channelsLabel(p.channels)}`),
+        p.bulkSend ? h('li', {}, 'Envio em lote por planilha') : null),
       planAction(b, p));
   }));
 
@@ -262,6 +266,9 @@ form.addEventListener('submit', async (e) => {
         reminder: form.elements.reminder.value || null,
         language: form.elements.language.value,
         defaultMessage: form.elements.defaultMessage.value.trim() || null,
+        staleAlertDays: Number(form.elements.staleAlertDays.value || 0),
+        expiryAlertDays: Number(form.elements.expiryAlertDays.value || 0),
+        autoResendBeforeExpiry: form.elements.autoResendBeforeExpiry.checked,
       },
     });
     fill(org);

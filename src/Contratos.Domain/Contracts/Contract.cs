@@ -47,6 +47,10 @@ public sealed class Contract
     public DateTimeOffset? SentAt { get; private set; }
     /// <summary>Última consulta do documento no provedor (reconciliação de webhooks perdidos).</summary>
     public DateTimeOffset? ProviderCheckedAt { get; private set; }
+    /// <summary>Quando a equipe foi avisada de que o contrato está parado (uma vez por envio).</summary>
+    public DateTimeOffset? StaleAlertedAt { get; private set; }
+    /// <summary>Quando a equipe foi avisada de que o prazo está perto (uma vez por envio).</summary>
+    public DateTimeOffset? ExpiryAlertedAt { get; private set; }
     public DateTimeOffset? CompletedAt { get; private set; }
     public DateTimeOffset? CancelledAt { get; private set; }
     public Guid CreatedBy { get; private set; }
@@ -112,8 +116,16 @@ public sealed class Contract
         SendIdempotencyKey = idempotencyKey;
         Status = ContractStatus.Sent;
         SentAt = DateTimeOffset.UtcNow;
+        StaleAlertedAt = null;
+        ExpiryAlertedAt = null;
         Touch();
     }
+
+    public void MarkStaleAlerted(DateTimeOffset at) => StaleAlertedAt = at;
+    public void MarkExpiryAlerted(DateTimeOffset at) => ExpiryAlertedAt = at;
+
+    /// <summary>Signatários que ainda podem receber o link de novo (não assinaram nem recusaram).</summary>
+    public IEnumerable<ContractSigner> PendingSigners() => _signers.Where(s => s.CanResend);
 
     /// <summary>O provedor aceitou o documento. <paramref name="signatures"/> vem na ordem de <see cref="SignersInSendOrder"/>.</summary>
     public void AttachProviderDocument(string documentId, IReadOnlyList<(string PublicId, string? ShortLink)> signatures)

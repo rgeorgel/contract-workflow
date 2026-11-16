@@ -46,8 +46,25 @@ public sealed record SignerRequest(
 
 public sealed record FileResult(Stream Content, string FileName);
 
+/// <summary>Uma linha da planilha do envio em lote: um contrato com seus signatários.</summary>
+public sealed record BulkContractRow(
+    string? Title, Dictionary<string, string>? VariableValues, DateOnly? ExpiresAt, string? Message,
+    SigningMode? SigningMode, List<SignerRequest>? Signers);
+
+/// <param name="DryRun">Só valida (prévia); sem ele, cria os rascunhos se todas as linhas estiverem certas.</param>
+public sealed record BulkContractsRequest(Guid TemplateId, List<BulkContractRow>? Rows, bool DryRun);
+
+/// <param name="Row">Posição na lista enviada, a partir de 1.</param>
+/// <param name="Errors">Por campo: title, expiresAt, variableValues.chave, signers, signers[0].email...</param>
+public sealed record BulkRowResult(int Row, Guid? ContractId, int? Number, IDictionary<string, string[]> Errors);
+
+public sealed record BulkContractsResult(int Total, int Valid, bool Created, IReadOnlyList<BulkRowResult> Rows);
+
 public interface IContractService
 {
+    /// <summary>Valida e cria rascunhos em lote (planos com envio em lote). Tudo ou nada: com uma linha errada, nada é criado.</summary>
+    Task<Result<BulkContractsResult>> CreateBulkAsync(BulkContractsRequest request, CancellationToken ct);
+
     Task<Paged<ContractListItem>> ListAsync(ContractListQuery query, CancellationToken ct);
     Task<Result<ContractDetail>> GetAsync(Guid id, CancellationToken ct);
     Task<Result<IReadOnlyList<ContractEventDto>>> GetEventsAsync(Guid id, CancellationToken ct);

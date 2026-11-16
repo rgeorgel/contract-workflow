@@ -21,6 +21,18 @@ export async function linkFromEmail(request, to, path) {
   return link;
 }
 
+/**
+ * O simulador do provedor fake só existe com Signature__Provider=Fake. Sem ele, a rota não existe (404);
+ * com ele, a rota responde (400 aqui, por faltar o token antiforgery).
+ */
+export async function fakeProviderEnabled(request) {
+  const zero = '00000000-0000-0000-0000-000000000000';
+  const res = await request.post(`/api/v1/dev/fake-provider/contracts/${zero}/signers/${zero}/sign`);
+  return res.status() !== 404 && res.status() !== 405;
+}
+
+export const FAKE_PROVIDER_HINT = 'precisa do provedor fake: rode com "npm run test:isolado" (stack própria) ou SIGNATURE_PROVIDER=Fake';
+
 /** Troca o plano da organização logada na página pela API da plataforma. */
 export async function setPlan(page, plan) {
   const org = await (await page.request.get('/api/v1/organization/settings')).json();

@@ -29,6 +29,9 @@ public sealed class WorkerOptions
     public int ReconcileAfterHours { get; set; } = 24;
     /// <summary>Consultas por rodada: a Autentique aceita 60 requisições por minuto para a plataforma inteira.</summary>
     public int ReconcileBatch { get; set; } = 20;
+
+    /// <summary>De quanto em quanto tempo procurar contratos parados ou com prazo chegando (0: toda rodada).</summary>
+    public int AlertIntervalMinutes { get; set; } = 15;
 }
 
 /// <summary>Recebe webhooks: valida a assinatura e grava em webhook_inbox; o processamento é assíncrono.</summary>
@@ -73,6 +76,7 @@ public sealed class BackgroundProcessor(
     TimeProvider clock,
     IOptions<WorkerOptions> options,
     ProviderBalanceMonitor balance,
+    ContractAlerts alerts,
     ILogger<BackgroundProcessor> logger)
 {
     private const int BatchLimit = 50;
@@ -85,6 +89,8 @@ public sealed class BackgroundProcessor(
         try
         {
             for (var i = 0; i < BatchLimit && await ProcessNextInboxAsync(ct); i++) { }
+            // Antes da outbox: o e-mail de atenção e os reenvios saem na mesma rodada.
+            await alerts.RunIfDueAsync(ct);
             for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
             await ExpireContractsAsync(ct);
             await ReconcileAsync(ct);
@@ -330,6 +336,9 @@ public sealed class BackgroundProcessor(
                 db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SignedDocumentStored));
                 break;
             }
+            case OutboxTypes.ContractAlert:
+                await ContractAlerts.SendAsync(services, db, message.Read<ContractAlertMessage>(), ct);
+                break;
             case OutboxTypes.CreditsAlert:
             {
                 var msg = message.Read<CreditsAlertMessage>();

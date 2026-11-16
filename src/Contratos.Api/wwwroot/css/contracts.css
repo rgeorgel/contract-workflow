@@ -104,3 +104,16 @@
 .is-danger-text:hover { background: var(--color-danger-soft); color: var(--color-danger); }
 .check { display: inline-flex; gap: 8px; align-items: center; font-size: .925rem; }
 .check input { width: 18px; height: 18px; accent-color: var(--color-primary); }
+
+/* Envio em lote */
+.bulk-step { display: grid; gap: 16px; }
+.bulk-step__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.bulk-help summary { cursor: pointer; font-weight: 600; color: var(--color-primary); }
+.bulk-help[open] summary { margin-bottom: 12px; }
+.bulk-columns td:first-child { white-space: nowrap; }
+.bulk-preview tr.has-error td { background: var(--color-danger-soft); }
+.bulk-preview .error-list { margin: 0; padding-left: 18px; color: var(--color-danger); font-size: .875rem; }
+.bulk-preview .error-list code { color: inherit; font-weight: 600; }
+.progress-note { font-size: .925rem; color: var(--color-muted); }
+.upgrade { display: grid; gap: 12px; justify-items: start; padding: 28px; }
+.upgrade h2 { font-size: 1.15rem; }

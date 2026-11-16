@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { signUp, unique } from './helpers.js';
+import { FAKE_PROVIDER_HINT, fakeProviderEnabled, signUp, unique } from './helpers.js';
 
 const BODY = `<h1>Contrato de Locação</h1>
 <p>LOCADOR: {{locador.nome}}. LOCATÁRIO: {{locatario.nome}}.</p>
 <p>Imóvel na {{endereco}}.</p>`;
 
 test('do template ao contrato assinado, e encontrado pela busca', async ({ page, request }) => {
+  // O signatário é simulado pelo provedor fake; com a Autentique de verdade, quem assina é uma pessoa.
+  test.skip(!(await fakeProviderEnabled(request)), FAKE_PROVIDER_HINT);
   await signUp(page, request);
   const marker = unique('Locacao');
 

@@ -62,7 +62,8 @@ function renderPricing() {
           : h('li', {}, h('span', {}, h('strong', {}, `${catalog.welcomeCredits} contratos grátis`), ` para testar (${catalog.welcomeCreditDays} dias)`)),
         h('li', {}, h('span', {}, limitLabel(plan.maxUsers, 'usuário', 'usuários'))),
         h('li', {}, h('span', {}, limitLabel(plan.maxTemplates, 'template', 'templates'))),
-        h('li', {}, h('span', {}, channelText(plan.channels)))));
+        h('li', {}, h('span', {}, channelText(plan.channels))),
+        plan.bulkSend ? h('li', {}, h('span', {}, 'Envio em lote por planilha')) : null));
   }));
 }
 

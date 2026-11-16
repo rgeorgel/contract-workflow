@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Envio em lote · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/contracts.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/contract-bulk.js"></script>
+</head>
+<body class="app">
+  <app-nav active="contracts"></app-nav>
+  <main class="container page" data-main hidden>
+    <a class="back-link" href="/contracts.html">← Contratos</a>
+    <div class="page-header">
+      <div>
+        <h1>Envio em lote</h1>
+        <p>Vários contratos de uma vez a partir de uma planilha: um contrato por linha, com os signatários.</p>
+      </div>
+    </div>
+
+    <section class="panel" data-upgrade hidden aria-labelledby="upgrade-title">
+      <div class="panel__body upgrade">
+        <h2 id="upgrade-title">O envio em lote faz parte dos planos <span data-bulk-plans>Profissional e Empresa</span></h2>
+        <p class="muted">Monte uma planilha com os dados de cada contrato e envie todos de uma vez, sem preencher um por um.</p>
+        <a class="btn btn--primary" href="/settings.html">Ver planos</a>
+      </div>
+    </section>
+
+    <div data-flow hidden>
+      <section class="panel" aria-labelledby="bulk-template-title">
+        <div class="panel__header"><h2 id="bulk-template-title">1. Template e planilha modelo</h2></div>
+        <div class="panel__body bulk-step">
+          <div class="field">
+            <label class="field__label" for="bulk-template">Template</label>
+            <select class="select select--block" id="bulk-template" data-template></select>
+          </div>
+          <div class="bulk-step__actions">
+            <button class="btn btn--secondary" type="button" data-download disabled>Baixar planilha modelo</button>
+          </div>
+          <details class="bulk-help" data-help hidden>
+            <summary>Como preencher a planilha</summary>
+            <div class="table-wrap">
+              <table class="table bulk-columns">
+                <thead><tr><th>Coluna</th><th>O que vai nela</th></tr></thead>
+                <tbody data-columns></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="bulk-file-title">
+        <div class="panel__header"><h2 id="bulk-file-title">2. Planilha preenchida</h2></div>
+        <div class="panel__body bulk-step">
+          <div class="field">
+            <label class="field__label" for="bulk-file">Arquivo CSV</label>
+            <input class="input" id="bulk-file" type="file" accept=".csv,text/csv" data-file disabled aria-describedby="bulk-file-hint">
+            <p class="field__hint" id="bulk-file-hint">No Excel ou no Google Planilhas, salve como "CSV". Até 100 contratos por vez.</p>
+          </div>
+          <div class="alert alert--error" role="alert" data-file-alert hidden></div>
+        </div>
+      </section>
+
+      <section class="panel" data-preview-panel hidden aria-labelledby="bulk-preview-title">
+        <div class="panel__header">
+          <h2 id="bulk-preview-title">3. Conferir e enviar</h2>
+          <span class="badge" data-summary></span>
+        </div>
+        <div class="panel__body bulk-step">
+          <div class="alert" role="status" data-quota hidden></div>
+          <div class="table-wrap">
+            <table class="table table--stack bulk-preview">
+              <thead><tr><th>Linha</th><th>Contrato</th><th>Signatários</th><th>Situação</th></tr></thead>
+              <tbody data-rows></tbody>
+            </table>
+          </div>
+          <div class="progress-note" role="status" aria-live="polite" data-progress hidden></div>
+          <div class="bulk-step__actions" data-actions>
+            <button class="btn btn--secondary" type="button" data-create disabled>Criar rascunhos</button>
+            <button class="btn btn--primary" type="button" data-create-send disabled>Criar e enviar</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

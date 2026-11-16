@@ -31,7 +31,9 @@ const EVENT_TEXT = {
   SignerSigned: (e) => [`${e.signerName} assinou`, null, 'success'],
   SignerDeclined: (e) => [`${e.signerName} recusou`, e.payload.reason, 'danger'],
   DeliveryFailed: (e) => [`Falha ao entregar o link a ${e.signerName}`, e.payload.channel ? `Canal: ${DELIVERY[e.payload.channel] ?? e.payload.channel}` : null, 'danger'],
-  LinkResent: (e) => [`Link reenviado a ${e.signerName}`, null, 'info'],
+  LinkResent: (e) => [e.payload?.auto === 'true'
+    ? `Lembrete automático: link reenviado a ${e.signerName}, com o prazo perto`
+    : `Link reenviado a ${e.signerName}`, null, 'info'],
   Completed: () => ['Todos assinaram', 'Contrato concluído', 'success'],
   SignedDocumentStored: () => ['PDF assinado arquivado', null, 'success'],
   Cancelled: () => ['Contrato cancelado', null, 'danger'],

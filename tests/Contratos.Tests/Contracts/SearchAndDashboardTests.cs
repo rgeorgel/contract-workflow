@@ -116,7 +116,7 @@ public sealed partial class ContractsApiTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.ExecuteSqlAsync($"UPDATE contracts SET sent_at = now() - interval '5 days' WHERE id = {id}");
+            await db.Database.ExecuteSqlAsync($"UPDATE contracts SET sent_at = now() - interval '5 days 12 hours' WHERE id = {id}");
         }
 
         var later = await (await admin.Client.GetAsync("/api/v1/dashboard/summary?staleDays=3")).JsonAsync();

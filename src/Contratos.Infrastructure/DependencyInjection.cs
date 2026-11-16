@@ -107,6 +107,7 @@ public static class DependencyInjection
         services.AddSingleton<ProviderBalanceMonitor>();
 
         services.AddScoped<WebhookReceiver>();
+        services.AddSingleton<ContractAlerts>();
         services.AddSingleton<BackgroundProcessor>();
         services.AddHostedService<BackgroundWorker>();
         AddEmailSender(services, config);

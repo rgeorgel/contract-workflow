@@ -19,6 +19,10 @@ internal static class ContractsEndpoints
                 (await contracts.CreateAsync(req, ct)).ToHttp(c => WithETag(http, c, TypedResults.Created($"/api/v1/contracts/{c.Id}", c))))
             .WithSummary("Cria um rascunho a partir da versão publicada de um template");
 
+        g.MapPost("/bulk", async (BulkContractsRequest req, IContractService contracts, CancellationToken ct) =>
+                (await contracts.CreateBulkAsync(req, ct)).ToHttp())
+            .WithSummary("Valida (dryRun) ou cria rascunhos em lote a partir das linhas de uma planilha");
+
         g.MapGet("/{id:guid}", async (Guid id, IContractService contracts, HttpContext http, CancellationToken ct) =>
                 (await contracts.GetAsync(id, ct)).ToHttp(c => WithETag(http, c, TypedResults.Ok(c))))
             .WithSummary("Detalhe com signatários");

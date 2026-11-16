@@ -37,6 +37,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Gotenberg:Url", "http://127.0.0.1:9"); // ninguém escuta: health "degraded"
         builder.UseSetting("App:PublicBaseUrl", "https://app.test");
         builder.UseSetting("Worker:Enabled", "false");
+        builder.UseSetting("Worker:AlertIntervalMinutes", "0");
         builder.UseSetting("Storage:CreateBucket", "false");
         // Os testes gerais não esbarram em cota; os de planos trocam o plano pela API da plataforma.
         builder.UseSetting("Billing:DefaultPlan", "empresa");

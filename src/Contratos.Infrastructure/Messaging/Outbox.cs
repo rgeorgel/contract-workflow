@@ -12,6 +12,7 @@ public static class OutboxTypes
     public const string UsageAlert = "UsageAlert";
     public const string PaymentOverdueAlert = "PaymentOverdueAlert";
     public const string CreditsAlert = "CreditsAlert";
+    public const string ContractAlert = "ContractAlert";
 }
 
 public sealed record ContractMessage(Guid ContractId);

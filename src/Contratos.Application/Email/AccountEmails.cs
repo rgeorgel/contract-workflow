@@ -100,8 +100,9 @@ public static class AccountEmails
             link: link,
             footer: "Em Configurações, use \"Gerenciar assinatura\" para trocar o cartão e pagar a fatura em aberto. Tudo volta a funcionar assim que o pagamento é aprovado.");
 
-    private static EmailMessage Build(string productName, string to, string name, string subject,
-        string intro, string introText, string buttonLabel, string link, string footer)
+    internal static EmailMessage Build(string productName, string to, string name, string subject,
+        string intro, string introText, string buttonLabel, string link, string footer,
+        string? detailHtml = null, string? detailText = null)
     {
         var safeName = WebUtility.HtmlEncode(name);
         var safeLink = WebUtility.HtmlEncode(link);
@@ -116,6 +117,7 @@ public static class AccountEmails
                     <tr><td style="font-weight:700;font-size:18px;color:#2747d6;padding-bottom:24px">{safeProduct}</td></tr>
                     <tr><td style="font-size:16px;line-height:1.5;padding-bottom:8px">{(string.IsNullOrWhiteSpace(name) ? "Olá!" : $"Olá, {safeName}!")}</td></tr>
                     <tr><td style="font-size:16px;line-height:1.5;padding-bottom:24px">{intro}</td></tr>
+                    {(detailHtml is null ? "" : $"<tr><td style=\"padding-bottom:24px\">{detailHtml}</td></tr>")}
                     <tr><td style="padding-bottom:24px">
                       <a href="{safeLink}" style="display:inline-block;background:#2747d6;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">{WebUtility.HtmlEncode(buttonLabel)}</a>
                     </td></tr>
@@ -131,7 +133,7 @@ public static class AccountEmails
             {(string.IsNullOrWhiteSpace(name) ? "Olá!" : $"Olá, {name}!")}
 
             {introText}
-
+            {(detailText is null ? "" : "\n" + detailText)}
             {buttonLabel}: {link}
 
             {footer}

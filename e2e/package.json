@@ -5,7 +5,10 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "test:isolado": "./stack.sh test",
+    "stack:up": "./stack.sh up",
+    "stack:down": "./stack.sh down"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1"

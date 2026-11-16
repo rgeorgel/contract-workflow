@@ -66,6 +66,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<DateTimeOffset?>("ExpiryAlertedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiry_alerted_at");
+
                     b.Property<string>("Message")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -117,6 +121,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("signing_mode");
+
+                    b.Property<DateTimeOffset?>("StaleAlertedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stale_alerted_at");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1038,12 +1046,18 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         {
                             b1.Property<Guid>("OrganizationId");
 
+                            b1.Property<bool>("AutoResendBeforeExpiry");
+
                             b1.Property<string>("DefaultMessage");
+
+                            b1.Property<int>("ExpiryAlertDays");
 
                             b1.Property<string>("Language")
                                 .IsRequired();
 
                             b1.Property<string>("Reminder");
+
+                            b1.Property<int>("StaleAlertDays");
 
                             b1.HasKey("OrganizationId");
 

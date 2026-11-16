@@ -76,11 +76,13 @@ Unitários e de integração (precisam do Docker: Testcontainers sobe um Postgre
 dotnet test
 ```
 
-De ponta a ponta, com o sistema rodando (`docker compose up -d --build`):
+De ponta a ponta, numa stack própria e isolada (projeto `contratos-e2e`, porta 7710, provedor fake, sem Stripe). Ela não mexe na stack de desenvolvimento nem depende do `.env`:
 
 ```bash
-cd e2e && npm ci && npx playwright install chromium && npx playwright test
+cd e2e && npm ci && npx playwright install chromium && npm run test:isolado
 ```
+
+`npm run stack:down` derruba a stack e apaga os dados dela. Também dá para rodar contra a stack de desenvolvimento (`npx playwright test`, porta 7700). Nesse caso, os testes que precisam simular a assinatura são pulados quando o provedor não é o fake, com o motivo na saída.
 
 ## Portas locais
 

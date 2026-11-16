@@ -90,6 +90,33 @@
               <p class="field__error" id="defaultMessage-error" data-error-for="defaultMessage"></p>
             </div>
           </div>
+
+          <fieldset class="fieldset alerts-fieldset">
+            <legend class="settings-legend">Alertas e lembretes</legend>
+            <p class="field__hint">Quem criou o contrato recebe um e-mail com o que precisa de atenção. Use 0 para não avisar.</p>
+            <div class="form-grid form-grid--2">
+              <div class="field">
+                <label class="field__label" for="staleAlertDays">Avisar quando o contrato espera assinatura há</label>
+                <div class="input-suffix">
+                  <input class="input" id="staleAlertDays" name="staleAlertDays" type="number" min="0" max="60" step="1" inputmode="numeric" aria-describedby="staleAlertDays-error">
+                  <span>dias</span>
+                </div>
+                <p class="field__error" id="staleAlertDays-error" data-error-for="staleAlertDays"></p>
+              </div>
+              <div class="field">
+                <label class="field__label" for="expiryAlertDays">Avisar quando faltam para o prazo</label>
+                <div class="input-suffix">
+                  <input class="input" id="expiryAlertDays" name="expiryAlertDays" type="number" min="0" max="60" step="1" inputmode="numeric" aria-describedby="expiryAlertDays-error">
+                  <span>dias</span>
+                </div>
+                <p class="field__error" id="expiryAlertDays-error" data-error-for="expiryAlertDays"></p>
+              </div>
+              <label class="checkbox span-2">
+                <input type="checkbox" id="autoResendBeforeExpiry" name="autoResendBeforeExpiry">
+                <span>Quando o prazo estiver perto, reenviar o link automaticamente a quem ainda não assinou</span>
+              </label>
+            </div>
+          </fieldset>
           <div class="form-actions" data-actions>
             <button class="btn btn--primary" type="submit">Salvar alterações</button>
           </div>

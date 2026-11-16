@@ -150,6 +150,121 @@ internal sealed class ContractService(
         return renderer.Render(contract.Title, version.BodyHtml, version.Variables, contract.VariableValues);
     }
 
+    // ---------- Lote ----------
+
+    public const int MaxBulkRows = 100;
+
+    private sealed record BulkDraft(string Title, Dictionary<string, string> Values, DateTimeOffset? ExpiresAt,
+        SigningMode Mode, string? Message, List<SignerData> Signers);
+
+    public async Task<Result<BulkContractsResult>> CreateBulkAsync(BulkContractsRequest req, CancellationToken ct)
+    {
+        if (!tenant.CanEditContracts())
+            return CannotEdit;
+        var orgId = tenant.RequireOrganizationId();
+        var org = await db.Organizations.SingleAsync(o => o.Id == orgId, ct);
+        if (!org.Plan.BulkSend)
+            return Error.Forbidden(
+                $"O envio em lote faz parte dos planos {string.Join(" e ", Domain.Billing.Plans.All.Where(p => p.BulkSend).Select(p => p.Name))}. Mude de plano em Configurações.",
+                "bulk_not_in_plan");
+        if (!req.DryRun && org.IsPaymentOverdue)
+            return UsageMeter.PaymentOverdue("criar contratos");
+
+        var rows = req.Rows ?? [];
+        if (rows.Count == 0)
+            return Error.Validation("rows", "A planilha não tem nenhuma linha de contrato.");
+        if (rows.Count > MaxBulkRows)
+            return Error.Validation("rows", $"Envie no máximo {MaxBulkRows} contratos por vez.");
+
+        var template = await db.Templates.SingleOrDefaultAsync(t => t.Id == req.TemplateId, ct);
+        if (template is null)
+            return Error.Validation("templateId", "Escolha um template.");
+        if (template.ArchivedAt is not null || template.CurrentVersionId is null)
+            return Error.Validation("templateId", "Este template não tem versão publicada ativa.");
+        var version = await db.TemplateVersions.SingleAsync(v => v.Id == template.CurrentVersionId, ct);
+        var keys = version.Variables.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
+        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        var userId = tenant.RequireUserId();
+
+        var results = new List<BulkRowResult>();
+        var drafts = new List<BulkDraft>();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var mode = row.SigningMode ?? SigningMode.Parallel;
+            var errors = ContractValidator.ValidateDraft(
+                new UpdateContractRequest(row.Title, row.VariableValues, row.ExpiresAt, mode, row.Message), version.Variables, today);
+            var values = (row.VariableValues ?? [])
+                .Where(kv => keys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                .ToDictionary(kv => kv.Key, kv => kv.Value.Trim(), StringComparer.Ordinal);
+            foreach (var v in version.Variables.Where(v => v.Required && !values.ContainsKey(v.Key)))
+                errors.Add($"variableValues.{v.Key}", $"Preencha “{v.Label}”.");
+
+            // Signatários: validados um a um contra os anteriores da mesma linha (e-mail repetido etc.).
+            var probe = new Contract(orgId, 0, "lote", version.Id, null, userId);
+            var signers = row.Signers ?? [];
+            if (signers.Count == 0)
+                errors.Add("signers", "Adicione ao menos um signatário.");
+            if (signers.Count > Contract.MaxSigners)
+                errors.Add("signers", $"Um contrato tem no máximo {Contract.MaxSigners} signatários.");
+            var data = new List<SignerData>();
+            for (var j = 0; j < signers.Count && j < Contract.MaxSigners; j++)
+            {
+                var s = signers[j];
+                var signerErrors = ContractValidator.ValidateSigner(s, probe.Signers);
+                var method = s.DeliveryMethod ?? DeliveryMethod.Email;
+                if (Enum.IsDefined(method) && !org.Plan.Allows(method))
+                    signerErrors.Add("deliveryMethod", UsageMeter.ChannelNotInPlan(org.Plan, method));
+                if (!signerErrors.IsEmpty)
+                {
+                    foreach (var (field, messages) in signerErrors.ToDictionary())
+                        foreach (var message in messages)
+                            errors.Add($"signers[{j}].{field}", message);
+                    continue;
+                }
+                var d = ToData(s, s.SignOrder ?? j + 1);
+                probe.AddSigner(d);
+                data.Add(d);
+            }
+
+            if (errors.IsEmpty)
+            {
+                var expiresAt = row.ExpiresAt is { } date
+                    ? new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3)).ToUniversalTime()
+                    : (DateTimeOffset?)null;
+                drafts.Add(new BulkDraft(row.Title!.Trim(), values, expiresAt, mode,
+                    string.IsNullOrWhiteSpace(row.Message) ? org.Settings.DefaultMessage : row.Message, data));
+            }
+            results.Add(new BulkRowResult(i + 1, null, null, errors.ToDictionary()));
+        }
+
+        var valid = results.Count(r => r.Errors.Count == 0);
+        if (req.DryRun || valid < rows.Count)
+            return new BulkContractsResult(rows.Count, valid, false, results);
+
+        // Tudo certo: cria os rascunhos numa transação só (números sequenciais, sem buracos).
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var created = new List<Contract>();
+        foreach (var d in drafts)
+        {
+            var contract = new Contract(orgId, await NextNumberAsync(orgId, ct), d.Title, version.Id, d.Message, userId);
+            contract.UpdateDraft(d.Title, d.Values, d.ExpiresAt, d.Mode, d.Message);
+            foreach (var signer in d.Signers)
+                contract.AddSigner(signer);
+            db.Contracts.Add(contract);
+            db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Created, actorUserId: userId,
+                payload: new() { ["template"] = template.Name, ["bulk"] = "true" }));
+            created.Add(contract);
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        foreach (var c in created)
+            await RefreshSearchAsync(c.Id, ct);
+
+        return new BulkContractsResult(rows.Count, valid, true,
+            results.Select((r, i) => r with { ContractId = created[i].Id, Number = created[i].Number }).ToList());
+    }
+
     // ---------- Rascunho ----------
 
     public async Task<Result<ContractDetail>> CreateAsync(CreateContractRequest req, CancellationToken ct)

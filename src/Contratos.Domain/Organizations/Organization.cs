@@ -125,6 +125,26 @@ public sealed class Organization
         Name = name.Trim();
     }
 
+    public const int MaxAlertDays = 60;
+
+    /// <summary>Alertas à equipe e lembrete automático. 0 dias desliga o alerta.</summary>
+    public void UpdateAlerts(int staleAlertDays, int expiryAlertDays, bool autoResendBeforeExpiry)
+    {
+        if (staleAlertDays is < 0 or > MaxAlertDays)
+            throw new ArgumentOutOfRangeException(nameof(staleAlertDays));
+        if (expiryAlertDays is < 0 or > MaxAlertDays)
+            throw new ArgumentOutOfRangeException(nameof(expiryAlertDays));
+        Settings = new OrganizationSettings
+        {
+            Reminder = Settings.Reminder,
+            DefaultMessage = Settings.DefaultMessage,
+            Language = Settings.Language,
+            StaleAlertDays = staleAlertDays,
+            ExpiryAlertDays = expiryAlertDays,
+            AutoResendBeforeExpiry = autoResendBeforeExpiry,
+        };
+    }
+
     public void UpdateSettings(string? reminder, string? defaultMessage, string language)
     {
         if (reminder is not null && !Reminders.Contains(reminder))
@@ -137,6 +157,9 @@ public sealed class Organization
             Reminder = reminder,
             DefaultMessage = string.IsNullOrWhiteSpace(defaultMessage) ? null : defaultMessage.Trim(),
             Language = language,
+            StaleAlertDays = Settings.StaleAlertDays,
+            ExpiryAlertDays = Settings.ExpiryAlertDays,
+            AutoResendBeforeExpiry = Settings.AutoResendBeforeExpiry,
         };
     }
 }
@@ -147,4 +170,11 @@ public sealed class OrganizationSettings
     public string? Reminder { get; set; }
     public string? DefaultMessage { get; set; }
     public string Language { get; set; } = "pt-BR";
+
+    /// <summary>Avisa quem criou o contrato quando ele espera assinatura há tantos dias (0: não avisa).</summary>
+    public int StaleAlertDays { get; set; } = 3;
+    /// <summary>Avisa quem criou o contrato quando faltam tantos dias para o prazo (0: não avisa).</summary>
+    public int ExpiryAlertDays { get; set; } = 3;
+    /// <summary>Junto com o aviso de prazo, reenvia o link a quem ainda não assinou.</summary>
+    public bool AutoResendBeforeExpiry { get; set; } = true;
 }

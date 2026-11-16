@@ -31,12 +31,20 @@ internal sealed class OrganizationService(AppDbContext db, ICurrentTenant tenant
         var language = req.Language ?? "pt-BR";
         if (!Organization.Languages.Contains(language))
             errors.Add("language", "Idioma inválido.");
+        if (req.StaleAlertDays is < 0 or > Organization.MaxAlertDays)
+            errors.Add("staleAlertDays", $"Use de 0 a {Organization.MaxAlertDays} dias (0 desliga o aviso).");
+        if (req.ExpiryAlertDays is < 0 or > Organization.MaxAlertDays)
+            errors.Add("expiryAlertDays", $"Use de 0 a {Organization.MaxAlertDays} dias (0 desliga o aviso).");
         if (!errors.IsEmpty)
             return Error.Validation(errors);
 
         var org = await db.Organizations.SingleAsync(o => o.Id == tenant.RequireOrganizationId(), ct);
         org.Rename(name);
         org.UpdateSettings(reminder, req.DefaultMessage, language);
+        org.UpdateAlerts(
+            req.StaleAlertDays ?? org.Settings.StaleAlertDays,
+            req.ExpiryAlertDays ?? org.Settings.ExpiryAlertDays,
+            req.AutoResendBeforeExpiry ?? org.Settings.AutoResendBeforeExpiry);
         await db.SaveChangesAsync(ct);
         return await ToDtoAsync(org, ct);
     }
@@ -47,7 +55,8 @@ internal sealed class OrganizationService(AppDbContext db, ICurrentTenant tenant
         var month = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
         var sent = await CountSentAsync(org.Id, month, ct);
         return new OrganizationDto(org.Id, org.Name, org.Slug,
-            new OrganizationSettingsDto(org.Settings.Reminder, org.Settings.DefaultMessage, org.Settings.Language),
+            new OrganizationSettingsDto(org.Settings.Reminder, org.Settings.DefaultMessage, org.Settings.Language,
+                org.Settings.StaleAlertDays, org.Settings.ExpiryAlertDays, org.Settings.AutoResendBeforeExpiry),
             new UsageDto(month.ToString("yyyy-MM"), sent));
     }
 

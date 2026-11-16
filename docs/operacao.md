@@ -159,6 +159,30 @@ Como funciona:
 
 Em desenvolvimento, o webhook chega pelo Stripe CLI: `stripe listen --forward-to localhost:7700/api/v1/webhooks/stripe` mostra o `whsec_...` para usar em `STRIPE_WEBHOOK_SECRET`.
 
+## Alertas e lembretes
+
+O worker procura, a cada 15 minutos (`Worker__AlertIntervalMinutes`), contratos enviados que precisam de atenção:
+
+- **Parado:** esperando assinatura há mais dias que o configurado (padrão: 3).
+- **Prazo chegando:** faltam tantos dias para o prazo (padrão: 3). Junto com esse aviso, o link é reenviado a quem ainda não assinou, se "reenviar automaticamente" estiver ligado. Fica na linha do tempo como "Lembrete automático".
+
+Quem criou o contrato recebe **um e-mail por rodada**, com todos os seus contratos que precisam de atenção. Se essa pessoa foi desativada, o aviso vai para os Admins. Cada contrato gera no máximo um aviso de cada tipo por envio; se ele voltar para rascunho e for enviado de novo, os avisos recomeçam.
+
+Os dias (0 desliga) e o reenvio automático ficam em Configurações, "Alertas e lembretes", por empresa. Na primeira rodada depois da implantação, contratos que já estavam parados geram um aviso.
+
+## Envio em lote
+
+Planos com envio em lote (Profissional e Empresa): em Contratos, "Envio em lote".
+
+1. **Template:** escolha o template e baixe a planilha modelo. Ela traz as colunas `titulo`, as variáveis do template, `prazo`, `mensagem`, `em_ordem` e um bloco `signatarioN_*` (nome, email, celular, canal, papel, cpf) por papel sugerido no template.
+2. **Planilha:** preencha uma linha por contrato e envie como CSV. O sistema aceita `;` ou `,`, UTF-8 ou o padrão do Excel no Brasil (Windows-1252), e datas em `dd/mm/aaaa`. São até 100 contratos por vez.
+3. **Conferir:** a prévia valida tudo no servidor e aponta a linha e a coluna de cada erro.
+4. **Criar:** só cria quando todas as linhas estão certas, e cria tudo numa transação, com números em sequência. "Criar rascunhos" para revisar antes; "Criar e enviar" envia um por um.
+   - Cada envio usa a cota ou um crédito.
+   - Se a cota acabar no meio, o resto fica como rascunho.
+
+API: `POST /api/v1/contracts/bulk` com `{ templateId, rows, dryRun }`.
+
 ## Saúde
 
 | Rota | Para quê | Olha |
