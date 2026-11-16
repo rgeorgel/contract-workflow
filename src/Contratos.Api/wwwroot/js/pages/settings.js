@@ -19,7 +19,8 @@ function fill(org) {
 
 // ---------- Plano e uso ----------
 
-function meter(label, used, limit, hint) {
+/** `alert`: muda de cor perto do limite (só para a cota de contratos; usuários no limite é normal). */
+function meter(label, used, limit, hint, alert = false) {
   const value = limit == null ? `${used} · ilimitado` : `${used} de ${limit}`;
   const p = pct(used, limit);
   return h('div', { class: 'meter' },
@@ -27,14 +28,14 @@ function meter(label, used, limit, hint) {
     limit == null ? null : h('div', {
       class: 'mini-progress__track meter__track', role: 'progressbar',
       'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': String(limit), 'aria-valuenow': String(Math.min(used, limit)),
-    }, h('span', { class: `mini-progress__bar meter__bar${p >= 100 ? ' is-full' : p >= 80 ? ' is-warn' : ''}`, dataset: { pct: p } })),
+    }, h('span', { class: `mini-progress__bar meter__bar${!alert ? ' is-calm' : p >= 100 ? ' is-full' : p >= 80 ? ' is-warn' : ''}`, dataset: { pct: p } })),
     hint ? h('p', { class: 'meter__hint' }, hint) : null);
 }
 
 function contractsHint(b) {
   const left = Math.max(0, b.contractsLimit - b.contractsUsed);
   const renew = b.subscription?.cancelAt
-    ? `O ciclo termina em ${renewsLabel(b.periodEnd)}; depois vale o plano Grátis.`
+    ? `O ciclo termina em ${renewsLabel(b.periodEnd)}; depois a conta passa para o Avulso, que usa só créditos.`
     : `Renova em ${renewsLabel(b.periodEnd)}.`;
   if (left > 0) return `${left} ${left === 1 ? 'restante' : 'restantes'} neste ciclo. ${renew}`;
   if (b.creditsAvailable > 0) return `Os contratos do plano acabaram neste ciclo; os próximos envios usam créditos avulsos. ${renew}`;
@@ -74,7 +75,7 @@ function subscriptionNotice(b) {
   if (!s || !live(b)) return null;
   if (s.cancelAt) {
     return h('div', { class: 'alert alert--warning billing-notice' },
-      `Assinatura cancelada: o plano ${b.plan.name} vale até ${renewsLabel(s.cancelAt)} e depois a conta volta para o Grátis. `
+      `Assinatura cancelada: o plano ${b.plan.name} vale até ${renewsLabel(s.cancelAt)} e depois a conta passa para o Avulso, que usa só créditos. `
       + 'Mudou de ideia? Reative em "Gerenciar assinatura".');
   }
   return null;
@@ -119,12 +120,20 @@ function renderBilling(b) {
     subscriptionNotice(b),
     h('div', { class: 'billing-head' }, h('p', { class: 'billing-plan' },
       h('strong', {}, `Plano ${b.plan.name}`), ' · ',
-      b.plan.monthlyPrice > 0 ? `${formatMoney(b.plan.monthlyPrice)}/mês` : 'gratuito',
+      b.plan.monthlyPrice > 0 ? `${formatMoney(b.plan.monthlyPrice)}/mês` : 'sem mensalidade, 1 crédito por contrato',
       ' · ', `envio por ${channelsLabel(b.plan.channels)}`, subLine), manage),
     h('div', { class: 'meter-grid' },
-      meter('Contratos do plano neste ciclo', b.contractsUsed, b.contractsLimit, contractsHint(b)),
+      // Avulso não tem cota mensal: os créditos são tudo.
+      b.contractsLimit > 0 ? meter('Contratos do plano neste ciclo', b.contractsUsed, b.contractsLimit, contractsHint(b), true) : null,
       h('div', { class: 'meter' },
-        h('div', { class: 'meter__label' }, h('span', {}, 'Créditos avulsos'), h('strong', { 'data-credits': '' }, String(b.creditsAvailable))),
+        h('div', { class: 'meter__label' },
+          h('span', {}, b.contractsLimit > 0 ? 'Créditos avulsos' : 'Créditos de contrato'),
+          h('strong', { 'data-credits': '' }, String(b.creditsAvailable))),
+        b.contractsLimit === 0
+          ? h('p', { class: 'meter__hint' }, b.creditsAvailable > 0
+            ? 'Cada contrato enviado usa 1 crédito.'
+            : 'Sem créditos, novos envios ficam bloqueados. Compre um pacote ou assine um plano abaixo.')
+          : null,
         b.contractsFromCredits ? h('p', { class: 'meter__hint' }, `${b.contractsFromCredits} ${b.contractsFromCredits === 1 ? 'usado' : 'usados'} neste ciclo.`) : null,
         credits),
       meter('Usuários', b.usersUsed, b.usersLimit, 'Conta usuários ativos e convites pendentes.'),
@@ -139,7 +148,9 @@ function renderBilling(b) {
         current ? h('span', { class: 'badge badge--success' }, 'Seu plano') : null),
       ...cardPrice(b, p),
       h('ul', { class: 'plan-card__features' },
-        h('li', {}, `${p.contractsPerPeriod} contratos por mês`),
+        p.contractsPerPeriod > 0
+          ? h('li', {}, `${p.contractsPerPeriod} contratos por mês`)
+          : h('li', {}, `Sem mensalidade: compre contratos a partir de ${formatMoney(Math.min(...b.packs.map((k) => k.unitPrice)))}`),
         h('li', {}, limitLabel(p.maxUsers, 'usuário', 'usuários')),
         h('li', {}, limitLabel(p.maxTemplates, 'template', 'templates')),
         h('li', {}, `Envio por ${channelsLabel(p.channels)}`)),
@@ -177,7 +188,7 @@ function renderBilling(b) {
 }
 
 function cardPrice(b, p) {
-  if (p.monthlyPrice === 0) return [h('p', { class: 'plan-card__price' }, h('strong', {}, formatMoney(0)), '/mês'), h('p', { class: 'plan-card__annual' }, 'para sempre')];
+  if (p.monthlyPrice === 0) return [h('p', { class: 'plan-card__price' }, h('strong', {}, formatMoney(0)), '/mês'), h('p', { class: 'plan-card__annual' }, 'paga só o que enviar')];
   if (interval === 'year' && canPay(b) && !live(b)) {
     return [h('p', { class: 'plan-card__price' }, h('strong', {}, formatMoney(Math.round((p.annualPrice / 12) * 100) / 100)), '/mês'),
       h('p', { class: 'plan-card__annual' }, `cobrado ${formatMoney(p.annualPrice)} por ano`)];

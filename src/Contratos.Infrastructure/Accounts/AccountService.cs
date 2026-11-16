@@ -18,6 +18,7 @@ internal sealed class AccountService(
     IEmailSender email,
     IOptions<AppOptions> appOptions,
     IOptions<Billing.BillingOptions> billing,
+    Billing.UsageMeter meter,
     ILogger<AccountService> logger) : IAccountService
 {
     private AppOptions App => appOptions.Value;
@@ -94,7 +95,11 @@ internal sealed class AccountService(
             return false;
 
         var result = await users.ConfirmEmailAsync(user, decoded);
-        return result.Succeeded;
+        if (!result.Succeeded)
+            return false;
+        // Conta confirmada: libera os contratos de boas-vindas para testar (Avulso).
+        await meter.GrantWelcomeCreditsAsync(user.OrganizationId, ct);
+        return true;
     }
 
     public async Task ResendConfirmationAsync(string emailAddress, CancellationToken ct)

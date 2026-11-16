@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { canEditContracts, isAdmin, requireUser } from '../auth.js';
 import { h } from '../ui/dom.js';
-import { contractNumber, formatRelative } from '../utils/format.js';
+import { contractNumber, formatDate, formatRelative } from '../utils/format.js';
 import { progress } from '../utils/status.js';
 
 const STALE_DAYS = 3;
@@ -15,6 +15,13 @@ if (canEditContracts(me) && summary.hasPublishedTemplate) document.querySelector
 if (total === 0) {
   // Conta nova: mostra os primeiros passos em vez de números zerados.
   document.querySelector('[data-lead]').textContent = `A conta de ${me.organization.name} está pronta. Os próximos passos:`;
+  // Conta no Avulso com os contratos de boas-vindas: diz quantos são e até quando valem.
+  api('/organization/billing').then((b) => {
+    const welcome = b.contractsLimit === 0 ? b.credits.find((g) => g.source === 'welcome' && g.remaining > 0) : null;
+    if (!welcome) return;
+    document.querySelector('[data-lead]').textContent =
+      `A conta de ${me.organization.name} está pronta, com ${welcome.remaining} ${welcome.remaining === 1 ? 'contrato grátis' : 'contratos grátis'} para testar até ${formatDate(welcome.expiresAt)}. Os próximos passos:`;
+  }).catch(() => {});
   const steps = [
     { title: 'Montar o primeiro template', text: 'Cole o modelo de contrato e marque as variáveis.', href: '/templates.html', done: summary.hasPublishedTemplate },
     { title: 'Gerar e enviar um contrato', text: 'Preencha os dados, adicione quem assina e envie.', href: summary.hasPublishedTemplate ? '/contract-new.html' : null },

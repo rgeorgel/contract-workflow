@@ -156,3 +156,19 @@ public sealed class AutentiqueCollection : ICollectionFixture<AutentiqueApiFacto
 {
     public const string Name = "autentique";
 }
+
+/// <summary>Mesma API com a configuração de produção para cadastro: contas novas entram no Avulso.</summary>
+public sealed class AvulsoApiFactory : ApiFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Billing:DefaultPlan", "avulso");
+    }
+}
+
+[CollectionDefinition(Name)]
+public sealed class AvulsoCollection : ICollectionFixture<AvulsoApiFactory>
+{
+    public const string Name = "avulso";
+}

@@ -26,7 +26,7 @@ services:
       Autentique__Sandbox: ${AUTENTIQUE_SANDBOX:-true}
       SignatureBalance__AlertEmail: ${AUTENTIQUE_ALERT_EMAIL:-}
       SignatureBalance__LowDocuments: ${AUTENTIQUE_LOW_DOCUMENTS:-20}
-      Billing__DefaultPlan: ${BILLING_DEFAULT_PLAN:-gratis}
+      Billing__DefaultPlan: ${BILLING_DEFAULT_PLAN:-avulso}
       Billing__ContactEmail: ${BILLING_CONTACT_EMAIL:-}
       Platform__ApiKey: ${PLATFORM_API_KEY:-}
       Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}

@@ -41,7 +41,7 @@ public sealed class Organization
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>Plano atual (id do catálogo em <see cref="Plans"/>).</summary>
-    public string PlanId { get; private set; } = Plans.FreeId;
+    public string PlanId { get; private set; } = Plans.PayAsYouGoId;
 
     /// <summary>
     /// Ciclo pago da assinatura, quando há (vem do provedor de cobrança). Sem ele, ou fora dele,
@@ -89,10 +89,10 @@ public sealed class Organization
         SubscriptionStatus = status;
     }
 
-    /// <summary>Assinatura encerrada (cancelada ou não paga): volta ao plano grátis, no mês do calendário.</summary>
+    /// <summary>Assinatura encerrada (cancelada ou não paga): volta ao Avulso (só créditos).</summary>
     public void EndSubscription(string status)
     {
-        ChangePlan(Plans.FreeId);
+        ChangePlan(Plans.PayAsYouGoId);
         SubscriptionStatus = status;
         SubscriptionCancelAt = null;
     }

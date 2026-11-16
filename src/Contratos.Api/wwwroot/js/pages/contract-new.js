@@ -383,7 +383,16 @@ function renderUsageNote() {
   const settings = h('a', { href: '/settings.html' }, 'Ver plano e uso');
   let tone = 'alert--info';
   let text;
-  if (left > 0) {
+  if (billing.contractsLimit === 0 && billing.creditsAvailable > 0) {
+    text = `Este envio usa 1 crédito de contrato (você tem ${billing.creditsAvailable}).`;
+  } else if (billing.contractsLimit === 0) {
+    tone = 'alert--error';
+    text = 'Sua conta não tem créditos de contrato. Compre um pacote (a partir de R$ 2,40 por contrato) ou assine um plano para enviar.';
+    if (billing.onlineCheckout) {
+      settings.textContent = 'Comprar contratos';
+      settings.href = '/settings.html#pacotes';
+    }
+  } else if (left > 0) {
     text = `Este envio usa 1 dos ${left} ${left === 1 ? 'contrato restante' : 'contratos restantes'} do plano ${billing.plan.name} neste ciclo.`;
     if (left > 1 && billing.contractsUsed + 1 < billing.contractsLimit * 0.8) { el.hidden = true; return; }
   } else if (billing.creditsAvailable > 0) {

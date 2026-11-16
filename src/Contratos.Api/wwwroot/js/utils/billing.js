@@ -14,8 +14,9 @@ export const limitLabel = (n, one, many) => (n == null ? `${many} ilimitados` : 
 
 export const channelsLabel = (channels) => channels.map((c) => DELIVERY[c] ?? c).join(', ');
 
-/** Plano mais barato do catálogo que libera o canal. */
-export const cheapestWith = (plans, channel) => plans.find((p) => p.channels.includes(channel));
+/** Plano de assinatura mais barato que libera o canal (o Avulso libera todos, mas não é um "upgrade"). */
+export const cheapestWith = (plans, channel) =>
+  plans.find((p) => p.monthlyPrice > 0 && p.channels.includes(channel)) ?? plans.find((p) => p.channels.includes(channel));
 
 /** 0–100 inteiro, para o data-pct das barras (sem style inline por causa da CSP). */
 export const pct = (used, limit) => (limit ? Math.min(100, Math.round((used / limit) * 100)) : 0);

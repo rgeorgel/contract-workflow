@@ -12,8 +12,8 @@ public sealed class BillingOptions
 {
     public const string Section = "Billing";
 
-    /// <summary>Plano de quem cria conta. Em produção, o grátis.</summary>
-    public string DefaultPlan { get; set; } = Plans.FreeId;
+    /// <summary>Plano de quem cria conta. Em produção, o Avulso (com os créditos de boas-vindas).</summary>
+    public string DefaultPlan { get; set; } = Plans.PayAsYouGoId;
 
     /// <summary>Para onde mandar quem quer mudar de plano ou comprar contratos, enquanto não há checkout.</summary>
     public string? ContactEmail { get; set; }
@@ -103,6 +103,10 @@ internal sealed class UsageMeter(AppDbContext db, TimeProvider clock)
             OrganizationId = org.Id, ContractId = contractId, PlanId = snapshot.Plan.Id,
             Source = UsageSource.Credit, CreditGrantId = grantIds[0], ConsumedAt = now,
         });
+        // Sem cota mensal (Avulso), os créditos são tudo o que a conta tem: avisa quando resta 1 e quando acabam.
+        var left = snapshot.CreditsAvailable - 1;
+        if (snapshot.Plan.ContractsPerPeriod == 0 && left <= 1)
+            db.Enqueue(OutboxTypes.CreditsAlert, new CreditsAlertMessage(org.Id, left));
         return UsageSource.Credit;
     }
 
@@ -135,6 +139,10 @@ internal sealed class UsageMeter(AppDbContext db, TimeProvider clock)
 
     public static Error QuotaExceeded(Snapshot s)
     {
+        if (s.Plan.ContractsPerPeriod == 0)
+            return Error.Conflict(
+                "Sua conta não tem créditos de contrato. Compre um pacote (a partir de R$ 2,40 por contrato) ou assine um plano em Configurações.",
+                "quota_exceeded");
         var renews = RenewalDate(s.PeriodEnd);
         return Error.Conflict(
             $"Você já enviou os {s.Plan.ContractsPerPeriod} contratos do plano {s.Plan.Name} neste ciclo, que renova em {renews}, "
@@ -156,7 +164,41 @@ internal sealed class UsageMeter(AppDbContext db, TimeProvider clock)
     };
 
     public static string ChannelNotInPlan(Plan plan, DeliveryMethod m) =>
-        $"Envio por {ChannelLabel(m)} não faz parte do plano {plan.Name}. Ele está disponível a partir do plano {Plans.CheapestWith(m).Name}.";
+        $"Envio por {ChannelLabel(m)} não faz parte do plano {plan.Name}. Ele está no plano {Plans.CheapestWith(m).Name} e nos superiores.";
+
+    // ---------- Boas-vindas ----------
+
+    /// <summary>
+    /// Créditos de boas-vindas ao confirmar o cadastro, só no Avulso (quem já entra num plano pago não precisa).
+    /// A referência fixa no índice único garante uma vez por organização.
+    /// </summary>
+    public async Task GrantWelcomeCreditsAsync(Guid organizationId, CancellationToken ct)
+    {
+        var plan = await PlanOfAsync(organizationId, ct);
+        if (plan.Id != Plans.PayAsYouGoId
+            || await db.CreditGrants.AnyAsync(g => g.OrganizationId == organizationId && g.Reference == CreditSources.Welcome, ct))
+            return;
+        var now = clock.GetUtcNow();
+        db.CreditGrants.Add(new CreditGrant
+        {
+            OrganizationId = organizationId,
+            Quantity = Plans.WelcomeCredits,
+            Remaining = Plans.WelcomeCredits,
+            CreatedAt = now,
+            ExpiresAt = now.AddDays(Plans.WelcomeCreditDays),
+            Source = CreditSources.Welcome,
+            Reference = CreditSources.Welcome,
+            Note = "Boas-vindas",
+        });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            db.ChangeTracker.Clear(); // confirmação repetida ao mesmo tempo
+        }
+    }
 
     // ---------- Pagamento atrasado ----------
 

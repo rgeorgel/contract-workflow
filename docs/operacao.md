@@ -71,7 +71,7 @@ O catálogo de planos e de pacotes fica em código (`src/Contratos.Domain/Billin
 
 | Plano | Mensal | Anual | Contratos/ciclo | Usuários | Templates | Canais |
 |---|---|---|---|---|---|---|
-| `gratis` | R$ 0 | – | 3 | 1 | 2 | e-mail |
+| `avulso` | sem mensalidade | – | 0 (só créditos) | 1 | 2 | e-mail, WhatsApp e SMS |
 | `essencial` | R$ 39,90 | R$ 399 | 20 | 3 | 10 | + WhatsApp |
 | `profissional` | R$ 89,90 | R$ 899 | 80 | 10 | ilimitados | + SMS |
 | `empresa` | R$ 199,90 | R$ 1.999 | 250 | ilimitados | ilimitados | + SMS |
@@ -85,7 +85,12 @@ Regras:
 - **O que conta:** o envio desfeito antes de chegar à Autentique não conta e devolve o crédito. Isso vale para voltar para rascunho, cancelar ou excluir. Depois que chegou à Autentique, conta, mesmo cancelado.
 - **Avisos:** os Admins recebem e-mail ao chegar em 80% e em 100% da cota.
 - **Downgrade:** quem já passou do limite de usuários ou templates continua com o que tem, mas não cria mais. Canais fora do plano são recusados ao adicionar signatário e no envio.
-- **Contas novas** entram em `BILLING_DEFAULT_PLAN` (padrão `gratis`). Contas que já existiam quando os planos entraram foram para `empresa`.
+- **Contas novas** entram em `BILLING_DEFAULT_PLAN` (padrão `avulso`). Contas que já existiam quando os planos entraram foram para `empresa`.
+- **Avulso:** não tem cota mensal; cada contrato enviado usa 1 crédito.
+  - Ao confirmar o e-mail do cadastro, a conta ganha **3 contratos de boas-vindas, válidos por 30 dias**. Uma vez por organização, e só se ela entrar no Avulso.
+  - Depois, compra pacotes ou assina um plano.
+  - Os Admins recebem e-mail quando resta 1 crédito e quando os créditos acabam.
+  - Contas que estavam no antigo plano Grátis viraram Avulso e ganharam os mesmos 3 contratos de boas-vindas.
 
 Sem o Stripe configurado (ou para casos especiais, como cortesia), a equipe troca o plano e concede créditos pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
 
@@ -126,8 +131,8 @@ Como funciona:
 - **Pacotes avulsos:** "Comprar" na tabela de pacotes em Configurações (só Admin) abre um pagamento único, só cartão, com o preço de `Plans.cs`.
   - Os créditos entram na volta do pagamento e de novo pelo webhook `checkout.session.completed`, uma vez por sessão.
   - O valor pago precisa ser o do pacote no catálogo; se não for, nada é liberado e o erro vai para o log.
-  - Valem 12 meses e funcionam em qualquer plano, inclusive o Grátis.
-- **Fim da assinatura:** cancelada ou não paga (`canceled`, `unpaid`), a conta volta ao plano Grátis.
+  - Valem 12 meses e funcionam em qualquer plano, inclusive o Avulso.
+- **Fim da assinatura:** cancelada ou não paga (`canceled`, `unpaid`), a conta passa para o Avulso e segue enviando com os créditos que tiver.
 - **Webhooks:** cada evento é guardado na `webhook_inbox` (o mesmo evento reenviado conta uma vez só). O worker então busca a assinatura atual na API do Stripe, então a ordem dos eventos e a versão da API do webhook não importam.
 - **Plano e preços:** os produtos e preços no Stripe são criados pelo sistema na primeira assinatura, a partir de `Plans.cs`.
   - Produtos `contratos_<plano>`; preços com lookup key `contratos_<plano>_mensal` e `contratos_<plano>_anual`.
@@ -148,7 +153,7 @@ Como funciona:
 5. **Testar:** reinicie a app e assine pela tela de Configurações com o cartão de teste `4242 4242 4242 4242` (qualquer validade futura e qualquer CVC). Para testar recusa, use `4000 0000 0000 0341` (o cartão é aceito no cadastro e recusado na cobrança).
 6. **Recuperação de receita:** em Configurações → Billing → Recuperação de receita (*Revenue recovery*):
    - Deixe as novas tentativas de cobrança ligadas (*Smart Retries*).
-   - Escolha o que fazer quando todas falharem: **cancelar a assinatura**. A conta volta ao plano Grátis e desbloqueia; com "marcar como não paga" também volta ao Grátis.
+   - Escolha o que fazer quando todas falharem: **cancelar a assinatura**. A conta passa para o Avulso e desbloqueia; com "marcar como não paga" também passa para o Avulso.
    - Opcional: ligue os e-mails do próprio Stripe para cartão recusado.
 7. **Produção:** troque para as chaves `sk_live_...` e crie o webhook de novo no modo de produção (o *signing secret* é outro). O catálogo é recriado sozinho no modo de produção.
 

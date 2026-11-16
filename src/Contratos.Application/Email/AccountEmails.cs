@@ -72,6 +72,24 @@ public static class AccountEmails
             footer: "Você recebe este aviso por ser Admin da conta.");
     }
 
+    /// <summary>Aviso aos Admins do Avulso: resta 1 crédito de contrato, ou acabaram.</summary>
+    public static EmailMessage CreditsRunningOut(string productName, string to, string name, string organizationName, int remaining, string link)
+    {
+        var org = WebUtility.HtmlEncode(organizationName);
+        var (subject, intro, introText) = remaining > 0
+            ? ($"Resta 1 contrato na conta de {organizationName}",
+               $"<strong>{org}</strong> tem só mais 1 crédito de contrato.",
+               $"{organizationName} tem só mais 1 crédito de contrato.")
+            : ($"Os créditos de contrato de {organizationName} acabaram",
+               $"Os créditos de contrato de <strong>{org}</strong> acabaram: novos envios ficam bloqueados até você comprar mais.",
+               $"Os créditos de contrato de {organizationName} acabaram: novos envios ficam bloqueados até você comprar mais.");
+        const string options = "Compre um pacote avulso (a partir de R$ 2,40 por contrato) ou assine um plano mensal e envie com folga, a partir de R$ 39,90 por 20 contratos.";
+        return Build(productName, to, name, subject, $"{intro} {options}", $"{introText} {options}",
+            buttonLabel: "Comprar contratos",
+            link: link,
+            footer: "Os contratos já enviados não mudam. Você recebe este aviso por ser Admin da conta.");
+    }
+
     /// <summary>Aviso aos Admins: a cobrança da assinatura foi recusada e a conta está bloqueada.</summary>
     public static EmailMessage PaymentOverdue(string productName, string to, string name, string organizationName, string planName, string link) =>
         Build(productName, to, name,

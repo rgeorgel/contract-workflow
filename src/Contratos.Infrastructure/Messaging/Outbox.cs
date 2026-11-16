@@ -11,12 +11,14 @@ public static class OutboxTypes
     public const string StoreSignedDocument = "StoreSignedDocument";
     public const string UsageAlert = "UsageAlert";
     public const string PaymentOverdueAlert = "PaymentOverdueAlert";
+    public const string CreditsAlert = "CreditsAlert";
 }
 
 public sealed record ContractMessage(Guid ContractId);
 public sealed record ProviderDocumentMessage(string DocumentId);
 public sealed record ResendMessage(Guid ContractId, Guid SignerId);
 public sealed record PaymentOverdueMessage(Guid OrganizationId);
+public sealed record CreditsAlertMessage(Guid OrganizationId, int Remaining);
 public sealed record UsageAlertMessage(Guid OrganizationId, string PlanId, int Used, int Limit, DateTimeOffset PeriodEnd);
 
 internal static class OutboxExtensions

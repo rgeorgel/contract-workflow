@@ -132,7 +132,7 @@ public sealed class PacksAndOverdueTests(ApiFactory factory)
         using (var platform = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") }))
         {
             platform.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiFactory.PlatformKey);
-            await platform.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan = "gratis" });
+            await platform.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan = "avulso" });
         }
         var checkout = await admin.Client.PostAsync("/api/v1/billing/checkout", new { plan = "profissional", interval = "month" });
         var sessionId = SessionIdOf((await checkout.JsonAsync()).GetProperty("url").GetString()!);

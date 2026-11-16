@@ -98,7 +98,7 @@ public sealed class BillingTests(ApiFactory factory)
         var billing = await BillingAsync(admin);
 
         Assert.Equal("empresa", billing.GetProperty("plan").GetProperty("id").GetString()); // Billing:DefaultPlan dos testes
-        Assert.Equal(["gratis", "essencial", "profissional", "empresa"],
+        Assert.Equal(["avulso", "essencial", "profissional", "empresa"],
             billing.GetProperty("plans").EnumerateArray().Select(p => p.GetProperty("id").GetString()!).ToArray());
         Assert.Equal([1, 5, 10, 25, 50], billing.GetProperty("packs").EnumerateArray().Select(p => p.GetProperty("quantity").GetInt32()).ToArray());
         Assert.Equal(1, billing.GetProperty("usersUsed").GetInt32());
@@ -119,42 +119,71 @@ public sealed class BillingTests(ApiFactory factory)
         Assert.Equal(80, pro.GetProperty("contractsPerPeriod").GetInt32());
         Assert.Equal(["Email", "WhatsApp", "Sms"], pro.GetProperty("channels").EnumerateArray().Select(c => c.GetString()!).ToArray());
         Assert.Equal(12, catalog.GetProperty("creditValidityMonths").GetInt32());
+        Assert.Equal(3, catalog.GetProperty("welcomeCredits").GetInt32());
+        Assert.Equal(30, catalog.GetProperty("welcomeCreditDays").GetInt32());
+        var avulso = plans[0];
+        Assert.Equal(0, avulso.GetProperty("contractsPerPeriod").GetInt32());
+        Assert.Equal(["Email", "WhatsApp", "Sms"], avulso.GetProperty("channels").EnumerateArray().Select(c => c.GetString()!).ToArray());
         Assert.Equal(2.40m, catalog.GetProperty("packs").EnumerateArray().Last().GetProperty("unitPrice").GetDecimal());
     }
 
     // ---------- Cota e créditos ----------
 
+    /// <summary>Organização no plano, já sem nenhum crédito e com um template publicado.</summary>
+    private Task<(TestAccount Admin, Guid TemplateId)> AvulsoAsync() => AccountAsync("avulso");
+
     [Fact]
-    public async Task Plan_quota_is_used_before_credits_and_credits_after_it_runs_out()
+    public async Task Avulso_sends_only_with_credits()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
-        await GrantAsync(admin, 2);
-
-        await SendOkAsync(admin, templateId, 3);
+        var (admin, templateId) = await AvulsoAsync();
         var billing = await BillingAsync(admin);
-        Assert.Equal(3, billing.GetProperty("contractsUsed").GetInt32());
-        Assert.Equal(2, billing.GetProperty("creditsAvailable").GetInt32()); // cota do plano primeiro
-
-        await SendOkAsync(admin, templateId, 2);
-        billing = await BillingAsync(admin);
-        Assert.Equal(3, billing.GetProperty("contractsUsed").GetInt32());
-        Assert.Equal(2, billing.GetProperty("contractsFromCredits").GetInt32());
-        Assert.Equal(0, billing.GetProperty("creditsAvailable").GetInt32());
+        Assert.Equal(0, billing.GetProperty("contractsLimit").GetInt32());
         Assert.Equal(0, billing.GetProperty("availableSends").GetInt32());
 
         var blocked = await DraftAsync(admin, templateId);
         var res = await SendAsync(admin, blocked);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
-        Assert.Equal("quota_exceeded", await CodeAsync(res));
+        var problem = await res.JsonAsync();
+        Assert.Equal("quota_exceeded", problem.GetProperty("code").GetString());
+        Assert.Contains("não tem créditos de contrato", problem.GetProperty("title").GetString());
         var contract = await (await admin.Client.GetAsync($"/api/v1/contracts/{blocked}")).JsonAsync();
         Assert.Equal("Draft", contract.GetProperty("status").GetString());
         Assert.False(contract.GetProperty("hasDocument").GetBoolean());
+
+        await GrantAsync(admin, 2);
+        await SendOkAsync(admin, templateId, 1);
+        Assert.Equal(HttpStatusCode.Accepted, (await SendAsync(admin, blocked)).StatusCode);
+        billing = await BillingAsync(admin);
+        Assert.Equal(2, billing.GetProperty("contractsFromCredits").GetInt32());
+        Assert.Equal(0, billing.GetProperty("creditsAvailable").GetInt32());
+    }
+
+    [Fact]
+    public async Task Plan_quota_is_used_before_credits_and_credits_after_it_runs_out()
+    {
+        var (admin, templateId) = await AccountAsync("essencial"); // 20 por mês
+        await GrantAsync(admin, 2);
+
+        await SendOkAsync(admin, templateId, 20);
+        var billing = await BillingAsync(admin);
+        Assert.Equal(20, billing.GetProperty("contractsUsed").GetInt32());
+        Assert.Equal(2, billing.GetProperty("creditsAvailable").GetInt32()); // cota do plano primeiro
+
+        await SendOkAsync(admin, templateId, 2);
+        billing = await BillingAsync(admin);
+        Assert.Equal(20, billing.GetProperty("contractsUsed").GetInt32());
+        Assert.Equal(2, billing.GetProperty("contractsFromCredits").GetInt32());
+        Assert.Equal(0, billing.GetProperty("availableSends").GetInt32());
+
+        var res = await SendAsync(admin, await DraftAsync(admin, templateId));
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        Assert.Contains("contratos do plano Essencial", (await res.JsonAsync()).GetProperty("title").GetString());
     }
 
     [Fact]
     public async Task Credits_that_expire_first_are_used_first()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
+        var (admin, templateId) = await AvulsoAsync();
         await GrantAsync(admin, 5);
         await GrantAsync(admin, 3);
         using (var scope = factory.Services.CreateScope())
@@ -167,7 +196,7 @@ public sealed class BillingTests(ApiFactory factory)
             await db.SaveChangesAsync();
         }
 
-        await SendOkAsync(admin, templateId, 4); // 3 do plano + 1 crédito
+        await SendOkAsync(admin, templateId, 1);
         var credits = (await BillingAsync(admin)).GetProperty("credits").EnumerateArray()
             .ToDictionary(g => g.GetProperty("quantity").GetInt32(), g => g.GetProperty("remaining").GetInt32());
         Assert.Equal(2, credits[3]);
@@ -177,7 +206,7 @@ public sealed class BillingTests(ApiFactory factory)
     [Fact]
     public async Task Expired_credits_do_not_count()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
+        var (admin, templateId) = await AvulsoAsync();
         await GrantAsync(admin, 2);
         using (var scope = factory.Services.CreateScope())
         {
@@ -188,16 +217,15 @@ public sealed class BillingTests(ApiFactory factory)
                 .ExecuteUpdateAsync(u => u.SetProperty(g => g.ExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
         }
 
-        await SendOkAsync(admin, templateId, 3);
         Assert.Equal(0, (await BillingAsync(admin)).GetProperty("creditsAvailable").GetInt32());
         Assert.Equal(HttpStatusCode.Conflict, (await SendAsync(admin, await DraftAsync(admin, templateId))).StatusCode);
     }
 
     [Fact]
-    public async Task Two_sends_at_the_same_time_cannot_take_the_last_slot_twice()
+    public async Task Two_sends_at_the_same_time_cannot_take_the_last_credit_twice()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
-        await SendOkAsync(admin, templateId, 2);
+        var (admin, templateId) = await AvulsoAsync();
+        await GrantAsync(admin, 1);
         var a = await DraftAsync(admin, templateId, "Contrato A");
         var b = await DraftAsync(admin, templateId, "Contrato B");
 
@@ -205,14 +233,13 @@ public sealed class BillingTests(ApiFactory factory)
 
         Assert.Single(results, r => r.StatusCode == HttpStatusCode.Accepted);
         Assert.Single(results, r => r.StatusCode == HttpStatusCode.Conflict);
-        Assert.Equal(3, (await BillingAsync(admin)).GetProperty("contractsUsed").GetInt32());
+        Assert.Equal(1, (await BillingAsync(admin)).GetProperty("contractsFromCredits").GetInt32());
     }
 
     [Fact]
     public async Task Undoing_a_send_before_the_provider_gives_the_credit_back()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
-        await SendOkAsync(admin, templateId, 3);
+        var (admin, templateId) = await AvulsoAsync();
         await GrantAsync(admin, 1);
 
         // Recusado pelo provedor (dado inválido): volta para rascunho e devolve o crédito.
@@ -235,45 +262,75 @@ public sealed class BillingTests(ApiFactory factory)
     [Fact]
     public async Task A_send_that_reached_the_provider_counts_even_if_cancelled()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
+        var (admin, templateId) = await AvulsoAsync();
+        await GrantAsync(admin, 1);
         var id = await DraftAsync(admin, templateId);
         Assert.Equal(HttpStatusCode.Accepted, (await SendAsync(admin, id)).StatusCode);
         await factory.ProcessBackgroundAsync(); // chega ao provedor
         Assert.Equal(HttpStatusCode.OK, (await admin.Client.PostAsync($"/api/v1/contracts/{id}/cancel")).StatusCode);
-        Assert.Equal(1, (await BillingAsync(admin)).GetProperty("contractsUsed").GetInt32());
+        var billing = await BillingAsync(admin);
+        Assert.Equal(0, billing.GetProperty("creditsAvailable").GetInt32());
+        Assert.Equal(1, billing.GetProperty("contractsFromCredits").GetInt32());
     }
 
     [Fact]
     public async Task Custom_billing_period_defines_the_quota_window()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
-        await SendOkAsync(admin, templateId, 3);
-        Assert.Equal(0, (await BillingAsync(admin)).GetProperty("availableSends").GetInt32());
+        var (admin, templateId) = await AccountAsync("essencial");
+        await SendOkAsync(admin, templateId, 1);
+        Assert.Equal(1, (await BillingAsync(admin)).GetProperty("contractsUsed").GetInt32());
 
         // Novo ciclo pago começando agora: a cota renova.
         var start = DateTimeOffset.UtcNow.AddSeconds(1);
-        await SetPlanAsync(admin, "gratis", start, start.AddMonths(1));
+        await SetPlanAsync(admin, "essencial", start, start.AddMonths(1));
         await Task.Delay(1100);
         var billing = await BillingAsync(admin);
         Assert.Equal(0, billing.GetProperty("contractsUsed").GetInt32());
         Assert.Equal(start.ToUnixTimeSeconds(), billing.GetProperty("periodStart").GetDateTimeOffset().ToUnixTimeSeconds());
-        Assert.Equal(HttpStatusCode.Accepted, (await SendAsync(admin, await DraftAsync(admin, templateId))).StatusCode);
     }
 
     [Fact]
-    public async Task Admins_are_warned_when_the_plan_quota_runs_out()
+    public async Task Admins_are_warned_at_80_and_100_percent_of_the_plan_quota()
     {
-        var (admin, templateId) = await AccountAsync("gratis");
-        await SendOkAsync(admin, templateId, 2);
+        var (admin, templateId) = await AccountAsync("essencial"); // 20: avisos em 16 e 20
+        await SendOkAsync(admin, templateId, 15);
         await factory.ProcessBackgroundAsync();
-        Assert.DoesNotContain(factory.Emails.To(admin.Email), m => m.Subject.Contains("plano Grátis", StringComparison.Ordinal));
+        Assert.DoesNotContain(factory.Emails.To(admin.Email), m => m.Subject.Contains("plano Essencial", StringComparison.Ordinal));
 
         await SendOkAsync(admin, templateId, 1);
         await factory.ProcessBackgroundAsync();
-        var alert = Assert.Single(factory.Emails.To(admin.Email), m => m.Subject.Contains("plano Grátis", StringComparison.Ordinal));
-        Assert.Equal("Os contratos do plano Grátis acabaram neste ciclo", alert.Subject);
-        Assert.Contains("Compre um pacote", alert.TextBody);
-        Assert.Contains("https://app.test/settings.html", alert.TextBody);
+        Assert.Equal("Você já usou 80% dos contratos do plano Essencial",
+            Assert.Single(factory.Emails.To(admin.Email), m => m.Subject.Contains("plano Essencial", StringComparison.Ordinal)).Subject);
+
+        await SendOkAsync(admin, templateId, 4);
+        await factory.ProcessBackgroundAsync();
+        var full = factory.Emails.To(admin.Email).Last(m => m.Subject.Contains("plano Essencial", StringComparison.Ordinal));
+        Assert.Equal("Os contratos do plano Essencial acabaram neste ciclo", full.Subject);
+        Assert.Contains("Compre um pacote", full.TextBody);
+        Assert.Contains("https://app.test/settings.html", full.TextBody);
+    }
+
+    [Fact]
+    public async Task Avulso_admins_are_warned_when_one_credit_is_left_and_when_they_run_out()
+    {
+        var (admin, templateId) = await AvulsoAsync();
+        await GrantAsync(admin, 3);
+        bool IsCreditAlert(Contratos.Application.Email.EmailMessage m) =>
+            m.Subject.StartsWith("Resta 1 contrato", StringComparison.Ordinal) || m.Subject.StartsWith("Os créditos de contrato", StringComparison.Ordinal);
+
+        await SendOkAsync(admin, templateId, 1);
+        await factory.ProcessBackgroundAsync();
+        Assert.DoesNotContain(factory.Emails.To(admin.Email), IsCreditAlert);
+
+        await SendOkAsync(admin, templateId, 1);
+        await factory.ProcessBackgroundAsync();
+        Assert.StartsWith("Resta 1 contrato", Assert.Single(factory.Emails.To(admin.Email), IsCreditAlert).Subject);
+
+        await SendOkAsync(admin, templateId, 1);
+        await factory.ProcessBackgroundAsync();
+        var gone = factory.Emails.To(admin.Email).Where(IsCreditAlert).Last();
+        Assert.StartsWith("Os créditos de contrato", gone.Subject);
+        Assert.Contains("https://app.test/settings.html#pacotes", gone.TextBody);
     }
 
     [Theory]
@@ -290,9 +347,9 @@ public sealed class BillingTests(ApiFactory factory)
     public async Task Channels_outside_the_plan_are_refused()
     {
         var (admin, templateId) = await AccountAsync("empresa");
-        var withWhatsApp = await DraftAsync(admin, templateId, channel: "WhatsApp");
+        var withSms = await DraftAsync(admin, templateId, channel: "Sms");
 
-        await SetPlanAsync(admin, "gratis");
+        await SetPlanAsync(admin, "essencial"); // e-mail e WhatsApp
         var created = await admin.Client.PostAsync("/api/v1/contracts", new { templateId, title = "Outro" });
         var id = (await created.JsonAsync()).GetProperty("id").GetGuid();
         var add = await admin.Client.PostAsync($"/api/v1/contracts/{id}/signers",
@@ -301,13 +358,13 @@ public sealed class BillingTests(ApiFactory factory)
         Assert.Contains("plano Profissional", (await add.JsonAsync()).GetProperty("errors").GetProperty("deliveryMethod")[0].GetString());
 
         // Rascunho feito antes do downgrade: o envio recusa, sem gastar cota.
-        var send = await SendAsync(admin, withWhatsApp);
+        var send = await SendAsync(admin, withSms);
         Assert.Equal(HttpStatusCode.Conflict, send.StatusCode);
         Assert.Equal("channel_not_in_plan", await CodeAsync(send));
         Assert.Equal(0, (await BillingAsync(admin)).GetProperty("contractsUsed").GetInt32());
 
-        await SetPlanAsync(admin, "essencial");
-        Assert.Equal(HttpStatusCode.Accepted, (await SendAsync(admin, withWhatsApp)).StatusCode);
+        await SetPlanAsync(admin, "profissional");
+        Assert.Equal(HttpStatusCode.Accepted, (await SendAsync(admin, withSms)).StatusCode);
     }
 
     [Fact]
@@ -337,7 +394,7 @@ public sealed class BillingTests(ApiFactory factory)
     [Fact]
     public async Task Templates_beyond_the_plan_cannot_be_created_duplicated_or_unarchived()
     {
-        var (admin, first) = await AccountAsync("gratis"); // 2 templates
+        var (admin, first) = await AccountAsync("avulso"); // 2 templates
         var second = (await (await admin.Client.PostAsync("/api/v1/templates", new { name = "Segundo" })).JsonAsync()).GetProperty("id").GetGuid();
 
         var create = await admin.Client.PostAsync("/api/v1/templates", new { name = "Terceiro" });

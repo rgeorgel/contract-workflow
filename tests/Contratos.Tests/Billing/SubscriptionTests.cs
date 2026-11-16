@@ -24,14 +24,14 @@ public sealed class SubscriptionTests(ApiFactory factory)
     private static async Task<Guid> OrgIdAsync(TestAccount admin) =>
         (await (await admin.Client.GetAsync("/api/v1/organization/settings")).JsonAsync()).GetProperty("id").GetGuid();
 
-    /// <summary>Conta no plano grátis (o padrão dos testes é Empresa, sem assinatura).</summary>
+    /// <summary>Conta no Avulso (o padrão dos testes é Empresa, sem assinatura).</summary>
     private async Task<TestAccount> FreeAccountAsync()
     {
         var admin = await TestAccounts.CreateAdminAsync(factory);
         var slug = (await (await admin.Client.GetAsync("/api/v1/organization/settings")).JsonAsync()).GetProperty("slug").GetString();
         using var http = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiFactory.PlatformKey);
-        Assert.Equal(HttpStatusCode.OK, (await http.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan = "gratis" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await http.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan = "avulso" })).StatusCode);
         return admin;
     }
 
@@ -80,7 +80,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         Assert.Equal(3990, Stripe.Prices[Stripe.PriceId("contratos_essencial_mensal")]["unit_amount"]!.GetValue<long>());
         Assert.Equal(39900, Stripe.Prices[Stripe.PriceId("contratos_essencial_anual")]["unit_amount"]!.GetValue<long>());
         Assert.Equal("year", Stripe.Prices[Stripe.PriceId("contratos_empresa_anual")]["recurring"]!["interval"]!.GetValue<string>());
-        Assert.DoesNotContain(Stripe.Prices.Values, p => p["lookup_key"]?.GetValue<string>()?.Contains("gratis") == true);
+        Assert.DoesNotContain(Stripe.Prices.Values, p => p["lookup_key"]?.GetValue<string>()?.Contains("avulso") == true);
 
         var form = Stripe.Posts("/v1/checkout/sessions").Last().Form;
         Assert.Equal("subscription", form["mode"]);
@@ -94,7 +94,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         Assert.StartsWith("cs_test_", sessionId);
 
         // Nada muda antes de pagar.
-        Assert.Equal("gratis", (await BillingAsync(admin)).GetProperty("plan").GetProperty("id").GetString());
+        Assert.Equal("avulso", (await BillingAsync(admin)).GetProperty("plan").GetProperty("id").GetString());
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         var other = await FreeAccountAsync();
         var res = await other.Client.PostAsync("/api/v1/billing/checkout/confirm", new { sessionId });
         Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
-        Assert.Equal("gratis", (await BillingAsync(other)).GetProperty("plan").GetProperty("id").GetString());
+        Assert.Equal("avulso", (await BillingAsync(other)).GetProperty("plan").GetProperty("id").GetString());
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         var admin = await TestAccounts.CreateAdminAsync(factory); // Empresa sem assinatura: cabe o convite
         var editor = await TestAccounts.InviteAndAcceptAsync(factory, admin, "Editor");
         Assert.Equal(HttpStatusCode.Forbidden, (await editor.Client.PostAsync("/api/v1/billing/checkout", new { plan = "essencial", interval = "month" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.Client.PostAsync("/api/v1/billing/checkout", new { plan = "gratis", interval = "month" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.Client.PostAsync("/api/v1/billing/checkout", new { plan = "avulso", interval = "month" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.Client.PostAsync("/api/v1/billing/checkout", new { plan = "essencial", interval = "week" })).StatusCode);
         Assert.True((await BillingAsync(admin)).GetProperty("onlineCheckout").GetBoolean());
     }
@@ -172,11 +172,11 @@ public sealed class SubscriptionTests(ApiFactory factory)
         Assert.Equal("empresa", billing.GetProperty("plan").GetProperty("id").GetString());
         Assert.Equal(FakeStripe.PeriodEnd("month"), billing.GetProperty("subscription").GetProperty("cancelAt").GetDateTimeOffset());
 
-        // Fim do ciclo: o Stripe encerra e a conta volta ao grátis.
+        // Fim do ciclo: o Stripe encerra e a conta volta ao Avulso.
         Stripe.UpdateSubscription(subscriptionId, status: "canceled");
         await SubscriptionEventAsync("customer.subscription.deleted", subscriptionId);
         billing = await BillingAsync(admin);
-        Assert.Equal("gratis", billing.GetProperty("plan").GetProperty("id").GetString());
+        Assert.Equal("avulso", billing.GetProperty("plan").GetProperty("id").GetString());
         Assert.Equal("canceled", billing.GetProperty("subscription").GetProperty("status").GetString());
 
         // Pode assinar de novo.
@@ -204,7 +204,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
 
         Stripe.UpdateSubscription(subscriptionId, status: "unpaid");
         await SubscriptionEventAsync("customer.subscription.updated", subscriptionId);
-        Assert.Equal("gratis", (await BillingAsync(admin)).GetProperty("plan").GetProperty("id").GetString());
+        Assert.Equal("avulso", (await BillingAsync(admin)).GetProperty("plan").GetProperty("id").GetString());
     }
 
     [Fact]

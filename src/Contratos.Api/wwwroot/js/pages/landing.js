@@ -15,7 +15,7 @@ if (year) year.textContent = String(new Date().getFullYear());
 
 
 const TAGLINES = {
-  gratis: 'Para experimentar e para quem envia pouco.',
+  avulso: 'Para quem envia de vez em quando: sem mensalidade.',
   essencial: 'Para quem começou a enviar contrato toda semana.',
   profissional: 'Para equipes que vivem de contrato.',
   empresa: 'Para alto volume e equipes grandes.',
@@ -34,8 +34,9 @@ let catalog = null;
 
 function priceBlock(plan) {
   if (plan.monthlyPrice === 0) {
-    return [h('p', { class: 'price' }, h('strong', {}, formatMoney(0)), h('span', {}, '/mês')),
-      h('p', { class: 'price__note' }, 'para sempre')];
+    const best = catalog.packs.reduce((a, p) => (p.unitPrice < a.unitPrice ? p : a));
+    return [h('p', { class: 'price' }, h('strong', {}, formatMoney(best.unitPrice)), h('span', {}, '/contrato')),
+      h('p', { class: 'price__note' }, `no pacote de ${best.quantity}; sem mensalidade`)];
   }
   if (period === 'annual') {
     return [h('p', { class: 'price' }, h('strong', {}, formatMoney(Math.round((plan.annualPrice / 12) * 100) / 100)), h('span', {}, '/mês')),
@@ -54,9 +55,11 @@ function renderPricing() {
       h('p', { class: 'price-card__tagline' }, TAGLINES[plan.id] ?? ''),
       ...priceBlock(plan),
       h('a', { class: `btn ${recommended ? 'btn--primary' : 'btn--secondary'} price-card__cta`, href: '/signup.html' },
-        plan.monthlyPrice === 0 ? 'Começar grátis' : 'Começar agora'),
+        plan.monthlyPrice === 0 ? `Testar com ${catalog.welcomeCredits} grátis` : 'Começar agora'),
       h('ul', { class: 'price-card__features' },
-        h('li', {}, h('span', {}, h('strong', {}, `${plan.contractsPerPeriod} contratos`), ' por mês')),
+        plan.contractsPerPeriod > 0
+          ? h('li', {}, h('span', {}, h('strong', {}, `${plan.contractsPerPeriod} contratos`), ' por mês'))
+          : h('li', {}, h('span', {}, h('strong', {}, `${catalog.welcomeCredits} contratos grátis`), ` para testar (${catalog.welcomeCreditDays} dias)`)),
         h('li', {}, h('span', {}, limitLabel(plan.maxUsers, 'usuário', 'usuários'))),
         h('li', {}, h('span', {}, limitLabel(plan.maxTemplates, 'template', 'templates'))),
         h('li', {}, h('span', {}, channelText(plan.channels)))));

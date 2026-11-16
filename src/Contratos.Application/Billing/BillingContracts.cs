@@ -15,12 +15,16 @@ public sealed record PlanDto(
 public sealed record CreditPackDto(int Quantity, decimal Price, decimal UnitPrice);
 
 /// <summary>Catálogo público (página inicial e Configurações), sempre a partir de <see cref="Domain.Billing.Plans"/>.</summary>
-public sealed record PlanCatalogDto(IReadOnlyList<PlanDto> Plans, IReadOnlyList<CreditPackDto> Packs, int CreditValidityMonths)
+/// <param name="WelcomeCredits">Contratos grátis no cadastro (Avulso), válidos por <paramref name="WelcomeCreditDays"/> dias.</param>
+public sealed record PlanCatalogDto(
+    IReadOnlyList<PlanDto> Plans, IReadOnlyList<CreditPackDto> Packs, int CreditValidityMonths, int WelcomeCredits, int WelcomeCreditDays)
 {
     public static PlanCatalogDto Current { get; } = new(
         Domain.Billing.Plans.All.Select(PlanDto.From).ToList(),
         Domain.Billing.Plans.Packs.Select(p => new CreditPackDto(p.Quantity, p.Price, p.UnitPrice)).ToList(),
-        Domain.Billing.Plans.CreditValidityMonths);
+        Domain.Billing.Plans.CreditValidityMonths,
+        Domain.Billing.Plans.WelcomeCredits,
+        Domain.Billing.Plans.WelcomeCreditDays);
 }
 
 public sealed record CreditGrantDto(Guid Id, int Quantity, int Remaining, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string Source, string? Note);

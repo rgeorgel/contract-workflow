@@ -348,7 +348,7 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
-                        .HasDefaultValue("gratis")
+                        .HasDefaultValue("avulso")
                         .HasColumnName("plan_id");
 
                     b.Property<DateTimeOffset?>("PlanPeriodEnd")

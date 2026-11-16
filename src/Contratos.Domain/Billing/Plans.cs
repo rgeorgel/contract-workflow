@@ -29,7 +29,10 @@ public sealed record CreditPack(int Quantity, decimal Price)
 
 public static class Plans
 {
-    public const string FreeId = "gratis";
+    /// <summary>Sem mensalidade: cada contrato usa 1 crédito. Quem se cadastra ganha os créditos de boas-vindas.</summary>
+    public const string PayAsYouGoId = "avulso";
+    /// <summary>Nome antigo do plano sem mensalidade (configurações e dados de antes do Avulso).</summary>
+    private const string LegacyFreeId = "gratis";
     public const string EssentialId = "essencial";
     public const string ProfessionalId = "profissional";
     public const string BusinessId = "empresa";
@@ -37,7 +40,12 @@ public static class Plans
     /// <summary>Créditos avulsos valem por 12 meses a partir da compra.</summary>
     public const int CreditValidityMonths = 12;
 
-    public static readonly Plan Free = new(FreeId, "Grátis", 0m, 0m, 3, 1, 2, [DeliveryMethod.Email]);
+    /// <summary>Créditos de boas-vindas: liberados ao confirmar o e-mail do cadastro, valem 30 dias.</summary>
+    public const int WelcomeCredits = 3;
+    public const int WelcomeCreditDays = 30;
+
+    public static readonly Plan PayAsYouGo = new(PayAsYouGoId, "Avulso", 0m, 0m, 0, 1, 2,
+        [DeliveryMethod.Email, DeliveryMethod.WhatsApp, DeliveryMethod.Sms]);
     public static readonly Plan Essential = new(EssentialId, "Essencial", 39.90m, 399m, 20, 3, 10,
         [DeliveryMethod.Email, DeliveryMethod.WhatsApp]);
     public static readonly Plan Professional = new(ProfessionalId, "Profissional", 89.90m, 899m, 80, 10, null,
@@ -46,7 +54,7 @@ public static class Plans
         [DeliveryMethod.Email, DeliveryMethod.WhatsApp, DeliveryMethod.Sms]);
 
     /// <summary>Do mais barato para o mais caro.</summary>
-    public static IReadOnlyList<Plan> All { get; } = [Free, Essential, Professional, Business];
+    public static IReadOnlyList<Plan> All { get; } = [PayAsYouGo, Essential, Professional, Business];
 
     public static IReadOnlyList<CreditPack> Packs { get; } =
     [
@@ -58,11 +66,14 @@ public static class Plans
     ];
 
     public static Plan? Find(string? id) =>
-        All.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+        string.Equals(id, LegacyFreeId, StringComparison.OrdinalIgnoreCase)
+            ? PayAsYouGo
+            : All.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Plano desconhecido (removido do catálogo) cai no grátis, nunca num ilimitado.</summary>
-    public static Plan Get(string? id) => Find(id) ?? Free;
+    /// <summary>Plano desconhecido (removido do catálogo) cai no Avulso, nunca num ilimitado.</summary>
+    public static Plan Get(string? id) => Find(id) ?? PayAsYouGo;
 
-    /// <summary>O plano mais barato que libera o canal.</summary>
-    public static Plan CheapestWith(DeliveryMethod channel) => All.First(p => p.Allows(channel));
+    /// <summary>O plano de assinatura mais barato que libera o canal (o Avulso libera todos, mas não é um "upgrade").</summary>
+    public static Plan CheapestWith(DeliveryMethod channel) =>
+        All.FirstOrDefault(p => p.MonthlyPrice > 0 && p.Allows(channel)) ?? All.First(p => p.Allows(channel));
 }

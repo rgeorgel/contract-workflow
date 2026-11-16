@@ -18,7 +18,7 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
         b.OwnsOne(o => o.Settings, s => s.ToJson("settings"));
         b.Property(o => o.ContractCounter).HasDefaultValue(0);
         b.Property(o => o.CreatedAt).HasDefaultValueSql("now()");
-        b.Property(o => o.PlanId).HasMaxLength(30).HasDefaultValue(Contratos.Domain.Billing.Plans.FreeId).IsRequired();
+        b.Property(o => o.PlanId).HasMaxLength(30).HasDefaultValue(Contratos.Domain.Billing.Plans.PayAsYouGoId).IsRequired();
         b.Ignore(o => o.Plan);
         b.Ignore(o => o.HasLiveSubscription);
         b.Ignore(o => o.IsPaymentOverdue);

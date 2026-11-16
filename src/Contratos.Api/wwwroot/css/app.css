@@ -188,6 +188,7 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .meter__track { height: 8px; }
 .meter__bar.is-warn { background: var(--color-warning); }
 .meter__bar.is-full, .meter__bar.mini-progress__bar[data-pct="100"] { background: var(--color-danger); }
+.meter__bar.is-calm, .meter__bar.is-calm[data-pct="100"] { background: var(--color-primary); }
 .meter__hint { color: var(--color-muted); font-size: .85rem; }
 .credit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: .875rem; }
 .plan-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); margin-bottom: 24px; }

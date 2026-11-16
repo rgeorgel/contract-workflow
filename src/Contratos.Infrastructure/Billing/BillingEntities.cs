@@ -26,6 +26,8 @@ public static class CreditSources
 {
     public const string Manual = "manual";
     public const string Stripe = "stripe";
+    /// <summary>Créditos de boas-vindas do cadastro (referência fixa: uma vez por organização).</summary>
+    public const string Welcome = "welcome";
 }
 
 /// <summary>Um contrato enviado, e de onde saiu: cota do plano ou crédito avulso.</summary>

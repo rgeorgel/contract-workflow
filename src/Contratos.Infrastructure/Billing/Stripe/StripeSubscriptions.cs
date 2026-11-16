@@ -63,7 +63,7 @@ public sealed class StripeSubscriptionSync(
                 break;
             default: // incomplete, paused: ainda não dá (ou deixou de dar) direito ao plano pago
                 org.RecordSubscriptionStatus(sub.Id, sub.Status);
-                if (sub.Status == "paused" && org.PlanId != Plans.FreeId)
+                if (sub.Status == "paused" && org.PlanId != Plans.PayAsYouGoId)
                     org.EndSubscription(sub.Status);
                 break;
         }

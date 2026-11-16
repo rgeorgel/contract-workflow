@@ -330,6 +330,19 @@ public sealed class BackgroundProcessor(
                 db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SignedDocumentStored));
                 break;
             }
+            case OutboxTypes.CreditsAlert:
+            {
+                var msg = message.Read<CreditsAlertMessage>();
+                var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == msg.OrganizationId, ct);
+                if (org is null)
+                    break;
+                var app = services.GetRequiredService<IOptions<AppOptions>>().Value;
+                var email = services.GetRequiredService<IEmailSender>();
+                var link = $"{app.PublicBaseUrl.TrimEnd('/')}/settings.html#pacotes";
+                foreach (var admin in await ActiveAdminsAsync(db, org.Id, ct))
+                    await email.SendAsync(AccountEmails.CreditsRunningOut(app.ProductName, admin.Email, admin.Name, org.Name, msg.Remaining, link), ct);
+                break;
+            }
             case OutboxTypes.PaymentOverdueAlert:
                 await SendPaymentOverdueAlertAsync(services, db, message.Read<PaymentOverdueMessage>(), ct);
                 break;

@@ -9,46 +9,52 @@ async function apiWrite(page, method, path, data) {
   return res.json();
 }
 
-test('plano grátis: uso em Configurações e canal fora do plano bloqueado', async ({ page, request }) => {
-  await signUp(page, request, { plan: 'gratis' });
+test('Avulso: 3 contratos de boas-vindas em Configurações e canal fora do plano bloqueado', async ({ page, request }) => {
+  await signUp(page, request, { plan: null }); // fica no plano do cadastro (Avulso), com os créditos de boas-vindas
 
   await page.goto('/settings.html');
   const usage = page.getByRole('region', { name: 'Plano e uso' });
-  await expect(usage.getByText('Plano Grátis', { exact: true }).first()).toBeVisible();
-  await expect(usage.getByText('0 de 3')).toBeVisible();
-  await expect(usage.getByText('Nenhum crédito avulso.')).toBeVisible();
+  await expect(usage.getByText('Plano Avulso', { exact: true }).first()).toBeVisible();
+  await expect(usage.locator('[data-credits]')).toHaveText('3');
+  await expect(usage).toContainText('Boas-vindas');
+  await expect(usage).toContainText('Cada contrato enviado usa 1 crédito.');
+  await expect(usage).not.toContainText('Contratos do plano neste ciclo');
 
   const plans = page.getByRole('region', { name: 'Planos' });
   await expect(plans.getByRole('article')).toHaveCount(4);
-  await expect(plans.getByRole('article').filter({ hasText: 'Seu plano' })).toContainText('Grátis');
+  await expect(plans.getByRole('article').filter({ hasText: 'Seu plano' })).toContainText('Avulso');
   await expect(plans.getByRole('row', { name: /10 contratos/ })).toContainText('R$ 29,90');
+
+  // Painel de conta nova diz quantos contratos grátis há e até quando.
+  await page.goto('/dashboard.html');
+  await expect(page.locator('[data-lead]')).toContainText('com 3 contratos grátis para testar até');
 
   // Contrato com um template mínimo, direto pela API, para abrir o assistente na etapa de signatários.
   const template = await apiWrite(page, 'POST', '/templates', { name: 'Simples' });
   await apiWrite(page, 'PUT', `/templates/${template.id}`, { name: 'Simples', bodyHtml: '<p>Contrato simples.</p>', variables: [], defaultSignerRoles: [] });
   await apiWrite(page, 'POST', `/templates/${template.id}/publish`);
-  const contract = await apiWrite(page, 'POST', '/contracts', { templateId: template.id, title: 'Contrato do plano grátis' });
+  const contract = await apiWrite(page, 'POST', '/contracts', { templateId: template.id, title: 'Contrato do plano' });
 
+  // O Avulso libera todos os canais; o Essencial não tem SMS.
+  await setPlan(page, 'essencial');
   await page.goto(`/contract-new.html?id=${contract.id}&step=3`);
   await page.getByRole('button', { name: 'Adicionar signatário' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('radio', { name: /E-mail/ })).toBeEnabled();
-  await expect(dialog.getByRole('radio', { name: /WhatsApp/ })).toBeDisabled();
-  await expect(dialog.getByText('No plano Essencial')).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: /WhatsApp/ })).toBeEnabled();
+  await expect(dialog.getByRole('radio', { name: /SMS/ })).toBeDisabled();
   await expect(dialog.getByText('No plano Profissional')).toBeVisible();
 
-  // Mudou de plano: o WhatsApp libera.
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
-  await setPlan(page, 'essencial');
+  await setPlan(page, 'profissional');
   await page.reload();
   await page.getByRole('button', { name: 'Adicionar signatário' }).click();
-  await expect(page.getByRole('dialog').getByRole('radio', { name: /WhatsApp/ })).toBeEnabled();
+  await expect(page.getByRole('dialog').getByRole('radio', { name: /SMS/ })).toBeEnabled();
 });
 
 test('página inicial mostra os planos do catálogo, com preço mensal e anual', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Preços' }).click();
-  const pricing = page.getByRole('region', { name: /Comece grátis/ });
+  const pricing = page.getByRole('region', { name: /Teste com 3 contratos grátis/ });
   const pro = pricing.getByRole('article', { name: 'Profissional' });
   await expect(pricing.getByRole('article')).toHaveCount(4);
   await expect(pro).toContainText('R$ 89,90/mês');
@@ -59,7 +65,10 @@ test('página inicial mostra os planos do catálogo, com preço mensal e anual',
   await pricing.getByRole('button', { name: /Anual/ }).click();
   await expect(pro).toContainText('R$ 74,92/mês');
   await expect(pro).toContainText('cobrado R$ 899,00 por ano');
-  await expect(pricing.getByRole('article', { name: 'Grátis' })).toContainText('para sempre');
+  const avulso = pricing.getByRole('article', { name: 'Avulso' });
+  await expect(avulso).toContainText('R$ 2,40/contrato');
+  await expect(avulso).toContainText('3 contratos grátis para testar (30 dias)');
+  await expect(avulso.getByRole('link', { name: 'Testar com 3 grátis' })).toBeVisible();
 
   await expect(pricing.getByRole('listitem').filter({ hasText: /^50 contratos/ })).toContainText('R$ 2,40 cada');
   await pro.getByRole('link', { name: 'Começar agora' }).click();
@@ -67,7 +76,7 @@ test('página inicial mostra os planos do catálogo, com preço mensal e anual',
 });
 
 test('assinar: botão abre o checkout e a volta ativa o plano (Stripe simulado no navegador)', async ({ page, request }) => {
-  await signUp(page, request, { plan: 'gratis' });
+  await signUp(page, request, { plan: 'avulso' });
   // Sem chaves do Stripe no ambiente local: a API de cobrança é simulada aqui, a tela é a real.
   let checkoutBody = null;
   await page.route('**/api/v1/organization/billing', async (route) => {
@@ -99,13 +108,13 @@ test('assinar: botão abre o checkout e a volta ativa o plano (Stripe simulado n
 });
 
 test('pacote avulso: comprar abre o pagamento e a volta libera os contratos (Stripe simulado)', async ({ page, request }) => {
-  await signUp(page, request, { plan: 'gratis' });
+  await signUp(page, request, { plan: 'avulso' });
   let bought = null;
   let credited = false;
   await page.route('**/api/v1/organization/billing', async (route) => {
     const res = await route.fetch();
     const b = await res.json();
-    await route.fulfill({ response: res, json: { ...b, onlineCheckout: true, ...(credited ? { creditsAvailable: 10 } : {}) } });
+    await route.fulfill({ response: res, json: { ...b, onlineCheckout: true, ...(credited ? { creditsAvailable: b.creditsAvailable + 10 } : {}) } });
   });
   await page.route('**/api/v1/billing/packs/checkout', async (route) => {
     bought = route.request().postDataJSON();
@@ -114,7 +123,7 @@ test('pacote avulso: comprar abre o pagamento e a volta libera os contratos (Str
   await page.route('**/api/v1/billing/packs/confirm', async (route) => {
     credited = true;
     const b = await (await page.request.get('/api/v1/organization/billing')).json();
-    await route.fulfill({ json: { ...b, onlineCheckout: true, creditsAvailable: 10 } });
+    await route.fulfill({ json: { ...b, onlineCheckout: true, creditsAvailable: b.creditsAvailable + 10 } });
   });
 
   await page.goto('/settings.html');
@@ -123,11 +132,11 @@ test('pacote avulso: comprar abre o pagamento e a volta libera os contratos (Str
   await expect(page.getByText('Pacote liberado: 10 contratos a mais.')).toBeVisible();
   expect(bought).toEqual({ quantity: 10 });
   await expect(page).toHaveURL(/\/settings\.html#pacotes$/);
-  await expect(page.locator('[data-credits]')).toHaveText('10');
+  await expect(page.locator('[data-credits]')).toHaveText('13'); // 3 de boas-vindas + 10
 });
 
 test('pagamento atrasado: as páginas continuam abertas, com o aviso de bloqueio no topo', async ({ page, request }) => {
-  await signUp(page, request, { plan: 'gratis' });
+  await signUp(page, request, { plan: 'avulso' });
   // O status vem do Stripe; aqui a resposta de /auth/me é simulada com a assinatura atrasada.
   await page.route('**/api/v1/auth/me', async (route) => {
     const res = await route.fetch();
