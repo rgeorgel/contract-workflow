@@ -1,0 +1,74 @@
+/* Portal de desenvolvedores: barra lateral fixa no desktop, índice recolhível no celular. */
+.docs-hero { border-bottom: 1px solid var(--color-border); background: var(--color-surface); padding: 40px 0 32px; }
+.docs-hero h1 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.01em; }
+.docs-hero p { color: var(--color-muted); max-width: 68ch; margin: 0 0 20px; font-size: 1.05rem; }
+.docs-hero__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.docs-eyebrow { display: inline-block; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-primary); margin-bottom: 10px; }
+
+.docs-layout { display: grid; grid-template-columns: 1fr; gap: 32px; padding-top: 28px; padding-bottom: 64px; }
+@media (min-width: 1000px) { .docs-layout { grid-template-columns: 240px minmax(0, 1fr); gap: 48px; } }
+
+.docs-toc { font-size: .92rem; }
+.docs-toc details { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 10px 14px; background: var(--color-bg); }
+.docs-toc summary { font-weight: 600; cursor: pointer; }
+.docs-toc__group { margin: 14px 0 4px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-subtle); }
+.docs-toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.docs-toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--color-muted); text-decoration: none; border-left: 2px solid transparent; }
+.docs-toc a:hover { color: var(--color-text); background: var(--color-surface); }
+.docs-toc a.is-active { color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+@media (min-width: 1000px) {
+  .docs-toc { position: sticky; top: 84px; align-self: start; max-height: calc(100vh - 100px); overflow: auto; }
+  .docs-toc details { border: 0; padding: 0; background: none; }
+  .docs-toc summary { display: none; }
+}
+
+.docs-content { min-width: 0; max-width: 820px; }
+.docs-content section { scroll-margin-top: 84px; padding-bottom: 12px; }
+.docs-content section + section { border-top: 1px solid var(--color-border); padding-top: 28px; margin-top: 16px; }
+.docs-content h2 { font-size: 1.5rem; margin: 0 0 12px; letter-spacing: -.01em; }
+.docs-content h3 { font-size: 1.1rem; margin: 26px 0 10px; scroll-margin-top: 84px; }
+.docs-content p, .docs-content li { line-height: 1.65; }
+.docs-content p { margin: 0 0 14px; }
+.docs-content ul, .docs-content ol { padding-left: 22px; margin: 0 0 14px; }
+.docs-content :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em;
+  background: var(--color-surface-2); border-radius: 4px; padding: 1px 5px; word-break: break-word;
+}
+
+.endpoint { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92rem; }
+.method { display: inline-block; min-width: 54px; text-align: center; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: .78rem; letter-spacing: .03em; }
+.method--get { background: var(--color-success-soft); color: var(--color-success); }
+.method--post { background: var(--color-info-soft); color: var(--color-info); }
+.endpoint__path { word-break: break-all; }
+
+.docs-table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: .92rem; }
+.docs-table th, .docs-table td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--color-border); }
+.docs-table th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-subtle); font-weight: 700; }
+.docs-table td:first-child { white-space: nowrap; }
+.docs-table .req { color: var(--color-danger); font-size: .8rem; font-weight: 600; margin-left: 4px; }
+.table-scroll { overflow-x: auto; margin: 0 0 18px; }
+.table-scroll .docs-table { margin: 0; min-width: 560px; }
+
+.code { position: relative; margin: 0 0 18px; border-radius: 10px; background: #0f1426; color: #e6e9f5; overflow: hidden; }
+.code pre { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .84rem; line-height: 1.6; tab-size: 2; }
+.code__title { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px 8px 18px; background: #1a2140; font-size: .8rem; color: #aab2d4; }
+.code__copy { background: transparent; border: 1px solid #3a4470; color: #dfe4f7; border-radius: 6px; padding: 3px 10px; font-size: .78rem; cursor: pointer; }
+.code__copy:hover { background: #2a3360; }
+.code-tabs__list { display: flex; gap: 2px; background: #1a2140; padding: 6px 6px 0; overflow-x: auto; }
+.code-tabs__list button { background: transparent; border: 0; color: #aab2d4; padding: 7px 12px; border-radius: 6px 6px 0 0; font-size: .82rem; cursor: pointer; white-space: nowrap; }
+.code-tabs__list button[aria-selected="true"] { background: #0f1426; color: #fff; font-weight: 600; }
+.code-tabs__list .code__copy { margin-left: auto; align-self: center; margin-bottom: 6px; }
+
+.callout { border-left: 3px solid var(--color-primary); background: var(--color-primary-soft); padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; margin: 0 0 18px; }
+.callout--warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
+.callout p:last-child { margin-bottom: 0; }
+
+.docs-steps { counter-reset: step; list-style: none; padding: 0 !important; display: grid; gap: 14px; }
+.docs-steps > li { counter-increment: step; position: relative; padding-left: 44px; }
+.docs-steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--color-primary); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem;
+}
+/* Listas numeradas que continuam a anterior (o atributo start define de onde). */
+.docs-steps[start="3"] { counter-reset: step 2; }
+.docs-steps[start="5"] { counter-reset: step 4; }

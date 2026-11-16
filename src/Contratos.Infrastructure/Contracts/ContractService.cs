@@ -55,6 +55,11 @@ internal sealed class ContractService(
             query = query.Where(c => db.TemplateVersions.Any(v => v.Id == c.TemplateVersionId && v.TemplateId == templateId));
         if (q.CreatedBy is { } createdBy)
             query = query.Where(c => c.CreatedBy == createdBy);
+        if (!string.IsNullOrWhiteSpace(q.ExternalReference))
+        {
+            var reference = q.ExternalReference.Trim();
+            query = query.Where(c => c.ExternalReference == reference);
+        }
 
         var byCompletion = string.Equals(q.DateField, "completed", StringComparison.OrdinalIgnoreCase);
         if (q.From is { } from)
@@ -82,7 +87,7 @@ internal sealed class ContractService(
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(c => new
             {
-                c.Id, c.Number, c.Title, c.Status, c.CreatedAt, c.SentAt, c.CompletedAt, c.SendError,
+                c.Id, c.Number, c.Title, c.Status, c.CreatedAt, c.SentAt, c.CompletedAt, c.SendError, c.ExternalReference,
                 // Sem IgnoreQueryFilters aqui: no EF ele desliga os filtros da consulta INTEIRA,
                 // inclusive o de organização dos contratos.
                 TemplateName = db.TemplateVersions.Where(v => v.Id == c.TemplateVersionId)
@@ -96,7 +101,8 @@ internal sealed class ContractService(
         var items = rows.Select(r => new ContractListItem(
             r.Id, r.Number, r.Title, r.Status, r.TemplateName ?? "—", r.Total, r.Signed, r.CreatedAt, r.SentAt, r.CompletedAt,
             r.SendError is not null,
-            r.Status is ContractStatus.Sent or ContractStatus.PartiallySigned && r.SentAt is { } sent ? (int)(now - sent).TotalDays : null))
+            r.Status is ContractStatus.Sent or ContractStatus.PartiallySigned && r.SentAt is { } sent ? (int)(now - sent).TotalDays : null,
+            r.ExternalReference))
             .ToList();
         return new Paged<ContractListItem>(items, page, pageSize, total);
     }
@@ -182,7 +188,6 @@ internal sealed class ContractService(
         if (template.ArchivedAt is not null || template.CurrentVersionId is null)
             return Error.Validation("templateId", "Este template não tem versão publicada ativa.");
         var version = await db.TemplateVersions.SingleAsync(v => v.Id == template.CurrentVersionId, ct);
-        var keys = version.Variables.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
         var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
         var userId = tenant.RequireUserId();
 
@@ -190,51 +195,9 @@ internal sealed class ContractService(
         var drafts = new List<BulkDraft>();
         for (var i = 0; i < rows.Count; i++)
         {
-            var row = rows[i];
-            var mode = row.SigningMode ?? SigningMode.Parallel;
-            var errors = ContractValidator.ValidateDraft(
-                new UpdateContractRequest(row.Title, row.VariableValues, row.ExpiresAt, mode, row.Message), version.Variables, today);
-            var values = (row.VariableValues ?? [])
-                .Where(kv => keys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
-                .ToDictionary(kv => kv.Key, kv => kv.Value.Trim(), StringComparer.Ordinal);
-            foreach (var v in version.Variables.Where(v => v.Required && !values.ContainsKey(v.Key)))
-                errors.Add($"variableValues.{v.Key}", $"Preencha “{v.Label}”.");
-
-            // Signatários: validados um a um contra os anteriores da mesma linha (e-mail repetido etc.).
-            var probe = new Contract(orgId, 0, "lote", version.Id, null, userId);
-            var signers = row.Signers ?? [];
-            if (signers.Count == 0)
-                errors.Add("signers", "Adicione ao menos um signatário.");
-            if (signers.Count > Contract.MaxSigners)
-                errors.Add("signers", $"Um contrato tem no máximo {Contract.MaxSigners} signatários.");
-            var data = new List<SignerData>();
-            for (var j = 0; j < signers.Count && j < Contract.MaxSigners; j++)
-            {
-                var s = signers[j];
-                var signerErrors = ContractValidator.ValidateSigner(s, probe.Signers);
-                var method = s.DeliveryMethod ?? DeliveryMethod.Email;
-                if (Enum.IsDefined(method) && !org.Plan.Allows(method))
-                    signerErrors.Add("deliveryMethod", UsageMeter.ChannelNotInPlan(org.Plan, method));
-                if (!signerErrors.IsEmpty)
-                {
-                    foreach (var (field, messages) in signerErrors.ToDictionary())
-                        foreach (var message in messages)
-                            errors.Add($"signers[{j}].{field}", message);
-                    continue;
-                }
-                var d = ToData(s, s.SignOrder ?? j + 1);
-                probe.AddSigner(d);
-                data.Add(d);
-            }
-
-            if (errors.IsEmpty)
-            {
-                var expiresAt = row.ExpiresAt is { } date
-                    ? new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3)).ToUniversalTime()
-                    : (DateTimeOffset?)null;
-                drafts.Add(new BulkDraft(row.Title!.Trim(), values, expiresAt, mode,
-                    string.IsNullOrWhiteSpace(row.Message) ? org.Settings.DefaultMessage : row.Message, data));
-            }
+            var (errors, draft) = ValidateRow(rows[i], version, org, userId, today);
+            if (draft is not null)
+                drafts.Add(draft);
             results.Add(new BulkRowResult(i + 1, null, null, errors.ToDictionary()));
         }
 
@@ -263,6 +226,122 @@ internal sealed class ContractService(
 
         return new BulkContractsResult(rows.Count, valid, true,
             results.Select((r, i) => r with { ContractId = created[i].Id, Number = created[i].Number }).ToList());
+    }
+
+    /// <summary>Confere uma linha inteira (dados, variáveis obrigatórias, signatários e canais do plano) sem gravar nada.</summary>
+    private static (ValidationErrors Errors, BulkDraft? Draft) ValidateRow(
+        BulkContractRow row, TemplateVersion version, Domain.Organizations.Organization org, Guid userId, DateOnly today)
+    {
+        var keys = version.Variables.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
+        var mode = row.SigningMode ?? SigningMode.Parallel;
+        var errors = ContractValidator.ValidateDraft(
+            new UpdateContractRequest(row.Title, row.VariableValues, row.ExpiresAt, mode, row.Message), version.Variables, today);
+        var values = (row.VariableValues ?? [])
+            .Where(kv => keys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Trim(), StringComparer.Ordinal);
+        foreach (var v in version.Variables.Where(v => v.Required && !values.ContainsKey(v.Key)))
+            errors.Add($"variableValues.{v.Key}", $"Preencha “{v.Label}”.");
+
+        // Signatários: validados um a um contra os anteriores da mesma linha (e-mail repetido etc.).
+        var probe = new Contract(org.Id, 0, "lote", version.Id, null, userId);
+        var signers = row.Signers ?? [];
+        if (signers.Count == 0)
+            errors.Add("signers", "Adicione ao menos um signatário.");
+        if (signers.Count > Contract.MaxSigners)
+            errors.Add("signers", $"Um contrato tem no máximo {Contract.MaxSigners} signatários.");
+        var data = new List<SignerData>();
+        for (var j = 0; j < signers.Count && j < Contract.MaxSigners; j++)
+        {
+            var s = signers[j];
+            var signerErrors = ContractValidator.ValidateSigner(s, probe.Signers);
+            var method = s.DeliveryMethod ?? DeliveryMethod.Email;
+            if (Enum.IsDefined(method) && !org.Plan.Allows(method))
+                signerErrors.Add("deliveryMethod", UsageMeter.ChannelNotInPlan(org.Plan, method));
+            if (!signerErrors.IsEmpty)
+            {
+                foreach (var (field, messages) in signerErrors.ToDictionary())
+                    foreach (var message in messages)
+                        errors.Add($"signers[{j}].{field}", message);
+                continue;
+            }
+            var d = ToData(s, s.SignOrder ?? j + 1);
+            probe.AddSigner(d);
+            data.Add(d);
+        }
+
+        if (!errors.IsEmpty)
+            return (errors, null);
+        var expiresAt = row.ExpiresAt is { } date
+            ? new DateTimeOffset(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(-3)).ToUniversalTime()
+            : (DateTimeOffset?)null;
+        return (errors, new BulkDraft(row.Title!.Trim(), values, expiresAt, mode,
+            string.IsNullOrWhiteSpace(row.Message) ? org.Settings.DefaultMessage : row.Message, data));
+    }
+
+    // ---------- Contrato completo (API pública) ----------
+
+    public async Task<Result<CreatedContract>> CreateCompleteAsync(CompleteContractRequest req, string? idempotencyKey, CancellationToken ct)
+    {
+        if (!tenant.CanEditContracts())
+            return CannotEdit;
+        var orgId = tenant.RequireOrganizationId();
+
+        // Mesma chave de antes: devolve o que foi criado na primeira vez (a rede caiu, o cliente repetiu).
+        if (idempotencyKey is not null
+            && await db.Contracts.Include(c => c.Signers).SingleOrDefaultAsync(c => c.ApiIdempotencyKey == idempotencyKey, ct) is { } existing)
+            return new CreatedContract(await DetailAsync(existing, ct), true);
+
+        var org = await db.Organizations.SingleAsync(o => o.Id == orgId, ct);
+        if (org.IsPaymentOverdue)
+            return UsageMeter.PaymentOverdue("criar contratos");
+
+        var template = req.TemplateId == Guid.Empty ? null : await db.Templates.SingleOrDefaultAsync(t => t.Id == req.TemplateId, ct);
+        if (template is null)
+            return Error.Validation("templateId", "Template não encontrado.");
+        if (template.ArchivedAt is not null || template.CurrentVersionId is null)
+            return Error.Validation("templateId", "Este template não tem versão publicada ativa.");
+        var version = await db.TemplateVersions.SingleAsync(v => v.Id == template.CurrentVersionId, ct);
+
+        var row = req.Row with { Title = string.IsNullOrWhiteSpace(req.Row.Title) ? template.Name : req.Row.Title };
+        var userId = tenant.RequireUserId();
+        var (errors, draft) = ValidateRow(row, version, org, userId, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
+        if (req.ExternalReference is { Length: > Contract.ExternalReferenceMaxLength })
+            errors.Add("externalReference", $"Use no máximo {Contract.ExternalReferenceMaxLength} caracteres.");
+        if (draft is null || !errors.IsEmpty)
+            return Error.Validation(errors);
+
+        // Numa transação: se a gravação falhar, o número do contrato não fica pulado.
+        var tx = await db.Database.BeginTransactionAsync(ct);
+        var contract = new Contract(orgId, await NextNumberAsync(orgId, ct), draft.Title, version.Id, draft.Message, userId);
+        contract.UpdateDraft(draft.Title, draft.Values, draft.ExpiresAt, draft.Mode, draft.Message);
+        foreach (var signer in draft.Signers)
+            contract.AddSigner(signer);
+        contract.SetIntegration(req.ExternalReference, idempotencyKey);
+        db.Contracts.Add(contract);
+        db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Created, actorUserId: userId,
+            payload: new() { ["template"] = template.Name }));
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch (DbUpdateException e) when (idempotencyKey is not null && e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+        {
+            // Duas chamadas com a mesma chave ao mesmo tempo: a outra criou primeiro.
+            await tx.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            var winner = await db.Contracts.Include(c => c.Signers).SingleAsync(c => c.ApiIdempotencyKey == idempotencyKey, ct);
+            return new CreatedContract(await DetailAsync(winner, ct), true);
+        }
+        finally
+        {
+            await tx.DisposeAsync();
+        }
+        await RefreshSearchAsync(contract.Id, ct);
+        var detail = await DetailAsync(contract, ct);
+        // A busca regravou a linha (nova versão): quem enviar em seguida, na mesma requisição, carrega de novo.
+        db.ChangeTracker.Clear();
+        return new CreatedContract(detail, false);
     }
 
     // ---------- Rascunho ----------
@@ -718,6 +797,6 @@ internal sealed class ContractService(
                 s.Id, s.Name, s.Email, s.Phone, s.Cpf, s.DeliveryMethod, s.Role, s.Action, s.SignOrder, s.Status, s.ShortLink,
                 s.ViewedAt, s.SignedAt, s.DeclinedAt, s.DeclineReason, c.IsOpen && s.CanResend)).ToList(),
             c.DocumentKey is not null, c.SignedDocumentKey is not null, c.DocumentSha256, c.SendError,
-            createdBy, c.CreatedAt, c.UpdatedAt, c.SentAt, c.CompletedAt, c.CancelledAt, permissions, c.RowVersion);
+            createdBy, c.CreatedAt, c.UpdatedAt, c.SentAt, c.CompletedAt, c.CancelledAt, permissions, c.RowVersion, c.ExternalReference);
     }
 }

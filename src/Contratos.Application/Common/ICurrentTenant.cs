@@ -8,6 +8,8 @@ public interface ICurrentTenant
     Guid? OrganizationId { get; }
     Guid? UserId { get; }
     UserRole? Role { get; }
+    /// <summary>Nome da chave de API, quando a requisição veio da API pública (aparece na linha do tempo).</summary>
+    string? ApiKeyName => null;
 }
 
 public static class CurrentTenantExtensions

@@ -7,12 +7,13 @@ namespace Contratos.Application.Contracts;
 /// <param name="DateField">"created" (padrão) ou "completed": a qual data From/To se aplicam.</param>
 public sealed record ContractListQuery(
     string? Q, ContractStatus? Status, Guid? TemplateId, DateOnly? From, DateOnly? To,
-    int Page = 1, int PageSize = 20, string? Sort = null, string? DateField = null, Guid? CreatedBy = null);
+    int Page = 1, int PageSize = 20, string? Sort = null, string? DateField = null, Guid? CreatedBy = null,
+    string? ExternalReference = null);
 
 public sealed record ContractListItem(
     Guid Id, int Number, string Title, ContractStatus Status, string TemplateName,
     int SignersTotal, int SignersSigned, DateTimeOffset CreatedAt, DateTimeOffset? SentAt,
-    DateTimeOffset? CompletedAt, bool SendError, int? PendingDays);
+    DateTimeOffset? CompletedAt, bool SendError, int? PendingDays, string? ExternalReference = null);
 
 public sealed record SignerDto(
     Guid Id, string Name, string? Email, string? Phone, string? Cpf, DeliveryMethod DeliveryMethod,
@@ -31,7 +32,7 @@ public sealed record ContractDetail(
     bool HasDocument, bool HasSignedDocument, string? DocumentSha256, string? SendError,
     string? CreatedByName, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
     DateTimeOffset? SentAt, DateTimeOffset? CompletedAt, DateTimeOffset? CancelledAt,
-    ContractPermissions Permissions, uint RowVersion);
+    ContractPermissions Permissions, uint RowVersion, string? ExternalReference = null);
 
 public sealed record ContractEventDto(
     long Id, string Type, DateTimeOffset OccurredAt, string? SignerName, string? ActorName,
@@ -60,10 +61,19 @@ public sealed record BulkRowResult(int Row, Guid? ContractId, int? Number, IDict
 
 public sealed record BulkContractsResult(int Total, int Valid, bool Created, IReadOnlyList<BulkRowResult> Rows);
 
+/// <summary>Contrato completo numa chamada só (API pública): dados, signatários e referência externa.</summary>
+public sealed record CompleteContractRequest(Guid TemplateId, BulkContractRow Row, string? ExternalReference);
+
+/// <param name="Replayed">Mesma Idempotency-Key de antes: é o contrato criado na primeira chamada.</param>
+public sealed record CreatedContract(ContractDetail Contract, bool Replayed);
+
 public interface IContractService
 {
     /// <summary>Valida e cria rascunhos em lote (planos com envio em lote). Tudo ou nada: com uma linha errada, nada é criado.</summary>
     Task<Result<BulkContractsResult>> CreateBulkAsync(BulkContractsRequest request, CancellationToken ct);
+
+    /// <summary>Cria o rascunho já preenchido, validando tudo antes (como uma linha do lote). Aceita Idempotency-Key.</summary>
+    Task<Result<CreatedContract>> CreateCompleteAsync(CompleteContractRequest request, string? idempotencyKey, CancellationToken ct);
 
     Task<Paged<ContractListItem>> ListAsync(ContractListQuery query, CancellationToken ct);
     Task<Result<ContractDetail>> GetAsync(Guid id, CancellationToken ct);

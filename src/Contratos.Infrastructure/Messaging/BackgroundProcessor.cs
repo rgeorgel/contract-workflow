@@ -77,6 +77,7 @@ public sealed class BackgroundProcessor(
     IOptions<WorkerOptions> options,
     ProviderBalanceMonitor balance,
     ContractAlerts alerts,
+    Integrations.WebhookDispatcher webhooks,
     ILogger<BackgroundProcessor> logger)
 {
     private const int BatchLimit = 50;
@@ -94,6 +95,8 @@ public sealed class BackgroundProcessor(
             for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
             await ExpireContractsAsync(ct);
             await ReconcileAsync(ct);
+            // Depois de tudo que gera eventos: o webhook sai na mesma rodada.
+            await webhooks.DeliverDueAsync(ct);
             await balance.CheckIfDueAsync(ct);
         }
         finally
@@ -261,7 +264,7 @@ public sealed class BackgroundProcessor(
             if (message.Type == OutboxTypes.SendContract)
             {
                 var contractId = message.Read<ContractMessage>().ContractId;
-                var contract = await db.Contracts.IgnoreQueryFilters().SingleOrDefaultAsync(c => c.Id == contractId, ct);
+                var contract = await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers).SingleOrDefaultAsync(c => c.Id == contractId, ct);
                 if (contract is not null)
                 {
                     contract.RecordSendFailure(error);
@@ -358,6 +361,20 @@ public sealed class BackgroundProcessor(
             case OutboxTypes.UsageAlert:
                 await SendUsageAlertAsync(services, db, message.Read<UsageAlertMessage>(), ct);
                 break;
+            case OutboxTypes.WebhookFailingAlert:
+            {
+                var msg = message.Read<Integrations.WebhookFailingMessage>();
+                var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == msg.OrganizationId, ct);
+                var endpoint = await db.WebhookEndpoints.SingleOrDefaultAsync(e => e.Id == msg.EndpointId, ct);
+                if (org is null || endpoint is null)
+                    break;
+                var app = services.GetRequiredService<IOptions<AppOptions>>().Value;
+                var email = services.GetRequiredService<IEmailSender>();
+                var link = $"{app.PublicBaseUrl.TrimEnd('/')}/integrations.html#entregas";
+                foreach (var admin in await ActiveAdminsAsync(db, org.Id, ct))
+                    await email.SendAsync(AccountEmails.WebhookFailing(app.ProductName, admin.Email, admin.Name, org.Name, endpoint.Url, msg.Error, link), ct);
+                break;
+            }
             default:
                 logger.LogError("Tipo de mensagem desconhecido: {Type}", message.Type);
                 break;
@@ -414,7 +431,7 @@ public sealed class BackgroundProcessor(
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = clock.GetUtcNow();
-        var expired = await db.Contracts.IgnoreQueryFilters()
+        var expired = await db.Contracts.IgnoreQueryFilters().Include(c => c.Signers)
             .Where(c => (c.Status == ContractStatus.Sent || c.Status == ContractStatus.PartiallySigned) && c.ExpiresAt != null && c.ExpiresAt <= now)
             .Take(BatchLimit)
             .ToListAsync(ct);

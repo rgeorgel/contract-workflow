@@ -49,7 +49,8 @@ async function renderTimeline() {
       h('strong', {}, title),
       detail ? h('div', { class: 'muted' }, detail) : null,
       h('time', { datetime: e.occurredAt, title: formatDateTime(e.occurredAt) },
-        formatRelative(e.occurredAt), e.actorName ? ` · ${e.actorName}` : ''));
+        formatRelative(e.occurredAt), e.actorName ? ` · ${e.actorName}` : '',
+        e.payload?.apiKey ? ` · pela API (chave “${e.payload.apiKey}”)` : ''));
   }));
 }
 
@@ -119,6 +120,7 @@ function renderFacts() {
     ...row('Cancelado', c.cancelledAt && formatDateTime(c.cancelledAt)),
     ...row('Prazo', c.expiresAt && formatDate(c.expiresAt)),
     ...row('Mensagem', c.message),
+    ...row('Referência externa', c.externalReference && h('code', { title: 'Identificador no sistema que criou o contrato pela API' }, c.externalReference)),
     ...row('SHA-256 do PDF', c.documentSha256 && h('code', { title: 'Impressão digital do PDF enviado' }, c.documentSha256)));
 
   const values = document.querySelector('[data-values]');

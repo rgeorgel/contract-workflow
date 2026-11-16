@@ -157,7 +157,8 @@ function renderBilling(b) {
         h('li', {}, limitLabel(p.maxUsers, 'usuário', 'usuários')),
         h('li', {}, limitLabel(p.maxTemplates, 'template', 'templates')),
         h('li', {}, `Envio por ${channelsLabel(p.channels)}`),
-        p.bulkSend ? h('li', {}, 'Envio em lote por planilha') : null),
+        p.bulkSend ? h('li', {}, 'Envio em lote por planilha') : null,
+        p.apiAccess ? h('li', {}, 'API e webhooks para integrar com CRM e ERP') : null),
       planAction(b, p));
   }));
 

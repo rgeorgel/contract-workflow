@@ -183,6 +183,31 @@ Planos com envio em lote (Profissional e Empresa): em Contratos, "Envio em lote"
 
 API: `POST /api/v1/contracts/bulk` com `{ templateId, rows, dryRun }`.
 
+## API pública e webhooks
+
+Plano Empresa (`Plan.ApiAccess`). Documentação para os clientes em `/desenvolvedores/` (portal público) e `/desenvolvedores/openapi.json`. Um teste confere que o OpenAPI lista exatamente as rotas de `/api/public/v1`: ao criar ou mudar uma rota, atualize o `openapi.json` e o portal.
+
+**Chaves:** criadas por um Admin em Integrações (`/integrations.html`).
+- Formato `ctr_` mais 43 caracteres. O banco guarda só o SHA-256 e o começo da chave, para reconhecer na lista.
+- A chave autentica só em `/api/public/v1`; o cookie da tela não vale lá, e a chave não vale na `/api/v1`.
+- Age como Editor, em nome de quem a criou. A linha do tempo mostra "pela API (chave X)".
+- Revogar vale na hora. São até 10 chaves ativas por conta.
+
+**Limite:** 120 requisições por minuto por chave (`PUBLIC_API_PERMITS_PER_MINUTE`). Acima disso a resposta é 429 com `Retry-After`.
+
+**Webhooks:** até 10 endereços por conta, cada um com um segredo `whsec_`, cifrado com o Data Protection.
+- **Segredo:** se as chaves do Data Protection se perderem (volume `/keys`), as entregas falham com "Não foi possível ler o segredo". Basta gerar um segredo novo na tela.
+- **Quando nascem:** os eventos saem do mesmo `SaveChanges` que grava a linha do tempo do contrato (`WebhookEventWriter`), então não há evento sem mudança nem mudança sem evento. Ficam em `webhook_events` e `webhook_deliveries`.
+- **Como são entregues:** o worker entrega no fim de cada rodada.
+  - Endpoints diferentes saem em paralelo (8 por vez); no mesmo endpoint, na ordem dos eventos.
+  - Cada entrega tem 10 s de timeout e não segue redirecionamentos.
+  - Assinatura: `X-Contratos-Signature: t={unix},v1={HMAC-SHA256(segredo, "t.corpo")}`.
+- **Tentativas:** 8, depois de 1 min, 5 min, 30 min, 2 h, 6 h, 12 h e 24 h (`Webhooks__RetryDelaysSeconds`). Esgotadas, a entrega fica "Falhou" e os Admins recebem um e-mail, uma vez por sequência de falhas. Na tela dá para entregar de novo.
+- **SSRF:** a URL precisa ser `https://` e pública. No cadastro, localhost, IPs privados, link-local (169.254.x, metadados da nuvem) e `.internal`/`.local` são recusados. Na conexão, o IP resolvido é conferido de novo, o que barra um DNS trocado depois do cadastro.
+  - `WEBHOOKS_ALLOW_PRIVATE_NETWORKS=true` libera http e rede interna. Só em dev: o `docker-compose.override.yml` já liga.
+  - Nunca ligue em produção.
+- **Plano sem API:** se a conta muda para um plano sem API, as chaves respondem 403 `api_not_in_plan` e nenhum evento é gerado. Nada é apagado; voltando ao Empresa, tudo volta a funcionar.
+
 ## Saúde
 
 | Rota | Para quê | Olha |
@@ -208,6 +233,7 @@ A app escuta HTTP na porta 7700. Em produção, ponha um proxy com TLS na frente
 | --- | --- | --- |
 | `RateLimiting__AuthPermitsPerMinute` | 10 | Cadastro, login, confirmação, senha: por IP |
 | `API_RATE_LIMIT_PER_MINUTE` | 300 | Toda a `/api`: por usuário logado, ou por IP |
+| `PUBLIC_API_PERMITS_PER_MINUTE` | 120 | API pública (`/api/public/v1`): por chave |
 
 ## Backup
 

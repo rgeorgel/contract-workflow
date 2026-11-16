@@ -13,17 +13,22 @@ internal sealed class HttpCurrentTenant(IHttpContextAccessor accessor) : ICurren
     public Guid? OrganizationId => Guid.TryParse(User?.FindFirstValue(AppClaims.OrganizationId), out var id) ? id : null;
     public Guid? UserId => Guid.TryParse(User?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     public UserRole? Role => Enum.TryParse<UserRole>(User?.FindFirstValue(AppClaims.Role), out var r) ? r : null;
+    public string? ApiKeyName => User?.FindFirstValue(ApiKeyAuthenticationHandler.KeyNameClaim);
 }
 
 internal static class Policies
 {
     public const string IsAdmin = nameof(IsAdmin);
     public const string CanEditContracts = nameof(CanEditContracts);
+    /// <summary>API pública: só a chave de API autentica (o cookie da tela não vale aqui).</summary>
+    public const string PublicApi = nameof(PublicApi);
 
     public static void Configure(Microsoft.AspNetCore.Authorization.AuthorizationOptions o)
     {
         o.AddPolicy(IsAdmin, p => p.RequireAuthenticatedUser().RequireClaim(AppClaims.Role, nameof(UserRole.Admin)));
         o.AddPolicy(CanEditContracts, p => p.RequireAuthenticatedUser()
             .RequireClaim(AppClaims.Role, nameof(UserRole.Admin), nameof(UserRole.Editor)));
+        o.AddPolicy(PublicApi, p => p.AddAuthenticationSchemes(ApiKeyAuthenticationHandler.SchemeName)
+            .RequireAuthenticatedUser().RequireClaim(ApiKeyAuthenticationHandler.KeyIdClaim));
     }
 }

@@ -31,6 +31,9 @@ services:
       Platform__ApiKey: ${PLATFORM_API_KEY:-}
       Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
       Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
+      # API pública e webhooks dos clientes. Rede interna só em dev: em produção seria SSRF.
+      Webhooks__AllowPrivateNetworks: ${WEBHOOKS_ALLOW_PRIVATE_NETWORKS:-false}
+      RateLimiting__PublicApiPermitsPerMinute: ${PUBLIC_API_PERMITS_PER_MINUTE:-120}
       # E-mails do sistema: Resend por padrão (EMAIL_PROVIDER=Smtp usa as variáveis SMTP_*).
       Email__Provider: ${EMAIL_PROVIDER:-Resend}
       Email__FromAddress: ${EMAIL_FROM:-${SMTP_FROM:-nao-responda@contratos.local}}

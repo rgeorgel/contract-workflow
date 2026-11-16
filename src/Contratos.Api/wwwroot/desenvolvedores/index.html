@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API e webhooks · Contratos para desenvolvedores</title>
+  <meta name="description" content="Integre o seu CRM ou ERP com o Contratos: crie e envie contratos para assinatura eletrônica pela API REST e receba webhooks assinados a cada assinatura.">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/landing.css">
+  <link rel="stylesheet" href="/css/docs.css">
+  <script type="module" src="/js/pages/docs.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="site-header" data-header>
+    <div class="container site-header__inner">
+      <a class="brand" href="/" aria-label="Contratos, página inicial">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Contratos
+      </a>
+      <nav class="site-nav" aria-label="Seções">
+        <a href="#inicio-rapido">Início rápido</a>
+        <a href="#contratos">Referência</a>
+        <a href="#webhooks">Webhooks</a>
+        <a href="/desenvolvedores/openapi.json">OpenAPI</a>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost btn--sm" href="/login.html">Entrar</a>
+        <a class="btn btn--primary btn--sm" href="/signup.html">Criar conta</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <div class="docs-hero">
+      <div class="container">
+        <span class="docs-eyebrow">Para desenvolvedores</span>
+        <h1>API e webhooks do Contratos</h1>
+        <p>Crie contratos a partir de um pedido no seu CRM ou ERP, envie para assinatura por e-mail, WhatsApp ou SMS e saiba na hora, por webhook, quando cada pessoa assinou. API REST com JSON, chave por sistema e eventos assinados com HMAC.</p>
+        <div class="docs-hero__actions">
+          <a class="btn btn--primary" href="#inicio-rapido">Começar em 5 minutos</a>
+          <a class="btn btn--secondary" href="/desenvolvedores/openapi.json" download>Baixar OpenAPI (Postman, Insomnia)</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="container docs-layout">
+      <nav class="docs-toc" aria-label="Documentação">
+        <details open>
+          <summary>Nesta página</summary>
+          <p class="docs-toc__group">Começando</p>
+          <ul>
+            <li><a href="#visao-geral">Visão geral</a></li>
+            <li><a href="#inicio-rapido">Início rápido</a></li>
+            <li><a href="#autenticacao">Autenticação</a></li>
+            <li><a href="#convencoes">Convenções</a></li>
+            <li><a href="#erros">Erros</a></li>
+            <li><a href="#limites">Limites</a></li>
+          </ul>
+          <p class="docs-toc__group">Referência</p>
+          <ul>
+            <li><a href="#conta">Conta</a></li>
+            <li><a href="#templates">Templates</a></li>
+            <li><a href="#contratos">Contratos</a></li>
+            <li><a href="#objeto-contrato">Objeto contrato</a></li>
+            <li><a href="#documentos">PDFs e linha do tempo</a></li>
+          </ul>
+          <p class="docs-toc__group">Webhooks</p>
+          <ul>
+            <li><a href="#webhooks">Como funcionam</a></li>
+            <li><a href="#eventos">Eventos</a></li>
+            <li><a href="#assinatura">Conferir a assinatura</a></li>
+            <li><a href="#tentativas">Tentativas e ordem</a></li>
+          </ul>
+          <p class="docs-toc__group">Guias</p>
+          <ul>
+            <li><a href="#guia-crm">Integrar com um CRM</a></li>
+            <li><a href="#seguranca">Segurança</a></li>
+            <li><a href="#mudancas">Mudanças</a></li>
+          </ul>
+        </details>
+      </nav>
+
+      <div class="docs-content">
+        <section id="visao-geral" aria-labelledby="visao-geral-t">
+          <h2 id="visao-geral-t">Visão geral</h2>
+          <p>A API pública fica em <code data-base-url>{{BASE_URL}}/api/public/v1</code>. Com ela o seu sistema:</p>
+          <ul>
+            <li>lista os <strong>templates</strong> publicados e as variáveis de cada um;</li>
+            <li>cria um <strong>contrato</strong> já preenchido, com os signatários, e envia na mesma chamada;</li>
+            <li>acompanha o andamento e baixa o <strong>PDF assinado</strong>;</li>
+            <li>recebe <strong>webhooks</strong> quando alguém abre, assina ou recusa, e quando o contrato termina.</li>
+          </ul>
+          <p>Os templates continuam sendo montados na tela do Contratos, por quem cuida dos contratos. A integração só preenche e envia.</p>
+          <div class="callout">
+            <p><strong>Disponível no plano Empresa.</strong> Um Admin cria as chaves e cadastra os webhooks em <a href="/integrations.html">Integrações</a>. Se a conta mudar para um plano sem API, as chaves param de responder (403 <code>api_not_in_plan</code>) e os webhooks deixam de ser enviados; nada é apagado.</p>
+          </div>
+        </section>
+
+        <section id="inicio-rapido" aria-labelledby="inicio-rapido-t">
+          <h2 id="inicio-rapido-t">Início rápido</h2>
+          <ol class="docs-steps">
+            <li><strong>Crie uma chave.</strong> Em <a href="/integrations.html">Integrações → Chaves de API</a>, clique em “Nova chave”, dê um nome (ex.: “CRM”) e copie a chave <code>ctr_…</code>. Ela aparece uma única vez.</li>
+            <li><strong>Teste a chave</strong> consultando a conta:</li>
+          </ol>
+          <div class="code code-tabs" data-label="Consultar a conta">
+            <pre data-lang="curl" data-title="cURL"><code>curl {{BASE_URL}}/api/public/v1/account \
+  -H "Authorization: Bearer $CONTRATOS_API_KEY"</code></pre>
+            <pre data-lang="node" data-title="Node.js"><code>const res = await fetch('{{BASE_URL}}/api/public/v1/account', {
+  headers: { Authorization: `Bearer ${process.env.CONTRATOS_API_KEY}` },
+});
+console.log(await res.json());</code></pre>
+            <pre data-lang="python" data-title="Python"><code>import os, requests
+
+res = requests.get(
+    "{{BASE_URL}}/api/public/v1/account",
+    headers={"Authorization": f"Bearer {os.environ['CONTRATOS_API_KEY']}"},
+    timeout=30,
+)
+print(res.json())</code></pre>
+            <pre data-lang="php" data-title="PHP"><code>$ch = curl_init('{{BASE_URL}}/api/public/v1/account');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER =&gt; ['Authorization: Bearer ' . getenv('CONTRATOS_API_KEY')],
+    CURLOPT_RETURNTRANSFER =&gt; true,
+]);
+$account = json_decode(curl_exec($ch), true);</code></pre>
+          </div>
+          <ol class="docs-steps" start="3">
+            <li><strong>Escolha o template</strong> e veja as variáveis que ele pede: <code>GET /templates</code> e <code>GET /templates/{id}</code>.</li>
+            <li><strong>Crie e envie o contrato</strong> numa chamada:</li>
+          </ol>
+          <div class="code code-tabs" data-label="Criar e enviar um contrato">
+            <pre data-lang="curl" data-title="cURL"><code>curl {{BASE_URL}}/api/public/v1/contracts \
+  -H "Authorization: Bearer $CONTRATOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: pedido-4521" \
+  -d '{
+    "templateId": "0193a1e6-0000-7000-8000-000000000001",
+    "externalReference": "pedido-4521",
+    "variables": {
+      "contratante.nome": "Café Aurora Ltda",
+      "contratante.cpf": "12.345.678/0001-95",
+      "valor": "1500,50"
+    },
+    "signers": [
+      { "name": "Marina Costa", "email": "marina@cafeaurora.com.br", "deliveryMethod": "email" }
+    ],
+    "send": true
+  }'</code></pre>
+            <pre data-lang="node" data-title="Node.js"><code>const res = await fetch('{{BASE_URL}}/api/public/v1/contracts', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONTRATOS_API_KEY}`,
+    'Content-Type': 'application/json',
+    'Idempotency-Key': `pedido-${order.id}`,
+  },
+  body: JSON.stringify({
+    templateId: process.env.CONTRATOS_TEMPLATE_ID,
+    externalReference: `pedido-${order.id}`,
+    variables: {
+      'contratante.nome': order.customer.name,
+      'contratante.cpf': order.customer.document,
+      valor: order.total.toFixed(2),
+    },
+    signers: [{ name: order.customer.name, email: order.customer.email, deliveryMethod: 'email' }],
+    send: true,
+  }),
+});
+if (!res.ok) throw new Error((await res.json()).title);
+const contract = await res.json(); // contract.id, contract.status === 'sent'</code></pre>
+            <pre data-lang="python" data-title="Python"><code>res = requests.post(
+    "{{BASE_URL}}/api/public/v1/contracts",
+    headers={
+        "Authorization": f"Bearer {os.environ['CONTRATOS_API_KEY']}",
+        "Idempotency-Key": f"pedido-{order.id}",
+    },
+    json={
+        "templateId": os.environ["CONTRATOS_TEMPLATE_ID"],
+        "externalReference": f"pedido-{order.id}",
+        "variables": {
+            "contratante.nome": order.customer_name,
+            "contratante.cpf": order.customer_document,
+            "valor": f"{order.total:.2f}",
+        },
+        "signers": [{"name": order.customer_name, "email": order.customer_email, "deliveryMethod": "email"}],
+        "send": True,
+    },
+    timeout=60,
+)
+res.raise_for_status()
+contract = res.json()</code></pre>
+            <pre data-lang="php" data-title="PHP"><code>$payload = [
+    'templateId' =&gt; getenv('CONTRATOS_TEMPLATE_ID'),
+    'externalReference' =&gt; "pedido-{$order['id']}",
+    'variables' =&gt; [
+        'contratante.nome' =&gt; $order['customer_name'],
+        'contratante.cpf' =&gt; $order['customer_document'],
+        'valor' =&gt; number_format($order['total'], 2, '.', ''),
+    ],
+    'signers' =&gt; [['name' =&gt; $order['customer_name'], 'email' =&gt; $order['customer_email'], 'deliveryMethod' =&gt; 'email']],
+    'send' =&gt; true,
+];
+$ch = curl_init('{{BASE_URL}}/api/public/v1/contracts');
+curl_setopt_array($ch, [
+    CURLOPT_POST =&gt; true,
+    CURLOPT_POSTFIELDS =&gt; json_encode($payload),
+    CURLOPT_HTTPHEADER =&gt; [
+        'Authorization: Bearer ' . getenv('CONTRATOS_API_KEY'),
+        'Content-Type: application/json',
+        "Idempotency-Key: pedido-{$order['id']}",
+    ],
+    CURLOPT_RETURNTRANSFER =&gt; true,
+]);
+$contract = json_decode(curl_exec($ch), true);</code></pre>
+          </div>
+          <ol class="docs-steps" start="5">
+            <li><strong>Receba o aviso.</strong> Cadastre um webhook em <a href="/integrations.html">Integrações → Webhooks</a> e trate o evento <code>contract.completed</code> (todos assinaram) e <code>contract.signed_document_ready</code> (PDF assinado pronto). Veja <a href="#webhooks">Webhooks</a>.</li>
+          </ol>
+        </section>
+
+        <section id="autenticacao" aria-labelledby="autenticacao-t">
+          <h2 id="autenticacao-t">Autenticação</h2>
+          <p>Toda requisição leva a chave no cabeçalho <code>Authorization</code>:</p>
+          <div class="code"><div class="code__title">Cabeçalho</div><pre><code>Authorization: Bearer ctr_Ab12Cd34...</code></pre></div>
+          <ul>
+            <li><strong>Uma chave por sistema.</strong> Assim dá para revogar só a do sistema que vazou, sem parar os outros. Até 10 chaves ativas por conta.</li>
+            <li><strong>O que a chave pode.</strong> Ela age como um usuário Editor: lê templates, cria, envia e cancela contratos e reenvia links. Não gerencia usuários, planos nem configurações. Os contratos criados ficam no nome de quem criou a chave, e a linha do tempo mostra “pela API (chave CRM)”.</li>
+            <li><strong>Só no servidor.</strong> A chave dá acesso a todos os contratos da conta. Nunca a coloque em código que roda no navegador ou num aplicativo; a API não aceita chamadas de outros sites (CORS).</li>
+            <li><strong>Chave inválida ou revogada</strong> responde <code>401</code> com <code>"code": "unauthorized"</code>. A revogação vale na hora.</li>
+          </ul>
+        </section>
+
+        <section id="convencoes" aria-labelledby="convencoes-t">
+          <h2 id="convencoes-t">Convenções</h2>
+          <h3>Formato</h3>
+          <ul>
+            <li>JSON em UTF-8, com <code>Content-Type: application/json</code> no corpo das requisições.</li>
+            <li>Campos em <code>camelCase</code>; valores fixos (status, canais, ações) em <code>snake_case</code>: <code>partially_signed</code>, <code>sign_as_witness</code>.</li>
+            <li>Datas e horas em ISO 8601 com fuso (<code>2026-11-16T14:03:21.512+00:00</code>). Datas sem hora, como o prazo, em <code>AAAA-MM-DD</code>; o prazo vale até 23:59 de Brasília.</li>
+            <li>Identificadores são UUIDs. O <code>number</code> do contrato é o número sequencial que aparece na tela (nº 0042).</li>
+          </ul>
+          <h3 id="idempotencia">Idempotência</h3>
+          <p>Em <code>POST /contracts</code> e <code>POST /contracts/{id}/send</code>, envie o cabeçalho <code>Idempotency-Key</code> com um valor único da operação no seu sistema (o id do pedido, por exemplo; até 100 caracteres). Se a conexão cair e você repetir a chamada com a mesma chave, a API devolve o contrato criado da primeira vez, com status <code>200</code> e o cabeçalho <code>Idempotent-Replayed: true</code>, em vez de criar ou enviar de novo. A chave fica associada ao contrato para sempre: não reaproveite a mesma chave para outro pedido.</p>
+          <h3 id="paginacao">Paginação</h3>
+          <p>Listas trazem <code>items</code>, <code>page</code>, <code>pageSize</code>, <code>total</code> e <code>hasMore</code>. Use <code>?page=2&amp;pageSize=50</code> (até 100 por página).</p>
+        </section>
+
+        <section id="erros" aria-labelledby="erros-t">
+          <h2 id="erros-t">Erros</h2>
+          <p>Erros seguem o padrão <a href="https://www.rfc-editor.org/rfc/rfc9457" rel="noopener">Problem Details</a>: um <code>title</code> legível (em português, pode ser mostrado ao usuário), o <code>status</code> e um <code>code</code> estável para o seu código decidir o que fazer. Erros de validação trazem <code>errors</code>, com a lista de mensagens por campo.</p>
+          <div class="code"><div class="code__title">400: validação</div><pre><code>{
+  "title": "Confira os dados informados.",
+  "status": 400,
+  "code": "validation",
+  "errors": {
+    "variables.valor": ["Valor: Informe um valor, ex.: 1500,00."],
+    "signers[0].email": ["E-mail inválido."]
+  },
+  "traceId": "00-9a01d2e974e940a6bfdbe783b6c2064a-99855b2c794a8cbe-00"
+}</code></pre></div>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Status</th><th>code</th><th>Quando</th></tr></thead>
+              <tbody>
+                <tr><td>400</td><td><code>validation</code></td><td>Algum campo está errado; veja <code>errors</code>.</td></tr>
+                <tr><td>400</td><td><code>invalid_json</code></td><td>Corpo que não é JSON válido, ou um valor fixo desconhecido (ex.: <code>"deliveryMethod": "fax"</code>).</td></tr>
+                <tr><td>401</td><td><code>unauthorized</code></td><td>Chave ausente, inválida ou revogada.</td></tr>
+                <tr><td>402</td><td><code>payment_overdue</code></td><td>A assinatura da conta está com pagamento pendente: criar e enviar fica bloqueado. Leituras continuam.</td></tr>
+                <tr><td>403</td><td><code>api_not_in_plan</code></td><td>O plano atual da conta não inclui a API.</td></tr>
+                <tr><td>404</td><td><code>not_found</code></td><td>O recurso não existe nesta conta.</td></tr>
+                <tr><td>409</td><td><code>quota_exceeded</code></td><td>Acabaram os contratos do ciclo e os créditos avulsos. O rascunho é criado; envie depois de comprar créditos.</td></tr>
+                <tr><td>409</td><td><code>already_sent</code></td><td>O contrato já foi enviado.</td></tr>
+                <tr><td>409</td><td><code>already_final</code></td><td>Cancelar um contrato já concluído, recusado, expirado ou cancelado.</td></tr>
+                <tr><td>409</td><td><code>channel_not_in_plan</code></td><td>Canal (SMS, por exemplo) fora do plano.</td></tr>
+                <tr><td>409</td><td><code>cannot_resend</code></td><td>O signatário já assinou ou recusou, ou o contrato não está mais aberto.</td></tr>
+                <tr><td>409</td><td><code>pdf_failed</code></td><td>Falha temporária ao gerar o PDF. Tente de novo em instantes com a mesma <code>Idempotency-Key</code>.</td></tr>
+                <tr><td>413</td><td><code>payload_too_large</code></td><td>Corpo da requisição acima de 256 KB.</td></tr>
+                <tr><td>415</td><td><code>unsupported_media_type</code></td><td>Faltou o <code>Content-Type: application/json</code>.</td></tr>
+                <tr><td>429</td><td><code>rate_limited</code></td><td>Passou do limite por minuto; espere o tempo do cabeçalho <code>Retry-After</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Quando <code>POST /contracts</code> com <code>"send": true</code> cria o contrato mas não consegue enviar (sem cota, por exemplo), o erro traz <code>contractId</code>: o rascunho existe e pode ser enviado depois com <code>POST /contracts/{contractId}/send</code>.</p>
+        </section>
+
+        <section id="limites" aria-labelledby="limites-t">
+          <h2 id="limites-t">Limites</h2>
+          <ul>
+            <li><strong>120 requisições por minuto por chave.</strong> Acima disso a resposta é <code>429</code> com <code>Retry-After</code> (em segundos).</li>
+            <li>Até <strong>30 signatários</strong> por contrato; título com até 200 caracteres; mensagem com até 500; <code>externalReference</code> com até 100.</li>
+            <li>Cada contrato <strong>enviado</strong> usa um contrato da cota do plano ou, acabada a cota, um crédito avulso. Rascunhos não contam. Veja quanto resta em <code>GET /account</code>.</li>
+          </ul>
+        </section>
+
+        <section id="conta" aria-labelledby="conta-t">
+          <h2 id="conta-t">Conta</h2>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/account</span></div>
+          <p>Conta, plano e uso do ciclo atual. Útil para testar a chave e para avisar o seu time antes de a cota acabar.</p>
+          <div class="code"><div class="code__title">Resposta 200</div><pre><code>{
+  "organization": { "name": "Café Aurora", "slug": "cafe-aurora", "planId": "empresa", "planName": "Empresa" },
+  "usage": {
+    "periodStart": "2026-11-01T03:00:00+00:00",
+    "periodEnd": "2026-12-01T03:00:00+00:00",
+    "contractsUsed": 37,
+    "contractsLimit": 250,
+    "creditsAvailable": 10,
+    "availableSends": 223,
+    "paymentOverdue": false
+  }
+}</code></pre></div>
+        </section>
+
+        <section id="templates" aria-labelledby="templates-t">
+          <h2 id="templates-t">Templates</h2>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/templates</span></div>
+          <p>Templates com versão publicada e não arquivados. Contratos novos sempre usam a versão publicada mais recente.</p>
+          <div class="code"><div class="code__title">Resposta 200</div><pre><code>[
+  {
+    "id": "0193a1e6-0000-7000-8000-000000000001",
+    "name": "Prestação de serviços",
+    "description": "Contrato padrão de consultoria",
+    "version": 3,
+    "variableCount": 3,
+    "updatedAt": "2026-11-10T18:20:00+00:00"
+  }
+]</code></pre></div>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/templates/{id}</span></div>
+          <p>As variáveis do template (as chaves que vão em <code>variables</code> ao criar o contrato) e os signatários sugeridos.</p>
+          <div class="code"><div class="code__title">Resposta 200</div><pre><code>{
+  "id": "0193a1e6-0000-7000-8000-000000000001",
+  "name": "Prestação de serviços",
+  "description": "Contrato padrão de consultoria",
+  "version": 3,
+  "variables": [
+    { "key": "contratante.nome", "label": "Nome do contratante", "type": "text", "required": true },
+    { "key": "contratante.cpf", "label": "CPF ou CNPJ do contratante", "type": "cpf_cnpj", "required": true },
+    { "key": "valor", "label": "Valor mensal", "type": "money", "required": true }
+  ],
+  "suggestedSigners": [
+    { "role": "Contratante", "action": "sign", "order": 1 },
+    { "role": "Testemunha", "action": "sign_as_witness", "order": 2 }
+  ],
+  "updatedAt": "2026-11-10T18:20:00+00:00"
+}</code></pre></div>
+          <h3>Valores das variáveis</h3>
+          <p>Todos os valores vão como texto. O documento mostra cada tipo no formato brasileiro.</p>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>type</th><th>Envie</th><th>Aparece como</th></tr></thead>
+              <tbody>
+                <tr><td><code>text</code></td><td>Qualquer texto, até 2.000 caracteres.</td><td>Igual.</td></tr>
+                <tr><td><code>number</code></td><td><code>"10"</code>, <code>"1500.5"</code> ou <code>"1.500,5"</code>.</td><td>1.500,5</td></tr>
+                <tr><td><code>money</code></td><td><code>"1500.50"</code>, <code>"1500,50"</code> ou <code>"1.500,50"</code>.</td><td>R$ 1.500,50</td></tr>
+                <tr><td><code>date</code></td><td><code>"2026-12-01"</code> (AAAA-MM-DD).</td><td>01/12/2026</td></tr>
+                <tr><td><code>cpf_cnpj</code></td><td>Com ou sem máscara; os dígitos verificadores são conferidos.</td><td>123.456.789-09 / 12.345.678/0001-95</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="contratos" aria-labelledby="contratos-t">
+          <h2 id="contratos-t">Contratos</h2>
+
+          <h3 id="criar-contrato">Criar (e enviar)</h3>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/contracts</span></div>
+          <p>Cria o contrato a partir da versão publicada do template, com os valores e os signatários. Tudo é validado antes: se algo estiver errado, nada é criado. Com <code>"send": true</code>, o PDF é gerado e o contrato vai para assinatura na mesma chamada (resposta <code>201</code>, status <code>sent</code>); sem ele, fica como rascunho (<code>draft</code>), que pode ser revisado na tela e enviado depois.</p>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>templateId</code><span class="req">obrigatório</span></td><td>uuid</td><td>Template a usar.</td></tr>
+                <tr><td><code>variables</code></td><td>objeto</td><td>Chave da variável → valor (texto). Obrigatórias do template precisam vir preenchidas.</td></tr>
+                <tr><td><code>signers</code><span class="req">obrigatório</span></td><td>lista</td><td>De 1 a 30 signatários (abaixo).</td></tr>
+                <tr><td><code>title</code></td><td>texto</td><td>Título do contrato. Sem ele, usa o nome do template.</td></tr>
+                <tr><td><code>externalReference</code></td><td>texto</td><td>O id do pedido, da proposta ou do cliente no seu sistema. Volta em todas as respostas e webhooks e serve de filtro na listagem.</td></tr>
+                <tr><td><code>signingMode</code></td><td><code>parallel</code> | <code>sequential</code></td><td>Todos ao mesmo tempo (padrão) ou na ordem de <code>signOrder</code>.</td></tr>
+                <tr><td><code>expiresAt</code></td><td>data</td><td>Prazo para assinar (AAAA-MM-DD). Depois dele, o contrato expira.</td></tr>
+                <tr><td><code>message</code></td><td>texto</td><td>Mensagem no convite de assinatura. Sem ela, usa a mensagem padrão da conta.</td></tr>
+                <tr><td><code>send</code></td><td>booleano</td><td>Envia logo depois de criar. Padrão: <code>false</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>Signatário</strong></p>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code><span class="req">obrigatório</span></td><td>texto</td><td>Nome completo, até 100 caracteres.</td></tr>
+                <tr><td><code>deliveryMethod</code></td><td><code>email</code> | <code>whatsapp</code> | <code>sms</code></td><td>Por onde o link chega. Padrão: <code>email</code>.</td></tr>
+                <tr><td><code>email</code></td><td>texto</td><td>Obrigatório quando o canal é e-mail. Não pode repetir no mesmo contrato.</td></tr>
+                <tr><td><code>phone</code></td><td>texto</td><td>Obrigatório para WhatsApp e SMS, no formato internacional: <code>+55 11 98765-4321</code>.</td></tr>
+                <tr><td><code>cpf</code></td><td>texto</td><td>Opcional. Quando informado, o provedor confere o CPF de quem assina.</td></tr>
+                <tr><td><code>role</code></td><td>texto</td><td>Papel no contrato (Contratante, Testemunha…).</td></tr>
+                <tr><td><code>action</code></td><td><code>sign</code> | <code>sign_as_witness</code> | <code>approve</code> | <code>recognize</code></td><td>O que a pessoa faz. Padrão: <code>sign</code>.</td></tr>
+                <tr><td><code>signOrder</code></td><td>número</td><td>Ordem, no modo <code>sequential</code>. Padrão: a posição na lista.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code"><div class="code__title">Corpo completo</div><pre><code>{
+  "templateId": "0193a1e6-0000-7000-8000-000000000001",
+  "title": "Prestação de serviços: Café Aurora",
+  "externalReference": "pedido-4521",
+  "variables": {
+    "contratante.nome": "Café Aurora Ltda",
+    "contratante.cpf": "12.345.678/0001-95",
+    "valor": "1500,50"
+  },
+  "signers": [
+    { "name": "Marina Costa", "email": "marina@cafeaurora.com.br", "role": "Contratante" },
+    { "name": "João Lima", "phone": "+55 11 98765-4321", "deliveryMethod": "whatsapp",
+      "role": "Testemunha", "action": "sign_as_witness" }
+  ],
+  "signingMode": "parallel",
+  "expiresAt": "2026-12-15",
+  "message": "Qualquer dúvida, responda este e-mail.",
+  "send": true
+}</code></pre></div>
+          <p>A resposta é o <a href="#objeto-contrato">objeto contrato</a>, com o cabeçalho <code>Location</code> apontando para ele.</p>
+
+          <h3 id="listar-contratos">Listar</h3>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts</span></div>
+          <p>Do mais recente para o mais antigo (ou <code>sort=created_asc</code>). Filtros, todos opcionais:</p>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Parâmetro</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>externalReference</code></td><td>Exatamente esta referência, ex.: <code>pedido-4521</code>.</td></tr>
+                <tr><td><code>status</code></td><td><code>draft</code>, <code>sent</code>, <code>partially_signed</code>, <code>completed</code>, <code>declined</code>, <code>expired</code> ou <code>cancelled</code>.</td></tr>
+                <tr><td><code>templateId</code></td><td>Contratos deste template (qualquer versão).</td></tr>
+                <tr><td><code>createdFrom</code>, <code>createdTo</code></td><td>Criados entre estas datas (AAAA-MM-DD, horário de Brasília).</td></tr>
+                <tr><td><code>q</code></td><td>Busca por número, título, valores e nome ou e-mail de signatário.</td></tr>
+                <tr><td><code>page</code>, <code>pageSize</code></td><td>Página (a partir de 1) e tamanho (até 100, padrão 20).</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code"><div class="code__title">Resposta 200</div><pre><code>{
+  "items": [
+    {
+      "id": "0193a1e6-1111-7000-8000-000000000042",
+      "number": 42,
+      "title": "Prestação de serviços: Café Aurora",
+      "status": "partially_signed",
+      "externalReference": "pedido-4521",
+      "templateName": "Prestação de serviços",
+      "signersTotal": 2,
+      "signersSigned": 1,
+      "sendError": false,
+      "createdAt": "2026-11-16T14:03:21+00:00",
+      "sentAt": "2026-11-16T14:03:22+00:00",
+      "completedAt": null
+    }
+  ],
+  "page": 1, "pageSize": 20, "total": 1, "hasMore": false
+}</code></pre></div>
+
+          <h3 id="detalhe-contrato">Consultar</h3>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts/{id}</span></div>
+          <p>O <a href="#objeto-contrato">objeto contrato</a> completo, com os signatários.</p>
+
+          <h3 id="enviar-contrato">Enviar um rascunho</h3>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/contracts/{id}/send</span></div>
+          <p>Gera o PDF (que fica congelado, com o SHA-256 registrado) e manda para assinatura. Responde <code>202</code> com o contrato em <code>sent</code>; a entrega ao provedor acontece em segundos e é avisada pelo evento <code>contract.sent</code>. Aceita <code>Idempotency-Key</code>.</p>
+
+          <h3 id="cancelar-contrato">Cancelar</h3>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/contracts/{id}/cancel</span></div>
+          <p>Cancela um rascunho ou um contrato em andamento; os links de assinatura param de funcionar. Contrato cancelado antes de chegar ao provedor devolve a cota ou o crédito.</p>
+
+          <h3 id="reenviar-link">Reenviar o link a um signatário</h3>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/contracts/{id}/signers/{signerId}/resend</span></div>
+          <p>Manda o link de novo, pelo mesmo canal, a quem ainda não assinou.</p>
+        </section>
+
+        <section id="objeto-contrato" aria-labelledby="objeto-contrato-t">
+          <h2 id="objeto-contrato-t">Objeto contrato</h2>
+          <div class="code"><div class="code__title">Contrato</div><pre><code>{
+  "id": "0193a1e6-1111-7000-8000-000000000042",
+  "number": 42,
+  "title": "Prestação de serviços: Café Aurora",
+  "status": "partially_signed",
+  "externalReference": "pedido-4521",
+  "template": { "id": "0193a1e6-0000-7000-8000-000000000001", "name": "Prestação de serviços", "version": 3 },
+  "signingMode": "parallel",
+  "expiresAt": "2026-12-16T02:59:59+00:00",
+  "message": "Qualquer dúvida, responda este e-mail.",
+  "variables": { "contratante.nome": "Café Aurora Ltda", "contratante.cpf": "12345678000195", "valor": "1500,50" },
+  "signers": [
+    {
+      "id": "0193a1e6-2222-7000-8000-000000000001",
+      "name": "Marina Costa",
+      "email": "marina@cafeaurora.com.br",
+      "phone": null,
+      "cpf": null,
+      "deliveryMethod": "email",
+      "role": "Contratante",
+      "action": "sign",
+      "signOrder": 1,
+      "status": "signed",
+      "signLink": null,
+      "viewedAt": "2026-11-16T14:10:02+00:00",
+      "signedAt": "2026-11-16T14:11:40+00:00",
+      "declinedAt": null,
+      "declineReason": null
+    }
+  ],
+  "documentSha256": "3f1c…e9a0",
+  "hasDocument": true,
+  "hasSignedDocument": false,
+  "sendError": null,
+  "createdAt": "2026-11-16T14:03:21+00:00",
+  "updatedAt": "2026-11-16T14:11:40+00:00",
+  "sentAt": "2026-11-16T14:03:22+00:00",
+  "completedAt": null,
+  "cancelledAt": null
+}</code></pre></div>
+          <h3>Status do contrato</h3>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>status</th><th>Significado</th></tr></thead>
+              <tbody>
+                <tr><td><code>draft</code></td><td>Rascunho: pode ser alterado na tela e ainda não usou cota.</td></tr>
+                <tr><td><code>sent</code></td><td>Enviado, ninguém assinou ainda. Se <code>sendError</code> vier preenchido, o envio falhou e precisa de correção na tela.</td></tr>
+                <tr><td><code>partially_signed</code></td><td>Parte dos signatários já assinou.</td></tr>
+                <tr><td><code>completed</code></td><td>Todos assinaram. O PDF assinado fica disponível logo depois (<code>hasSignedDocument</code>).</td></tr>
+                <tr><td><code>declined</code></td><td>Alguém recusou; não pode mais ser assinado.</td></tr>
+                <tr><td><code>expired</code></td><td>O prazo acabou sem todas as assinaturas.</td></tr>
+                <tr><td><code>cancelled</code></td><td>Cancelado pela sua equipe ou pela API.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Status do signatário</h3>
+          <p><code>pending</code> (link enviado), <code>viewed</code> (abriu o documento), <code>signed</code>, <code>declined</code> (com <code>declineReason</code>) e <code>delivery_failed</code> (o link não chegou: e-mail ou telefone errado). <code>signLink</code> é o link curto de assinatura quando o provedor gera um; pode vir nulo, e o link sempre chega à pessoa pelo canal escolhido.</p>
+        </section>
+
+        <section id="documentos" aria-labelledby="documentos-t">
+          <h2 id="documentos-t">PDFs e linha do tempo</h2>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts/{id}/document</span></div>
+          <p>O PDF original, como foi enviado (disponível depois do envio). Resposta <code>application/pdf</code>.</p>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts/{id}/signed-document</span></div>
+          <p>O PDF assinado, com o manifesto de assinaturas do provedor. Disponível a partir do evento <code>contract.signed_document_ready</code>; antes disso, <code>404</code>.</p>
+          <div class="code code-tabs" data-label="Baixar o PDF assinado">
+            <pre data-lang="curl" data-title="cURL"><code>curl {{BASE_URL}}/api/public/v1/contracts/$CONTRACT_ID/signed-document \
+  -H "Authorization: Bearer $CONTRATOS_API_KEY" -o contrato-assinado.pdf</code></pre>
+            <pre data-lang="node" data-title="Node.js"><code>import { writeFile } from 'node:fs/promises';
+
+const res = await fetch(`{{BASE_URL}}/api/public/v1/contracts/${id}/signed-document`, {
+  headers: { Authorization: `Bearer ${process.env.CONTRATOS_API_KEY}` },
+});
+await writeFile('contrato-assinado.pdf', Buffer.from(await res.arrayBuffer()));</code></pre>
+            <pre data-lang="python" data-title="Python"><code>res = requests.get(
+    f"{{BASE_URL}}/api/public/v1/contracts/{contract_id}/signed-document",
+    headers={"Authorization": f"Bearer {os.environ['CONTRATOS_API_KEY']}"},
+    timeout=60,
+)
+open("contrato-assinado.pdf", "wb").write(res.content)</code></pre>
+          </div>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts/{id}/events</span></div>
+          <p>A linha do tempo do contrato, do mais recente para o mais antigo: <code>created</code>, <code>contract_sent</code>, <code>sent_to_provider</code>, <code>signer_viewed</code>, <code>signer_signed</code>, <code>signer_declined</code>, <code>delivery_failed</code>, <code>link_resent</code>, <code>completed</code>, <code>signed_document_stored</code>, <code>cancelled</code>, <code>expired</code>, entre outros. Serve de trilha de auditoria para o seu sistema.</p>
+          <div class="code"><div class="code__title">Resposta 200</div><pre><code>[
+  { "id": 981, "type": "signer_signed", "occurredAt": "2026-11-16T14:11:40+00:00",
+    "signerName": "Marina Costa", "actorName": null, "details": {} },
+  { "id": 975, "type": "created", "occurredAt": "2026-11-16T14:03:21+00:00",
+    "signerName": null, "actorName": "Ana Souza", "details": { "template": "Prestação de serviços", "apiKey": "CRM" } }
+]</code></pre></div>
+        </section>
+
+        <section id="webhooks" aria-labelledby="webhooks-t">
+          <h2 id="webhooks-t">Webhooks: como funcionam</h2>
+          <p>Em vez de consultar a API de tempos em tempos, cadastre um endereço do seu sistema em <a href="/integrations.html">Integrações → Webhooks</a>. A cada acontecimento, o Contratos faz um <code>POST</code> nesse endereço com um JSON do evento.</p>
+          <ul>
+            <li>Endereço público com <code>https://</code>. Endereços de rede interna (localhost, 10.x, 192.168.x…) não são aceitos.</li>
+            <li>Escolha os eventos que quer receber, ou todos (inclui os que forem criados no futuro). Até 10 webhooks por conta.</li>
+            <li>Responda com qualquer status <code>2xx</code> em até <strong>10 segundos</strong>. Redirecionamentos não são seguidos.</li>
+            <li>Use “Enviar teste” na tela para receber um evento <code>webhook.test</code> e conferir a conexão. O histórico de entregas mostra a resposta do seu servidor.</li>
+          </ul>
+          <h3>Cabeçalhos</h3>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Cabeçalho</th><th>Conteúdo</th></tr></thead>
+              <tbody>
+                <tr><td><code>X-Contratos-Signature</code></td><td><code>t=1763302300,v1=5f2b…</code>: veja <a href="#assinatura">Conferir a assinatura</a>.</td></tr>
+                <tr><td><code>X-Contratos-Event</code></td><td>Tipo do evento, ex.: <code>contract.completed</code>.</td></tr>
+                <tr><td><code>X-Contratos-Event-Id</code></td><td>Id do evento (igual ao <code>id</code> do corpo). Use para ignorar repetições.</td></tr>
+                <tr><td><code>X-Contratos-Delivery</code></td><td>Id desta entrega (muda quando é entregue de novo).</td></tr>
+                <tr><td><code>X-Contratos-Attempt</code></td><td>Número da tentativa: 1, 2, 3…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Corpo</h3>
+          <div class="code"><div class="code__title">POST no seu endereço</div><pre><code>{
+  "id": "0193a1f0-3333-7000-8000-00000000abcd",
+  "type": "signer.signed",
+  "createdAt": "2026-11-16T14:11:40+00:00",
+  "data": {
+    "contract": { "id": "0193a1e6-1111-…", "number": 42, "status": "partially_signed",
+                  "externalReference": "pedido-4521", "signers": [ … ], … },
+    "signer": { "id": "0193a1e6-2222-…", "name": "Marina Costa", "status": "signed", … },
+    "reason": null,
+    "message": null
+  }
+}</code></pre></div>
+          <p><code>data.contract</code> é o <a href="#objeto-contrato">objeto contrato</a> como estava no momento do evento. <code>data.signer</code> vem nos eventos de signatário e na recusa. <code>data.reason</code> traz o motivo da recusa (<code>contract.declined</code>) ou o erro do envio (<code>contract.send_failed</code>).</p>
+        </section>
+
+        <section id="eventos" aria-labelledby="eventos-t">
+          <h2 id="eventos-t">Eventos</h2>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>type</th><th>Quando</th></tr></thead>
+              <tbody>
+                <tr><td><code>contract.created</code></td><td>Contrato criado (pela tela, pela API ou em lote).</td></tr>
+                <tr><td><code>contract.sent</code></td><td>Entregue ao provedor de assinatura; os signatários receberam os links.</td></tr>
+                <tr><td><code>contract.send_failed</code></td><td>O envio falhou depois das tentativas (dados recusados pelo provedor, por exemplo). Precisa de correção na tela.</td></tr>
+                <tr><td><code>signer.viewed</code></td><td>Um signatário abriu o documento.</td></tr>
+                <tr><td><code>signer.signed</code></td><td>Um signatário assinou.</td></tr>
+                <tr><td><code>signer.delivery_failed</code></td><td>O link não chegou a um signatário.</td></tr>
+                <tr><td><code>contract.declined</code></td><td>Um signatário recusou (motivo em <code>data.reason</code>).</td></tr>
+                <tr><td><code>contract.completed</code></td><td>Todos assinaram.</td></tr>
+                <tr><td><code>contract.signed_document_ready</code></td><td>O PDF assinado pode ser baixado em <code>/contracts/{id}/signed-document</code>.</td></tr>
+                <tr><td><code>contract.expired</code></td><td>O prazo acabou sem todas as assinaturas.</td></tr>
+                <tr><td><code>contract.cancelled</code></td><td>Contrato cancelado.</td></tr>
+                <tr><td><code>webhook.test</code></td><td>Enviado pelo botão “Enviar teste”, sem <code>data.contract</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Novos tipos de evento podem surgir. Ignore (responda <code>2xx</code>) os que o seu sistema não conhece.</p>
+        </section>
+
+        <section id="assinatura" aria-labelledby="assinatura-t">
+          <h2 id="assinatura-t">Conferir a assinatura</h2>
+          <p>Cada webhook tem um segredo (<code>whsec_…</code>), mostrado ao cadastrar e em “Segredo” na tela. Confira toda requisição antes de confiar nela: qualquer pessoa que descubra o seu endereço pode mandar um POST.</p>
+          <ol>
+            <li>Leia o corpo <strong>cru</strong>, os bytes exatos que chegaram, antes de converter o JSON.</li>
+            <li>Separe <code>t</code> (timestamp Unix, em segundos) e <code>v1</code> do cabeçalho <code>X-Contratos-Signature</code>.</li>
+            <li>Calcule <code>HMAC-SHA256(segredo, t + "." + corpo)</code> em hexadecimal minúsculo e compare com <code>v1</code> em tempo constante.</li>
+            <li>Recuse se <code>t</code> estiver a mais de 5 minutos do seu relógio: impede que alguém reenvie um evento antigo capturado.</li>
+          </ol>
+          <div class="code code-tabs" data-label="Conferir a assinatura">
+            <pre data-lang="node" data-title="Node.js"><code>import crypto from 'node:crypto';
+import express from 'express';
+
+const app = express();
+const SECRET = process.env.CONTRATOS_WEBHOOK_SECRET;
+
+// express.raw: a assinatura é sobre os bytes exatos do corpo.
+app.post('/webhooks/contratos', express.raw({ type: 'application/json' }), (req, res) =&gt; {
+  const parts = Object.fromEntries(
+    (req.get('X-Contratos-Signature') ?? '').split(',').map((p) =&gt; p.split('=')),
+  );
+  const expected = crypto.createHmac('sha256', SECRET).update(`${parts.t}.${req.body}`).digest('hex');
+  const valid = typeof parts.v1 === 'string' &amp;&amp; parts.v1.length === expected.length
+    &amp;&amp; crypto.timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected));
+  if (!valid || Math.abs(Date.now() / 1000 - Number(parts.t)) &gt; 300) return res.sendStatus(400);
+
+  const event = JSON.parse(req.body);
+  res.sendStatus(200);       // responda logo
+  queue.add(event);          // e processe em segundo plano
+});</code></pre>
+            <pre data-lang="python" data-title="Python"><code>import hashlib, hmac, json, os, time
+from flask import Flask, abort, request
+
+app = Flask(__name__)
+SECRET = os.environ["CONTRATOS_WEBHOOK_SECRET"].encode()
+
+@app.post("/webhooks/contratos")
+def contratos():
+    body = request.get_data()  # bytes exatos
+    header = request.headers.get("X-Contratos-Signature", "")
+    parts = dict(p.split("=", 1) for p in header.split(",") if "=" in p)
+    expected = hmac.new(SECRET, parts.get("t", "").encode() + b"." + body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, parts.get("v1", "")):
+        abort(400)
+    if abs(time.time() - int(parts.get("t", "0"))) &gt; 300:
+        abort(400)
+
+    event = json.loads(body)
+    queue.enqueue(event)
+    return "", 200</code></pre>
+            <pre data-lang="php" data-title="PHP"><code>$body = file_get_contents('php://input');
+$secret = getenv('CONTRATOS_WEBHOOK_SECRET');
+
+$parts = [];
+foreach (explode(',', $_SERVER['HTTP_X_CONTRATOS_SIGNATURE'] ?? '') as $pair) {
+    [$k, $v] = array_pad(explode('=', $pair, 2), 2, '');
+    $parts[$k] = $v;
+}
+$expected = hash_hmac('sha256', ($parts['t'] ?? '') . '.' . $body, $secret);
+if (!hash_equals($expected, $parts['v1'] ?? '') || abs(time() - (int) ($parts['t'] ?? 0)) &gt; 300) {
+    http_response_code(400);
+    exit;
+}
+
+$event = json_decode($body, true);
+// Grave numa fila e responda.
+http_response_code(200);</code></pre>
+            <pre data-lang="csharp" data-title="C#"><code>app.MapPost("/webhooks/contratos", async (HttpRequest request) =&gt;
+{
+    using var reader = new StreamReader(request.Body, Encoding.UTF8);
+    var body = await reader.ReadToEndAsync();
+    var parts = request.Headers["X-Contratos-Signature"].ToString().Split(',')
+        .Select(p =&gt; p.Split('=', 2)).Where(p =&gt; p.Length == 2)
+        .ToDictionary(p =&gt; p[0], p =&gt; p[1]);
+
+    var secret = Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("CONTRATOS_WEBHOOK_SECRET")!);
+    var expected = Convert.ToHexStringLower(
+        HMACSHA256.HashData(secret, Encoding.UTF8.GetBytes($"{parts.GetValueOrDefault("t")}.{body}")));
+    var valid = parts.TryGetValue("v1", out var given)
+        &amp;&amp; CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(given))
+        &amp;&amp; long.TryParse(parts.GetValueOrDefault("t"), out var t)
+        &amp;&amp; Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - t) &lt;= 300;
+    if (!valid)
+        return Results.BadRequest();
+
+    using var ev = JsonDocument.Parse(body);
+    // Grave numa fila e responda.
+    return Results.Ok();
+});</code></pre>
+          </div>
+          <div class="callout callout--warning">
+            <p>Ao gerar um segredo novo na tela, o anterior para de valer na hora. Atualize o seu sistema logo em seguida; os eventos recusados nesse meio-tempo podem ser entregues de novo pelo histórico.</p>
+          </div>
+        </section>
+
+        <section id="tentativas" aria-labelledby="tentativas-t">
+          <h2 id="tentativas-t">Tentativas e ordem</h2>
+          <ul>
+            <li><strong>Novas tentativas.</strong> Sem resposta <code>2xx</code> (erro, demora de mais de 10 s, sem conexão), o evento é tentado de novo depois de 1 min, 5 min, 30 min, 2 h, 6 h, 12 h e 24 h: 8 tentativas em cerca de 2 dias. Depois disso a entrega fica como “Falhou” e os Admins da conta recebem um e-mail (um por sequência de falhas).</li>
+            <li><strong>Entregar de novo.</strong> Corrigido o seu servidor, use “Entregar de novo” no histórico de entregas.</li>
+            <li><strong>Pelo menos uma vez.</strong> O mesmo evento pode chegar mais de uma vez (o seu servidor processou mas a resposta se perdeu, por exemplo). Guarde o <code>id</code> dos eventos já tratados e ignore os repetidos.</li>
+            <li><strong>Ordem.</strong> Os eventos de um webhook saem na ordem em que aconteceram, mas uma nova tentativa pode chegar depois de um evento mais novo. Use <code>createdAt</code> e o <code>status</code> de <code>data.contract</code>, ou consulte <code>GET /contracts/{id}</code> para ter o estado atual.</li>
+            <li><strong>Responda rápido.</strong> Grave o evento numa fila e responda <code>200</code>; faça o trabalho pesado (baixar o PDF, atualizar o CRM) em segundo plano.</li>
+          </ul>
+        </section>
+
+        <section id="guia-crm" aria-labelledby="guia-crm-t">
+          <h2 id="guia-crm-t">Guia: integrar com um CRM</h2>
+          <p>Um fluxo comum: quando um negócio é ganho no CRM, o contrato sai sozinho, e o negócio é atualizado quando o cliente assina.</p>
+          <ol class="docs-steps">
+            <li><strong>Mapeie o template uma vez.</strong> Pegue o <code>templateId</code> em <code>GET /templates</code> e as chaves das variáveis em <code>GET /templates/{id}</code>. Guarde na configuração da integração qual campo do CRM vai em cada variável.</li>
+            <li><strong>Negócio ganho → <code>POST /contracts</code></strong> com <code>"send": true</code>, <code>externalReference</code> igual ao id do negócio e <code>Idempotency-Key</code> igual ao mesmo id. Se a chamada falhar no meio, repetir é seguro.</li>
+            <li><strong>Guarde o <code>id</code> do contrato</strong> no negócio, para abrir o contrato depois.</li>
+            <li><strong>Webhook <code>signer.signed</code></strong> → registre a atividade no negócio (“Marina Costa assinou”).</li>
+            <li><strong>Webhook <code>contract.signed_document_ready</code></strong> → baixe o PDF em <code>/contracts/{id}/signed-document</code>, anexe ao negócio e mude a etapa para “Contrato assinado”. Ache o negócio por <code>data.contract.externalReference</code>.</li>
+            <li><strong>Webhooks <code>contract.declined</code> e <code>contract.expired</code></strong> → avise o responsável pelo negócio.</li>
+          </ol>
+          <div class="callout"><p>Contratos que precisam de revisão humana antes de sair? Crie sem <code>send</code>: o rascunho aparece na tela do Contratos, alguém confere e envia, e o webhook <code>contract.sent</code> avisa o CRM.</p></div>
+        </section>
+
+        <section id="seguranca" aria-labelledby="seguranca-t">
+          <h2 id="seguranca-t">Segurança</h2>
+          <ul>
+            <li>Guarde a chave e o segredo do webhook em variáveis de ambiente ou num cofre de segredos, nunca no repositório.</li>
+            <li>Chave vazada: revogue em Integrações (vale na hora) e crie outra. A tela mostra o último uso de cada chave.</li>
+            <li>O Contratos guarda só o hash das chaves de API; o segredo do webhook fica cifrado.</li>
+            <li>Os dados dos contratos são pessoais (nome, e-mail, CPF): trate-os no seu sistema conforme a LGPD.</li>
+          </ul>
+        </section>
+
+        <section id="mudancas" aria-labelledby="mudancas-t">
+          <h2 id="mudancas-t">Mudanças</h2>
+          <p>A versão faz parte do endereço (<code>/v1</code>). Dentro dela, só entram mudanças compatíveis: campos novos nas respostas, novos tipos de evento e novos parâmetros opcionais. Escreva o seu código para ignorar campos que ele não conhece.</p>
+          <ul>
+            <li><strong>16/11/2026</strong>: primeira versão: conta, templates, contratos (criar, enviar, cancelar, reenviar, PDFs, linha do tempo) e webhooks.</li>
+          </ul>
+          <p>A especificação completa está em <a href="/desenvolvedores/openapi.json">openapi.json</a> (OpenAPI 3.1), para importar no Postman ou no Insomnia ou gerar um cliente.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <a class="brand brand--small" href="/">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2747d6"/><path d="M10 7.5h8.5l4 4V24a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 24V9A1.5 1.5 0 0 1 10 7.5Z" fill="#fff"/><path d="m12 18 2.6 2.6L20 15.2" fill="none" stroke="#2747d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Contratos
+      </a>
+      <nav class="site-footer__nav" aria-label="Rodapé">
+        <a href="/">Página inicial</a>
+        <a href="/#precos">Preços</a>
+        <a href="/desenvolvedores/">API</a>
+        <a href="/login.html">Entrar</a>
+      </nav>
+      <p class="site-footer__copy">© <span data-year>2026</span> Contratos</p>
+    </div>
+  </footer>
+</body>
+</html>

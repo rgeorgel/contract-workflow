@@ -7,6 +7,7 @@ public sealed class Contract
     public const int TitleMaxLength = 200;
     public const int MessageMaxLength = 500;
     public const int MaxSigners = 30;
+    public const int ExternalReferenceMaxLength = 100;
 
     private readonly List<ContractSigner> _signers = [];
 
@@ -43,6 +44,11 @@ public sealed class Contract
     /// <summary>Última falha ao entregar ao provedor, depois de esgotar as tentativas ("Erro no envio").</summary>
     public string? SendError { get; private set; }
     public string? SendIdempotencyKey { get; private set; }
+
+    /// <summary>Identificador do contrato no sistema do cliente (CRM, ERP), informado pela API.</summary>
+    public string? ExternalReference { get; private set; }
+    /// <summary>Idempotency-Key da criação pela API: repetir a chamada devolve este contrato em vez de criar outro.</summary>
+    public string? ApiIdempotencyKey { get; private set; }
 
     public DateTimeOffset? SentAt { get; private set; }
     /// <summary>Última consulta do documento no provedor (reconciliação de webhooks perdidos).</summary>
@@ -102,6 +108,13 @@ public sealed class Contract
         _signers.Remove(signer);
         Touch();
         return signer;
+    }
+
+    public void SetIntegration(string? externalReference, string? apiIdempotencyKey)
+    {
+        EnsureDraft();
+        ExternalReference = string.IsNullOrWhiteSpace(externalReference) ? null : externalReference.Trim();
+        ApiIdempotencyKey = apiIdempotencyKey;
     }
 
     // ---------- Envio ----------

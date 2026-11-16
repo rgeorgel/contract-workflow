@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrações · Contratos</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/components/app-nav.js"></script>
+  <script type="module" src="/js/pages/integrations.js"></script>
+</head>
+<body class="app">
+  <app-nav active="integrations"></app-nav>
+  <main class="container page" data-main hidden>
+    <div class="page-header">
+      <div>
+        <h1>Integrações</h1>
+        <p>Conecte o seu CRM ou ERP: crie e envie contratos pela API e receba um aviso no seu sistema quando alguém assina.</p>
+      </div>
+      <div class="page-header__actions">
+        <a class="btn btn--secondary" href="/desenvolvedores/" target="_blank" rel="noopener">Documentação da API</a>
+      </div>
+    </div>
+
+    <section class="panel" data-upgrade hidden aria-labelledby="upgrade-title">
+      <div class="panel__body integrations-upgrade">
+        <h2 id="upgrade-title">A API e os webhooks fazem parte do plano <span data-api-plans>Empresa</span></h2>
+        <p class="muted">Com eles, o seu sistema cria contratos a partir de um pedido ou de uma proposta, acompanha as assinaturas e baixa o PDF assinado, sem ninguém copiar dados de uma tela para outra.</p>
+        <a class="btn btn--primary" href="/settings.html">Ver planos</a>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="keys-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="keys-title">Chaves de API</h2>
+          <p class="panel__subtitle">Cada sistema usa a sua chave. Ela cria e envia contratos em nome de quem a criou.</p>
+        </div>
+        <button class="btn btn--primary btn--sm" type="button" data-new-key disabled>Nova chave</button>
+      </div>
+      <div class="table-wrap" data-keys><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+    </section>
+
+    <section class="panel" aria-labelledby="hooks-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="hooks-title">Webhooks</h2>
+          <p class="panel__subtitle">Endereços do seu sistema que recebem os eventos dos contratos, assinados com um segredo.</p>
+        </div>
+        <button class="btn btn--primary btn--sm" type="button" data-new-hook disabled>Novo webhook</button>
+      </div>
+      <div class="table-wrap" data-hooks><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+    </section>
+
+    <section class="panel" id="entregas" aria-labelledby="deliveries-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="deliveries-title">Entregas recentes</h2>
+          <p class="panel__subtitle">Cada evento é tentado até 8 vezes, por cerca de 2 dias, até o seu sistema responder com sucesso (2xx).</p>
+        </div>
+        <div class="deliveries-tools">
+          <label class="visually-hidden" for="delivery-filter">Webhook</label>
+          <select class="select" id="delivery-filter" data-delivery-filter><option value="">Todos os webhooks</option></select>
+          <button class="btn btn--secondary btn--sm" type="button" data-refresh>Atualizar</button>
+        </div>
+      </div>
+      <div class="table-wrap" data-deliveries><div class="loading"><div class="spinner" aria-label="Carregando"></div></div></div>
+      <div class="pager" data-pager hidden>
+        <button class="btn btn--secondary btn--sm" type="button" data-prev>Anteriores</button>
+        <span class="muted" data-page-info></span>
+        <button class="btn btn--secondary btn--sm" type="button" data-next>Mais antigas</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

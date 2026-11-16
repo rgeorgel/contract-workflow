@@ -27,12 +27,16 @@ internal sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
         b.Property(c => c.AutentiqueDocumentId).HasMaxLength(100);
         b.Property(c => c.SendError).HasMaxLength(500);
         b.Property(c => c.SendIdempotencyKey).HasMaxLength(100);
+        b.Property(c => c.ExternalReference).HasMaxLength(Contract.ExternalReferenceMaxLength);
+        b.Property(c => c.ApiIdempotencyKey).HasMaxLength(100);
         b.Property(c => c.RowVersion).IsRowVersion();
 
         b.HasIndex(c => new { c.OrganizationId, c.Status, c.CreatedAt }).IsDescending(false, false, true);
         b.HasIndex(c => new { c.OrganizationId, c.Number }).IsUnique();
         // É por ele que o webhook encontra o contrato (e a organização).
         b.HasIndex(c => c.AutentiqueDocumentId).IsUnique();
+        b.HasIndex(c => new { c.OrganizationId, c.ExternalReference }).HasFilter("external_reference IS NOT NULL");
+        b.HasIndex(c => new { c.OrganizationId, c.ApiIdempotencyKey }).IsUnique().HasFilter("api_idempotency_key IS NOT NULL");
 
         b.HasOne<Organization>().WithMany().HasForeignKey(c => c.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne<TemplateVersion>().WithMany().HasForeignKey(c => c.TemplateVersionId).OnDelete(DeleteBehavior.Restrict);

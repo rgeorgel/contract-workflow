@@ -100,6 +100,15 @@ public static class AccountEmails
             link: link,
             footer: "Em Configurações, use \"Gerenciar assinatura\" para trocar o cartão e pagar a fatura em aberto. Tudo volta a funcionar assim que o pagamento é aprovado.");
 
+    public static EmailMessage WebhookFailing(string productName, string to, string name, string organizationName,
+        string url, string error, string link) =>
+        Build(productName, to, name, $"Webhook sem resposta: {url}",
+            intro: $"O endereço <strong>{WebUtility.HtmlEncode(url)}</strong>, cadastrado nas integrações de <strong>{WebUtility.HtmlEncode(organizationName)}</strong>, não confirmou um evento depois de todas as tentativas (último erro: {WebUtility.HtmlEncode(error)}).",
+            introText: $"O endereço {url}, cadastrado nas integrações de {organizationName}, não confirmou um evento depois de todas as tentativas (último erro: {error}).",
+            buttonLabel: "Ver as entregas",
+            link: link,
+            footer: "Os próximos eventos continuam sendo tentados. Depois de corrigir o seu servidor, use \"Entregar de novo\" nas entregas que falharam. Este aviso só se repete se o endereço voltar a responder e falhar outra vez.");
+
     internal static EmailMessage Build(string productName, string to, string name, string subject,
         string intro, string introText, string buttonLabel, string link, string footer,
         string? detailHtml = null, string? detailText = null)

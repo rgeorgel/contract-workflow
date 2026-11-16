@@ -63,7 +63,8 @@ function renderPricing() {
         h('li', {}, h('span', {}, limitLabel(plan.maxUsers, 'usuário', 'usuários'))),
         h('li', {}, h('span', {}, limitLabel(plan.maxTemplates, 'template', 'templates'))),
         h('li', {}, h('span', {}, channelText(plan.channels))),
-        plan.bulkSend ? h('li', {}, h('span', {}, 'Envio em lote por planilha')) : null));
+        plan.bulkSend ? h('li', {}, h('span', {}, 'Envio em lote por planilha')) : null,
+        plan.apiAccess ? h('li', {}, h('span', {}, 'API e webhooks (CRM, ERP)')) : null));
   }));
 }
 

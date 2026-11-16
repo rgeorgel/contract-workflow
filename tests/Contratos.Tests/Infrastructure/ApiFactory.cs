@@ -17,12 +17,14 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly PostgreSqlContainer _db = new PostgreSqlBuilder("postgres:17").Build();
 
     protected virtual int ApiPermitsPerMinute => 100_000;
+    protected virtual int PublicApiPermitsPerMinute => 100_000;
 
     public const string PlatformKey = "test-platform-key-0123456789abcdef0123456789";
 
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
     public FakeStripe Stripe { get; } = new();
+    public FakeWebhookReceiver Webhooks { get; } = new();
 
     /// <summary>Roda o worker uma vez: webhooks, outbox e expiração.</summary>
     public Task ProcessBackgroundAsync() => Services.GetRequiredService<BackgroundProcessor>().ProcessAllAsync(CancellationToken.None);
@@ -34,6 +36,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Database:MigrateOnStartup", "true");
         builder.UseSetting("RateLimiting:AuthPermitsPerMinute", "10000");
         builder.UseSetting("RateLimiting:ApiPermitsPerMinute", ApiPermitsPerMinute.ToString());
+        builder.UseSetting("RateLimiting:PublicApiPermitsPerMinute", PublicApiPermitsPerMinute.ToString());
         builder.UseSetting("Gotenberg:Url", "http://127.0.0.1:9"); // ninguém escuta: health "degraded"
         builder.UseSetting("App:PublicBaseUrl", "https://app.test");
         builder.UseSetting("Worker:Enabled", "false");
@@ -47,6 +50,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Stripe:ApiBase", "https://api.stripe.test");
         for (var i = 0; i < 4; i++)
             builder.UseSetting($"Worker:RetryDelaysSeconds:{i}", "0");
+        // Webhooks: 3 tentativas sem espera (a 1ª e mais 2).
+        builder.UseSetting("Webhooks:RetryDelaysSeconds:0", "0");
+        builder.UseSetting("Webhooks:RetryDelaysSeconds:1", "0");
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IEmailSender>();
@@ -56,6 +62,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.RemoveAll<IPdfRenderer>();
             services.AddSingleton<IPdfRenderer, FakePdfRenderer>();
             services.AddHttpClient("stripe").ConfigurePrimaryHttpMessageHandler(() => Stripe);
+            services.AddHttpClient(Contratos.Infrastructure.Integrations.WebhookDispatcher.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => Webhooks);
         });
     }
 
@@ -121,6 +129,7 @@ public sealed class FakePdfRenderer : IPdfRenderer
 public sealed class LowLimitApiFactory : ApiFactory
 {
     protected override int ApiPermitsPerMinute => 5;
+    protected override int PublicApiPermitsPerMinute => 3;
 }
 
 [CollectionDefinition(Name)]

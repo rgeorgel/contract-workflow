@@ -25,6 +25,7 @@ Nada é apagado por prazo: a exclusão é sempre pedida por um Admin ou por quem
 - **Senhas** com PBKDF2 (ASP.NET Core Identity), bloqueio após 5 tentativas, rate limit nas rotas de autenticação e na API.
 - **Transporte**: cookies `Secure`/`HttpOnly`/`SameSite=Strict`, HSTS fora de desenvolvimento, CSP restritiva.
 - **Templates sanitizados** e Gotenberg sem acesso à rede (o HTML de um cliente não consegue buscar dados internos).
+- **API pública e webhooks**: as chaves de API ficam só como hash; o segredo de cada webhook fica cifrado (Data Protection). Os webhooks levam dados dos signatários (nome, e-mail, telefone, CPF) para o sistema que a própria organização cadastrou, só por `https` e só para endereços públicos (nada de rede interna). A organização é a controladora desse envio.
 
 ## Suboperadores
 

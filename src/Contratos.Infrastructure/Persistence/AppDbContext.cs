@@ -4,6 +4,7 @@ using Contratos.Infrastructure.Billing;
 using Contratos.Domain.Organizations;
 using Contratos.Domain.Templates;
 using Contratos.Infrastructure.Identity;
+using Contratos.Infrastructure.Integrations;
 using Contratos.Infrastructure.Messaging;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<DeletionLogEntry> DeletionLog => Set<DeletionLogEntry>();
     public DbSet<CreditGrant> CreditGrants => Set<CreditGrant>();
     public DbSet<UsageRecord> UsageRecords => Set<UsageRecord>();
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
+    public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+
+    /// <summary>
+    /// Antes de gravar: eventos novos da linha do tempo viram eventos de webhook (na mesma transação),
+    /// e os que vieram da API pública ganham o nome da chave.
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        await WebhookEventWriter.CollectAsync(this, tenant?.ApiKeyName, cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
 
     /// <summary><c>unaccent</c> marcada como IMMUTABLE, para poder ir em índice (criada na migration Search).</summary>
     public static string ImmutableUnaccent(string text) => throw new NotSupportedException("Só em consultas.");

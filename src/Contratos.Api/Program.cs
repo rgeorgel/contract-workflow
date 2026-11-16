@@ -38,7 +38,9 @@ builder.Services.AddOpenApi();
 
 var secureCookies = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
-builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
+builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthentication().AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(o =>
 {
     o.Cookie.Name = "contratos.auth";
@@ -68,16 +70,48 @@ builder.Services.AddAntiforgery(o =>
 // Limites: rotas de autenticação por IP (força bruta) e a API inteira por usuário ou IP (abuso, scraping).
 var authPermitsPerMinute = builder.Configuration.GetValue("RateLimiting:AuthPermitsPerMinute", 10);
 var apiPermitsPerMinute = builder.Configuration.GetValue("RateLimiting:ApiPermitsPerMinute", 300);
+var publicApiPermitsPerMinute = builder.Configuration.GetValue("RateLimiting:PublicApiPermitsPerMinute", 120);
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = async (ctx, ct) =>
+    {
+        // A API pública documenta o Retry-After e o corpo em JSON.
+        var seconds = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry) ? (int)Math.Ceiling(retry.TotalSeconds) : 60;
+        ctx.HttpContext.Response.Headers.RetryAfter = Math.Max(1, seconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (ctx.HttpContext.Request.Path.StartsWithSegments(PublicApiEndpoints.Prefix))
+            await ResultHttp.Problem(StatusCodes.Status429TooManyRequests,
+                $"Limite de {publicApiPermitsPerMinute} requisições por minuto atingido. Tente de novo em {Math.Max(1, seconds)} s.", "rate_limited")
+                .ExecuteAsync(ctx.HttpContext);
+    };
     o.AddPolicy(AuthEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
         ClientIp(ctx),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = authPermitsPerMinute, Window = TimeSpan.FromMinutes(1) }));
-    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+    // Dois limites valem juntos: o de sempre (por chave, usuário ou IP) e, na API pública, um por IP mais folgado,
+    // para que trocar a chave a cada tentativa (chaves inventadas) não escape do limite.
+    var publicApiPerIp = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        ctx.Request.Path.StartsWithSegments(PublicApiEndpoints.Prefix)
+            ? RateLimitPartition.GetSlidingWindowLimiter($"public-ip:{ClientIp(ctx)}", _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = publicApiPermitsPerMinute * 5, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6,
+            })
+            : RateLimitPartition.GetNoLimiter("not-public"));
+    var perCaller = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
     {
         if (!ctx.Request.Path.StartsWithSegments("/api"))
             return RateLimitPartition.GetNoLimiter("static");
+        // API pública: por chave (o cabeçalho, com hash), antes de saber se ela é válida.
+        if (ctx.Request.Path.StartsWithSegments(PublicApiEndpoints.Prefix))
+        {
+            var auth = ctx.Request.Headers.Authorization.ToString();
+            var partition = auth.Length > 0
+                ? "key:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(auth)), 0, 12)
+                : $"ip:{ClientIp(ctx)}";
+            return RateLimitPartition.GetSlidingWindowLimiter(partition, _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = publicApiPermitsPerMinute, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6,
+            });
+        }
         var key = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } userId
             ? $"user:{userId}"
             : $"ip:{ClientIp(ctx)}";
@@ -86,6 +120,7 @@ builder.Services.AddRateLimiter(o =>
             PermitLimit = apiPermitsPerMinute, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6,
         });
     });
+    o.GlobalLimiter = PartitionedRateLimiter.CreateChained(perCaller, publicApiPerIp);
 });
 
 // Atrás de proxy reverso (TLS no proxy): IP real do cliente e esquema https vêm dos cabeçalhos X-Forwarded-*.
@@ -159,10 +194,12 @@ api.MapOrganizationEndpoints();
 api.MapTemplatesEndpoints();
 api.MapContractsEndpoints();
 api.MapDashboardEndpoints();
+api.MapIntegrationsEndpoints();
 if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", StringComparison.OrdinalIgnoreCase))
     api.MapFakeProviderEndpoints();
 app.MapWebhookEndpoints();
 app.MapPlatformEndpoints();
+app.MapPublicApiEndpoints();
 
 app.Run();
 

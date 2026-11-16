@@ -6,10 +6,10 @@ namespace Contratos.Application.Billing;
 
 public sealed record PlanDto(
     string Id, string Name, decimal MonthlyPrice, decimal AnnualPrice, int ContractsPerPeriod,
-    int? MaxUsers, int? MaxTemplates, IReadOnlyList<DeliveryMethod> Channels, bool BulkSend)
+    int? MaxUsers, int? MaxTemplates, IReadOnlyList<DeliveryMethod> Channels, bool BulkSend, bool ApiAccess)
 {
     public static PlanDto From(Plan p) =>
-        new(p.Id, p.Name, p.MonthlyPrice, p.AnnualPrice, p.ContractsPerPeriod, p.MaxUsers, p.MaxTemplates, p.Channels, p.BulkSend);
+        new(p.Id, p.Name, p.MonthlyPrice, p.AnnualPrice, p.ContractsPerPeriod, p.MaxUsers, p.MaxTemplates, p.Channels, p.BulkSend, p.ApiAccess);
 }
 
 public sealed record CreditPackDto(int Quantity, decimal Price, decimal UnitPrice);

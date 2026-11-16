@@ -6,6 +6,7 @@ const LINKS = [
   { key: 'contracts', href: '/contracts.html', label: 'Contratos' },
   { key: 'templates', href: '/templates.html', label: 'Templates' },
   { key: 'users', href: '/users.html', label: 'Usuários', roles: ['Admin'] },
+  { key: 'integrations', href: '/integrations.html', label: 'Integrações', roles: ['Admin'] },
   { key: 'settings', href: '/settings.html', label: 'Configurações' },
 ];
 

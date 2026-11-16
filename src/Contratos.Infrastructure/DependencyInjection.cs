@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddOptions<BalanceAlertOptions>().Bind(config.GetSection(BalanceAlertOptions.Section));
         services.AddSingleton<ProviderBalanceMonitor>();
 
+        AddIntegrations(services, config);
         services.AddScoped<WebhookReceiver>();
         services.AddSingleton<ContractAlerts>();
         services.AddSingleton<BackgroundProcessor>();
@@ -188,6 +189,26 @@ public static class DependencyInjection
         if (!connectionString.Contains("Gss", StringComparison.OrdinalIgnoreCase))
             builder.GssEncryptionMode = GssEncryptionMode.Disable;
         return builder.ConnectionString;
+    }
+
+    /// <summary>API pública (chaves) e webhooks de saída para os sistemas dos clientes.</summary>
+    private static void AddIntegrations(IServiceCollection services, IConfiguration config)
+    {
+        services.AddOptions<Integrations.WebhookOptions>().Bind(config.GetSection(Integrations.WebhookOptions.Section));
+        services.AddScoped<Integrations.ApiKeyStore>();
+        services.AddSingleton<Integrations.WebhookSecrets>();
+        services.AddScoped<Application.Integrations.IIntegrationService, Integrations.IntegrationService>();
+        services.AddSingleton<Integrations.WebhookDispatcher>();
+        var allowPrivate = config.GetValue<bool>($"{Integrations.WebhookOptions.Section}:AllowPrivateNetworks");
+        services.AddHttpClient(Integrations.WebhookDispatcher.HttpClientName, http => http.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                // Redirecionamento levaria a requisição (assinada) para outro lugar sem a checagem de rede.
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+                ConnectCallback = Integrations.WebhookUrls.SafeConnect(allowPrivate),
+            });
     }
 
     private static void AddStripe(IServiceCollection services, IConfiguration config)

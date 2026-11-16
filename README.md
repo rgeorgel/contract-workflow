@@ -43,6 +43,12 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Reconciliação a cada 30 min para contratos em aberto há mais de 24 h (webhooks perdidos)
 - Configuração em [docs/operacao.md](docs/operacao.md#assinatura-autentique)
 
+**Integrações (plano Empresa)**
+- API pública em `/api/public/v1` com chave por sistema (`Authorization: Bearer ctr_...`): templates, criar e enviar contrato numa chamada (com `Idempotency-Key` e `externalReference`), consultar, cancelar, reenviar link, linha do tempo e PDFs
+- Webhooks assinados com HMAC para os eventos dos contratos, com novas tentativas por ~2 dias, histórico de entregas, "Entregar de novo" e proteção contra SSRF
+- Tela de Integrações (Admin) e portal público de documentação em `/desenvolvedores/`, com OpenAPI em `/desenvolvedores/openapi.json`
+- Detalhes em [docs/operacao.md](docs/operacao.md#api-pública-e-webhooks)
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):
@@ -65,7 +71,8 @@ As migrations são aplicadas na subida em desenvolvimento. A documentação da A
 
 ## Documentação
 
-- [docs/operacao.md](docs/operacao.md): health checks, proxy, limites, backup e restauração
+- [docs/operacao.md](docs/operacao.md): health checks, proxy, limites, API pública e webhooks, backup e restauração
+- `/desenvolvedores/`: documentação da API pública para os clientes (portal no próprio site)
 - [docs/lgpd.md](docs/lgpd.md): dados pessoais, retenção e medidas técnicas
 
 ## Testes

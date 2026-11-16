@@ -13,6 +13,7 @@ public static class OutboxTypes
     public const string PaymentOverdueAlert = "PaymentOverdueAlert";
     public const string CreditsAlert = "CreditsAlert";
     public const string ContractAlert = "ContractAlert";
+    public const string WebhookFailingAlert = "WebhookFailingAlert";
 }
 
 public sealed record ContractMessage(Guid ContractId);
