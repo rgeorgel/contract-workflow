@@ -2,10 +2,12 @@ using Contratos.Api.Security;
 using Contratos.Application.Common;
 using Contratos.Application.Signatures;
 using Contratos.Domain.Contracts;
+using Contratos.Infrastructure.Billing.Stripe;
 using Contratos.Infrastructure.Messaging;
 using Contratos.Infrastructure.Persistence;
 using Contratos.Infrastructure.Signatures;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Contratos.Api.Endpoints;
 
@@ -34,6 +36,27 @@ internal static class WebhooksEndpoints
             .AllowAnonymous()
             .WithTags("Webhooks")
             .WithSummary("Eventos do provedor de assinatura (valida HMAC-SHA256)");
+
+        // Só existe com o Stripe configurado.
+        if (app.ServiceProvider.GetService<IOptions<StripeOptions>>()?.Value.Enabled == true)
+            app.MapPost("/api/v1/webhooks/stripe", async (HttpRequest request, StripeWebhookReceiver receiver, ILoggerFactory loggers, CancellationToken ct) =>
+                {
+                    using var reader = new StreamReader(request.Body);
+                    var raw = await reader.ReadToEndAsync(ct);
+                    var outcome = await receiver.ReceiveAsync(raw, request.Headers["Stripe-Signature"].ToString(), ct);
+                    if (outcome == StripeWebhookReceiver.Outcome.InvalidSignature)
+                        loggers.CreateLogger("Contratos.Webhooks").LogWarning(
+                            "Webhook do Stripe recusado: Stripe-Signature ausente, expirada ou que não confere com Stripe__WebhookSecret");
+                    return outcome switch
+                    {
+                        StripeWebhookReceiver.Outcome.InvalidSignature => Results.BadRequest(),
+                        StripeWebhookReceiver.Outcome.Malformed => Results.BadRequest(),
+                        _ => Results.Ok(),
+                    };
+                })
+                .AllowAnonymous()
+                .WithTags("Webhooks")
+                .WithSummary("Eventos de cobrança do Stripe (valida Stripe-Signature)");
     }
 
     /// <summary>

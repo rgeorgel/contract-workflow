@@ -87,7 +87,7 @@ Regras:
 - **Downgrade:** quem já passou do limite de usuários ou templates continua com o que tem, mas não cria mais. Canais fora do plano são recusados ao adicionar signatário e no envio.
 - **Contas novas** entram em `BILLING_DEFAULT_PLAN` (padrão `gratis`). Contas que já existiam quando os planos entraram foram para `empresa`.
 
-Enquanto não há checkout, a equipe troca o plano e concede créditos pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
+Sem o Stripe configurado (ou para casos especiais, como cortesia), a equipe troca o plano e concede créditos pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
 
 ```bash
 # Organizações (busca por nome ou slug), com plano, uso do ciclo e créditos
@@ -104,6 +104,42 @@ curl -s -X POST -H "Authorization: Bearer $PLATFORM_API_KEY" -H "Content-Type: a
 ```
 
 `BILLING_CONTACT_EMAIL`, se definido, aparece em Configurações como o contato para mudar de plano ou comprar contratos.
+
+## Assinatura online (Stripe)
+
+Os clientes assinam e gerenciam o plano sozinhos, pagando **só com cartão de crédito**: o pagamento confirma na hora e o plano ativa na volta do checkout. Sem `STRIPE_SECRET_KEY`, Configurações mostra o contato (`BILLING_CONTACT_EMAIL`) no lugar dos botões.
+
+Como funciona:
+
+- **Assinar:** "Assinar mensal/anual" em Configurações (só Admin) abre o Stripe Checkout. Na volta, o sistema confere a sessão e ativa o plano na hora, sem esperar o webhook.
+- **Gerenciar:** "Gerenciar assinatura" abre o portal do Stripe para trocar de plano, trocar o cartão, atualizar os dados de cobrança (CNPJ), ver faturas e cancelar.
+  - Upgrade cobra a diferença na hora.
+  - Downgrade e troca de anual para mensal ficam para o fim do ciclo.
+  - Cancelar mantém o plano até o fim do ciclo pago.
+- **Ciclo:** a cota de contratos segue o período pago da assinatura.
+- **Pagamento atrasado (`past_due`):** o plano continua, com um aviso para atualizar o cartão. O Stripe tenta cobrar de novo.
+- **Fim da assinatura:** cancelada ou não paga (`canceled`, `unpaid`), a conta volta ao plano Grátis.
+- **Webhooks:** cada evento é guardado na `webhook_inbox` (o mesmo evento reenviado conta uma vez só). O worker então busca a assinatura atual na API do Stripe, então a ordem dos eventos e a versão da API do webhook não importam.
+- **Plano e preços:** os produtos e preços no Stripe são criados pelo sistema na primeira assinatura, a partir de `Plans.cs`.
+  - Produtos `contratos_<plano>`; preços com lookup key `contratos_<plano>_mensal` e `contratos_<plano>_anual`.
+  - Não edite preços no painel: mude no código. No deploy seguinte, o sistema cria o preço novo e quem já assina continua no antigo até trocar.
+  - A configuração do portal ("Contratos") também é criada e mantida pelo sistema.
+- **Troca manual pela plataforma:** com assinatura ativa, a API da plataforma recusa trocar o plano (`managed_by_stripe`); o plano é o do Stripe. Créditos avulsos continuam liberados.
+
+### Configurar
+
+1. **Conta:** crie a conta no Stripe com o CNPJ (país Brasil). Comece em **modo de teste**.
+2. **Dados públicos:** em Configurações → Dados públicos da empresa, preencha nome, e-mail de suporte e descrição na fatura. Aparecem no checkout e na fatura do cartão.
+3. **Chave da API:** em Desenvolvedores → Chaves de API, copie a chave secreta (`sk_test_...`) para `STRIPE_SECRET_KEY`.
+4. **Webhook:** em Desenvolvedores → Webhooks → Adicionar destino:
+   - URL: `https://SEU_DOMINIO/api/v1/webhooks/stripe`.
+   - Eventos: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`, `invoice.payment_failed`.
+   - Copie o *signing secret* (`whsec_...`) para `STRIPE_WEBHOOK_SECRET`.
+   - A app não sobe com a chave e sem o secret: sem webhook, renovações e cancelamentos não chegariam.
+5. **Testar:** reinicie a app e assine pela tela de Configurações com o cartão de teste `4242 4242 4242 4242` (qualquer validade futura e qualquer CVC). Para testar recusa, use `4000 0000 0000 0341` (o cartão é aceito no cadastro e recusado na cobrança).
+6. **Produção:** troque para as chaves `sk_live_...` e crie o webhook de novo no modo de produção (o *signing secret* é outro). O catálogo é recriado sozinho no modo de produção.
+
+Em desenvolvimento, o webhook chega pelo Stripe CLI: `stripe listen --forward-to localhost:7700/api/v1/webhooks/stripe` mostra o `whsec_...` para usar em `STRIPE_WEBHOOK_SECRET`.
 
 ## Saúde
 

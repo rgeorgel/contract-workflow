@@ -31,6 +31,17 @@ internal static class OrganizationEndpoints
         g.MapGet("/billing", async (IBillingService billing, CancellationToken ct) => TypedResults.Ok(await billing.GetAsync(ct)))
             .WithSummary("Plano, uso do ciclo, créditos avulsos e catálogo de planos");
 
+        var billing = api.MapGroup("/billing").WithTags("Assinatura").RequireAuthorization(Policies.IsAdmin);
+        billing.MapPost("/checkout", async (CheckoutRequest req, ISubscriptionService subs, CancellationToken ct) =>
+                (await subs.CheckoutAsync(req, ct)).ToHttp())
+            .WithSummary("Abre o pagamento (Stripe Checkout, só cartão) para assinar um plano (Admin)");
+        billing.MapPost("/checkout/confirm", async (ConfirmCheckoutRequest req, ISubscriptionService subs, CancellationToken ct) =>
+                (await subs.ConfirmCheckoutAsync(req, ct)).ToHttp())
+            .WithSummary("Confere a sessão de pagamento na volta e ativa o plano (Admin)");
+        billing.MapPost("/portal", async (ISubscriptionService subs, CancellationToken ct) =>
+                (await subs.PortalAsync(ct)).ToHttp())
+            .WithSummary("Abre o portal do Stripe: trocar plano, cartão, cancelar, faturas (Admin)");
+
         return api;
     }
 }

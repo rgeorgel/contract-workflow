@@ -25,6 +25,10 @@ public sealed record PlanCatalogDto(IReadOnlyList<PlanDto> Plans, IReadOnlyList<
 
 public sealed record CreditGrantDto(Guid Id, int Quantity, int Remaining, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string Source, string? Note);
 
+/// <param name="Status">Status do Stripe (active, trialing, past_due, canceled...).</param>
+/// <param name="Interval">"month" ou "year".</param>
+public sealed record SubscriptionDto(string Status, string? Interval, bool CancelAtPeriodEnd, DateTimeOffset? CurrentPeriodEnd);
+
 /// <param name="ContractsUsed">Da cota do plano, neste ciclo.</param>
 /// <param name="ContractsFromCredits">Enviados com crédito avulso neste ciclo.</param>
 /// <param name="AvailableSends">Quantos contratos ainda dá para enviar agora (cota restante + créditos).</param>
@@ -44,12 +48,31 @@ public sealed record BillingDto(
     IReadOnlyList<CreditGrantDto> Credits,
     IReadOnlyList<PlanDto> Plans,
     IReadOnlyList<CreditPackDto> Packs,
-    string? ContactEmail);
+    string? ContactEmail,
+    SubscriptionDto? Subscription,
+    bool OnlineCheckout);
 
 public interface IBillingService
 {
     /// <summary>Plano, uso do ciclo e créditos da organização atual.</summary>
     Task<BillingDto> GetAsync(CancellationToken ct);
+}
+
+// ---------- Assinatura online (Stripe) ----------
+
+/// <param name="Interval">"month" ou "year".</param>
+public sealed record CheckoutRequest(string? Plan, string? Interval);
+public sealed record ConfirmCheckoutRequest(string? SessionId);
+public sealed record RedirectDto(string Url);
+
+public interface ISubscriptionService
+{
+    /// <summary>Página de pagamento do Stripe (só cartão) para assinar o plano.</summary>
+    Task<Result<RedirectDto>> CheckoutAsync(CheckoutRequest request, CancellationToken ct);
+    /// <summary>Na volta do pagamento: confere a sessão e ativa o plano na hora, sem esperar o webhook.</summary>
+    Task<Result<BillingDto>> ConfirmCheckoutAsync(ConfirmCheckoutRequest request, CancellationToken ct);
+    /// <summary>Portal do Stripe: trocar de plano, trocar cartão, cancelar, ver faturas.</summary>
+    Task<Result<RedirectDto>> PortalAsync(CancellationToken ct);
 }
 
 // ---------- Operação da plataforma (sem tenant) ----------

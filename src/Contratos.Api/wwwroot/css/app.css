@@ -178,7 +178,9 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .dash-empty { padding: 28px 20px; color: var(--color-muted); font-size: .925rem; text-align: center; }
 
 /* Plano e uso (Configurações) */
-.billing-plan { margin-bottom: 16px; }
+.billing-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.billing-notice { margin-bottom: 16px; }
+.plan-card__cta { margin-top: 12px; width: 100%; }
 .meter-grid { display: grid; gap: 20px; }
 @media (min-width: 720px) { .meter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .meter { display: grid; gap: 6px; align-content: start; }

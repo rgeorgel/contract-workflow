@@ -365,12 +365,41 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(60)")
                         .HasColumnName("slug");
 
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("stripe_customer_id");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("stripe_subscription_id");
+
+                    b.Property<bool>("SubscriptionCancelAtPeriodEnd")
+                        .HasColumnType("boolean")
+                        .HasColumnName("subscription_cancel_at_period_end");
+
+                    b.Property<string>("SubscriptionInterval")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("subscription_interval");
+
+                    b.Property<string>("SubscriptionStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("subscription_status");
+
                     b.HasKey("Id")
                         .HasName("pk_organizations");
 
                     b.HasIndex("Slug")
                         .IsUnique()
                         .HasDatabaseName("ix_organizations_slug");
+
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_organizations_stripe_customer_id")
+                        .HasFilter("stripe_customer_id IS NOT NULL");
 
                     b.ToTable("organizations", (string)null);
                 });

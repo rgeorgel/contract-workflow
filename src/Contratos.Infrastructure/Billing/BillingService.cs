@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Contratos.Infrastructure.Billing;
 
 /// <summary>Monta o quadro de plano e uso de uma organização (com ou sem tenant).</summary>
-internal sealed class BillingReader(AppDbContext db, UsageMeter meter, TimeProvider clock, IOptions<BillingOptions> options)
+internal sealed class BillingReader(AppDbContext db, UsageMeter meter, TimeProvider clock, IOptions<BillingOptions> options, IOptions<Stripe.StripeOptions> stripe)
 {
     public async Task<BillingDto> BuildAsync(Organization org, CancellationToken ct)
     {
@@ -28,7 +28,11 @@ internal sealed class BillingReader(AppDbContext db, UsageMeter meter, TimeProvi
             await meter.CountSeatsAsync(org.Id, ct), plan.MaxUsers,
             await meter.CountTemplatesAsync(org.Id, ct), plan.MaxTemplates,
             grants, PlanCatalogDto.Current.Plans, PlanCatalogDto.Current.Packs,
-            string.IsNullOrWhiteSpace(options.Value.ContactEmail) ? null : options.Value.ContactEmail.Trim());
+            string.IsNullOrWhiteSpace(options.Value.ContactEmail) ? null : options.Value.ContactEmail.Trim(),
+            org.SubscriptionStatus is { } status
+                ? new SubscriptionDto(status, org.SubscriptionInterval, org.SubscriptionCancelAtPeriodEnd, org.HasLiveSubscription ? org.PlanPeriodEnd : null)
+                : null,
+            stripe.Value.Enabled);
     }
 }
 
@@ -80,6 +84,8 @@ internal sealed class PlatformBillingService(AppDbContext db, UsageMeter meter, 
             errors.Add("periodEnd", "O fim do ciclo precisa ser depois do início.");
         if (!errors.IsEmpty)
             return Error.Validation(errors);
+        if (org.HasLiveSubscription)
+            return Error.Conflict("Esta organização tem assinatura ativa no Stripe; o plano muda pelo portal de assinatura.", "managed_by_stripe");
 
         org.ChangePlan(plan!.Id, req.PeriodStart?.ToUniversalTime(), req.PeriodEnd?.ToUniversalTime());
         await db.SaveChangesAsync(ct);

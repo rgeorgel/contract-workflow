@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<BillingReader>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IPlatformBillingService, PlatformBillingService>();
+        AddStripe(services, config);
         services.AddScoped<IContractService, ContractService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddSingleton<IFileStorage, S3FileStorage>();
@@ -186,5 +187,32 @@ public static class DependencyInjection
         if (!connectionString.Contains("Gss", StringComparison.OrdinalIgnoreCase))
             builder.GssEncryptionMode = GssEncryptionMode.Disable;
         return builder.ConnectionString;
+    }
+
+    private static void AddStripe(IServiceCollection services, IConfiguration config)
+    {
+        services.AddOptions<Billing.Stripe.StripeOptions>().Bind(config.GetSection(Billing.Stripe.StripeOptions.Section));
+        var stripe = config.GetSection(Billing.Stripe.StripeOptions.Section).Get<Billing.Stripe.StripeOptions>() ?? new();
+        if (!stripe.Enabled)
+        {
+            services.AddScoped<ISubscriptionService, Billing.Stripe.DisabledSubscriptionService>();
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(stripe.WebhookSecret))
+            throw new InvalidOperationException("Stripe:SecretKey configurada sem Stripe:WebhookSecret: renovações e cancelamentos não chegariam ao sistema.");
+
+        services.AddHttpClient("stripe", http => http.Timeout = TimeSpan.FromSeconds(60));
+        services.AddSingleton<global::Stripe.StripeClient>(sp =>
+        {
+            var o = sp.GetRequiredService<IOptions<Billing.Stripe.StripeOptions>>().Value;
+            var http = new global::Stripe.SystemNetHttpClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("stripe"));
+            return string.IsNullOrWhiteSpace(o.ApiBase)
+                ? new global::Stripe.StripeClient(o.SecretKey!.Trim(), httpClient: http)
+                : new global::Stripe.StripeClient(o.SecretKey!.Trim(), httpClient: http, apiBase: o.ApiBase);
+        });
+        services.AddSingleton<Billing.Stripe.StripeCatalog>();
+        services.AddScoped<Billing.Stripe.StripeSubscriptionSync>();
+        services.AddScoped<Billing.Stripe.StripeWebhookReceiver>();
+        services.AddScoped<ISubscriptionService, Billing.Stripe.StripeSubscriptionService>();
     }
 }

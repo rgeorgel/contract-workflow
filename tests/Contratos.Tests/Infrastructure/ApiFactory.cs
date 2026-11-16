@@ -22,6 +22,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
+    public FakeStripe Stripe { get; } = new();
 
     /// <summary>Roda o worker uma vez: webhooks, outbox e expiração.</summary>
     public Task ProcessBackgroundAsync() => Services.GetRequiredService<BackgroundProcessor>().ProcessAllAsync(CancellationToken.None);
@@ -40,6 +41,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // Os testes gerais não esbarram em cota; os de planos trocam o plano pela API da plataforma.
         builder.UseSetting("Billing:DefaultPlan", "empresa");
         builder.UseSetting("Platform:ApiKey", PlatformKey);
+        builder.UseSetting("Stripe:SecretKey", FakeStripe.SecretKey);
+        builder.UseSetting("Stripe:WebhookSecret", FakeStripe.WebhookSecret);
+        builder.UseSetting("Stripe:ApiBase", "https://api.stripe.test");
         for (var i = 0; i < 4; i++)
             builder.UseSetting($"Worker:RetryDelaysSeconds:{i}", "0");
         builder.ConfigureTestServices(services =>
@@ -50,6 +54,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IFileStorage>(Files);
             services.RemoveAll<IPdfRenderer>();
             services.AddSingleton<IPdfRenderer, FakePdfRenderer>();
+            services.AddHttpClient("stripe").ConfigurePrimaryHttpMessageHandler(() => Stripe);
         });
     }
 

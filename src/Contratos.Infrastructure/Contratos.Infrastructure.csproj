@@ -11,6 +11,7 @@
     <PackageReference Include="MailKit" />
     <PackageReference Include="HtmlSanitizer" />
     <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="Stripe.net" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Contratos.Application\Contratos.Application.csproj" />

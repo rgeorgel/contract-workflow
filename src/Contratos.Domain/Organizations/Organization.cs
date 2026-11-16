@@ -52,6 +52,47 @@ public sealed class Organization
 
     public Plan Plan => Plans.Get(PlanId);
 
+    // ---------- Assinatura no provedor de cobrança (Stripe) ----------
+
+    public string? StripeCustomerId { get; private set; }
+    public string? StripeSubscriptionId { get; private set; }
+    /// <summary>Status do Stripe: active, trialing, past_due, canceled, unpaid, incomplete...</summary>
+    public string? SubscriptionStatus { get; private set; }
+    /// <summary>"month" ou "year".</summary>
+    public string? SubscriptionInterval { get; private set; }
+    public bool SubscriptionCancelAtPeriodEnd { get; private set; }
+
+    /// <summary>Assinatura que ainda dá direito ao plano (inclui pagamento atrasado, que tem tolerância).</summary>
+    public bool HasLiveSubscription => SubscriptionStatus is "active" or "trialing" or "past_due";
+
+    public void SetStripeCustomer(string customerId) => StripeCustomerId = customerId;
+
+    /// <summary>Assinatura vigente: plano e ciclo passam a ser os do Stripe.</summary>
+    public void ApplySubscription(string subscriptionId, string status, string planId, string interval,
+        DateTimeOffset periodStart, DateTimeOffset periodEnd, bool cancelAtPeriodEnd)
+    {
+        ChangePlan(planId, periodStart, periodEnd);
+        StripeSubscriptionId = subscriptionId;
+        SubscriptionStatus = status;
+        SubscriptionInterval = interval;
+        SubscriptionCancelAtPeriodEnd = cancelAtPeriodEnd;
+    }
+
+    /// <summary>Só registra o status (assinatura incompleta ou pausada): plano e ciclo não mudam.</summary>
+    public void RecordSubscriptionStatus(string subscriptionId, string status)
+    {
+        StripeSubscriptionId = subscriptionId;
+        SubscriptionStatus = status;
+    }
+
+    /// <summary>Assinatura encerrada (cancelada ou não paga): volta ao plano grátis, no mês do calendário.</summary>
+    public void EndSubscription(string status)
+    {
+        ChangePlan(Plans.FreeId);
+        SubscriptionStatus = status;
+        SubscriptionCancelAtPeriodEnd = false;
+    }
+
     public void ChangePlan(string planId, DateTimeOffset? periodStart = null, DateTimeOffset? periodEnd = null)
     {
         var plan = Plans.Find(planId) ?? throw new ArgumentException("Plano desconhecido.", nameof(planId));

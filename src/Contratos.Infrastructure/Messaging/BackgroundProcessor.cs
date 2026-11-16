@@ -113,8 +113,11 @@ public sealed class BackgroundProcessor(
 
         try
         {
-            foreach (var ev in provider.ParseWebhook(item.Payload))
-                await ApplyEventAsync(db, ev, ct);
+            if (item.Provider == Billing.Stripe.StripeWebhookReceiver.ProviderName)
+                await scope.ServiceProvider.GetRequiredService<Billing.Stripe.StripeSubscriptionSync>().HandleEventAsync(item.Payload, ct);
+            else
+                foreach (var ev in provider.ParseWebhook(item.Payload))
+                    await ApplyEventAsync(db, ev, ct);
             item.ProcessedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);

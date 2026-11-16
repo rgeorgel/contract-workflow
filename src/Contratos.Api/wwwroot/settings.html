@@ -34,7 +34,13 @@
     </section>
 
     <section class="panel" aria-labelledby="plans-title">
-      <div class="panel__header"><h2 id="plans-title">Planos</h2></div>
+      <div class="panel__header">
+        <h2 id="plans-title">Planos</h2>
+        <div class="segmented" role="group" aria-label="Período de cobrança" data-interval hidden>
+          <button type="button" aria-selected="true" data-interval-value="month">Mensal</button>
+          <button type="button" aria-selected="false" data-interval-value="year">Anual (2 meses grátis)</button>
+        </div>
+      </div>
       <div class="panel__body">
         <div class="plan-grid" data-plans></div>
         <h3 class="billing-subtitle">Pacotes de contratos avulsos</h3>

@@ -65,3 +65,35 @@ test('página inicial mostra os planos do catálogo, com preço mensal e anual',
   await pro.getByRole('link', { name: 'Começar agora' }).click();
   await expect(page).toHaveURL(/signup\.html/);
 });
+
+test('assinar: botão abre o checkout e a volta ativa o plano (Stripe simulado no navegador)', async ({ page, request }) => {
+  await signUp(page, request, { plan: 'gratis' });
+  // Sem chaves do Stripe no ambiente local: a API de cobrança é simulada aqui, a tela é a real.
+  let checkoutBody = null;
+  await page.route('**/api/v1/organization/billing', async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), onlineCheckout: true } });
+  });
+  await page.route('**/api/v1/billing/checkout', async (route) => {
+    checkoutBody = route.request().postDataJSON();
+    await route.fulfill({ json: { url: '/settings.html?checkout=success&session_id=cs_test_e2e' } });
+  });
+  await page.route('**/api/v1/billing/checkout/confirm', async (route) => {
+    const billing = await (await page.request.get('/api/v1/organization/billing')).json();
+    const essencial = billing.plans.find((p) => p.id === 'essencial');
+    await route.fulfill({ json: { ...billing, onlineCheckout: true, plan: essencial, contractsLimit: 20,
+      subscription: { status: 'active', interval: 'year', cancelAtPeriodEnd: false, currentPeriodEnd: '2027-11-15T03:00:00Z' } } });
+  });
+
+  await page.goto('/settings.html');
+  const plans = page.getByRole('region', { name: 'Planos' });
+  await plans.getByRole('button', { name: /Anual/ }).click();
+  await plans.getByRole('article').filter({ hasText: 'Essencial' }).getByRole('button', { name: 'Assinar anual' }).click();
+
+  await expect(page.getByText('Assinatura ativada: plano Essencial.')).toBeVisible();
+  expect(checkoutBody).toEqual({ plan: 'essencial', interval: 'year' });
+  await expect(page).toHaveURL(/\/settings\.html$/); // sem session_id na barra
+  await expect(page.getByRole('button', { name: 'Gerenciar assinatura' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Plano e uso' })).toContainText('assinatura anual, renova em 15/11');
+  await expect(page.getByRole('region', { name: 'Plano e uso' })).not.toContainText('null');
+});
