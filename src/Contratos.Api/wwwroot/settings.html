@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/progress.css">
   <script type="module" src="/js/components/app-nav.js"></script>
   <script type="module" src="/js/pages/settings.js"></script>
 </head>
@@ -23,12 +24,28 @@
     </div>
 
     <section class="panel" aria-labelledby="usage-title">
-      <div class="panel__header"><h2 id="usage-title">Uso do mês</h2></div>
+      <div class="panel__header">
+        <h2 id="usage-title">Plano e uso</h2>
+        <span class="badge badge--info" data-plan-badge hidden></span>
+      </div>
+      <div class="panel__body" data-billing>
+        <p class="muted">Carregando…</p>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="plans-title">
+      <div class="panel__header"><h2 id="plans-title">Planos</h2></div>
       <div class="panel__body">
-        <div class="stat">
-          <span class="stat__value" data-usage>—</span>
-          <span class="stat__label" data-usage-label>contratos enviados</span>
+        <div class="plan-grid" data-plans></div>
+        <h3 class="billing-subtitle">Pacotes de contratos avulsos</h3>
+        <p class="muted">Pagos uma vez e válidos por 12 meses. Só são usados depois que os contratos do plano acabam no ciclo.</p>
+        <div class="table-wrap">
+          <table class="table pack-table">
+            <thead><tr><th>Pacote</th><th>Preço</th><th>Por contrato</th></tr></thead>
+            <tbody data-packs></tbody>
+          </table>
         </div>
+        <p class="billing-contact" data-contact></p>
       </div>
     </section>
 

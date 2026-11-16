@@ -1,6 +1,7 @@
 using Contratos.Application.Common;
 using Contratos.Application.Templates;
 using Contratos.Domain.Templates;
+using Contratos.Infrastructure.Billing;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,7 +11,8 @@ internal sealed class TemplateService(
     AppDbContext db,
     ICurrentTenant tenant,
     IHtmlSanitizer sanitizer,
-    DocumentRenderer renderer) : ITemplateService
+    DocumentRenderer renderer,
+    UsageMeter meter) : ITemplateService
 {
     private static readonly Error NotFound = Error.NotFound("Template não encontrado.");
 
@@ -63,6 +65,8 @@ internal sealed class TemplateService(
         }
         if (!errors.IsEmpty)
             return Error.Validation(errors);
+        if (await meter.CheckTemplateAsync(tenant.RequireOrganizationId(), ct) is { } limit)
+            return limit;
 
         var userId = tenant.RequireUserId();
         var template = new Template(tenant.RequireOrganizationId(), req.Name!.Trim(), req.Description?.Trim() is { Length: > 0 } d ? d : null, userId);
@@ -146,6 +150,9 @@ internal sealed class TemplateService(
         if (source is null)
             return NotFound;
 
+        if (await meter.CheckTemplateAsync(source.OrganizationId, ct) is { } limit)
+            return limit;
+
         var content = await DraftAsync(source.Id, ct)
             ?? await db.TemplateVersions.SingleAsync(v => v.Id == source.CurrentVersionId, ct);
 
@@ -170,8 +177,12 @@ internal sealed class TemplateService(
             return NotFound;
         if (archived)
             template.Archive();
-        else
+        else if (template.ArchivedAt is not null)
+        {
+            if (await meter.CheckTemplateAsync(template.OrganizationId, ct) is { } limit)
+                return limit;
             template.Unarchive();
+        }
         return await SaveAsync(template, ct);
     }
 

@@ -16,6 +16,8 @@ services:
       Smtp__Security: None
       # Em dev (e nos testes e2e) o limite de autenticação é folgado; em produção fica o padrão (10/min).
       RateLimiting__AuthPermitsPerMinute: "100"
+      # API da plataforma ligada em dev com uma chave conhecida: os testes e2e trocam o plano das contas por ela.
+      Platform__ApiKey: ${PLATFORM_API_KEY:-dev-platform-key-troque-por-uma-de-32-caracteres}
     depends_on:
       db:
         condition: service_healthy

@@ -18,6 +18,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected virtual int ApiPermitsPerMinute => 100_000;
 
+    public const string PlatformKey = "test-platform-key-0123456789abcdef0123456789";
+
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
 
@@ -35,6 +37,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("App:PublicBaseUrl", "https://app.test");
         builder.UseSetting("Worker:Enabled", "false");
         builder.UseSetting("Storage:CreateBucket", "false");
+        // Os testes gerais não esbarram em cota; os de planos trocam o plano pela API da plataforma.
+        builder.UseSetting("Billing:DefaultPlan", "empresa");
+        builder.UseSetting("Platform:ApiKey", PlatformKey);
         for (var i = 0; i < 4; i++)
             builder.UseSetting($"Worker:RetryDelaysSeconds:{i}", "0");
         builder.ConfigureTestServices(services =>

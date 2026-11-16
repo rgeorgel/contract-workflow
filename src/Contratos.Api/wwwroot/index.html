@@ -23,6 +23,7 @@
       <nav class="site-nav" aria-label="Seções">
         <a href="#como-funciona">Como funciona</a>
         <a href="#recursos">Recursos</a>
+        <a href="#precos">Preços</a>
         <a href="#perguntas">Perguntas</a>
       </nav>
       <div class="site-header__actions">
@@ -208,8 +209,36 @@
       </div>
     </section>
 
+    <!-- Preços: montados pelo landing.js a partir de /api/v1/plans, o mesmo catálogo que aplica os limites. -->
+    <section class="section section--tinted" id="precos" aria-labelledby="precos-titulo">
+      <div class="container">
+        <header class="section__header">
+          <p class="eyebrow">Preços</p>
+          <h2 id="precos-titulo">Comece grátis e mude de plano quando precisar</h2>
+          <p class="section__lead">Todos os planos têm templates com variáveis, editor visual, modelos prontos e o PDF assinado guardado no contrato.</p>
+        </header>
+
+        <div class="billing-toggle" role="group" aria-label="Período de cobrança" data-billing-toggle hidden>
+          <button type="button" aria-pressed="true" data-period="monthly">Mensal</button>
+          <button type="button" aria-pressed="false" data-period="annual">Anual <span class="billing-toggle__save">2 meses grátis</span></button>
+        </div>
+
+        <div class="pricing" data-pricing>
+          <p class="pricing__fallback">Carregando os planos… Se não aparecerem, <a href="/signup.html">crie a conta grátis</a> e veja os planos em Configurações.</p>
+        </div>
+
+        <div class="packs" data-packs hidden>
+          <div class="packs__copy">
+            <h3>Precisa de mais contratos num mês?</h3>
+            <p>Compre pacotes avulsos, sem trocar de plano. Eles valem por <span data-validity>12</span> meses e só são usados depois que os contratos do plano acabam.</p>
+          </div>
+          <ul class="packs__list" data-pack-list></ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Perguntas -->
-    <section class="section section--tinted" id="perguntas" aria-labelledby="perguntas-titulo">
+    <section class="section" id="perguntas" aria-labelledby="perguntas-titulo">
       <div class="container faq">
         <header class="section__header section__header--left">
           <p class="eyebrow">Perguntas frequentes</p>
@@ -234,7 +263,15 @@
           </details>
           <details>
             <summary>Quantas pessoas da empresa podem usar?</summary>
-            <p>Quem cria a conta vira Admin e pode convidar o resto da equipe por e-mail, definindo o perfil de cada pessoa.</p>
+            <p>Quem cria a conta vira Admin e convida o resto da equipe por e-mail, definindo o perfil de cada pessoa. O número de usuários depende do plano: 1 no Grátis, 3 no Essencial, 10 no Profissional e ilimitados no Empresa.</p>
+          </details>
+          <details>
+            <summary>O que conta como contrato do plano?</summary>
+            <p>Cada contrato enviado para assinatura, não importa quantas pessoas assinam. Rascunhos não contam, e um envio desfeito antes de chegar aos signatários também não.</p>
+          </details>
+          <details>
+            <summary>E se os contratos do plano acabarem no meio do mês?</summary>
+            <p>Os envios passam a usar os pacotes avulsos que você tiver. Sem pacote, novos envios esperam a renovação do plano; os contratos já enviados continuam normalmente. Avisamos por e-mail quando chegar a 80% e a 100%.</p>
           </details>
         </div>
       </div>
@@ -259,6 +296,7 @@
       <nav class="site-footer__nav" aria-label="Rodapé">
         <a href="/login.html">Entrar</a>
         <a href="/signup.html">Criar conta</a>
+        <a href="#precos">Preços</a>
         <a href="#perguntas">Perguntas</a>
       </nav>
       <p class="site-footer__copy">© <span data-year>2026</span> Contratos</p>

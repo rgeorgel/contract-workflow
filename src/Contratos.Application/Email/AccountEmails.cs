@@ -40,6 +40,38 @@ public static class AccountEmails
             link: link,
             footer: "O link vale por 2 horas. Se não foi você, ignore esta mensagem; sua senha continua a mesma.");
 
+    /// <summary>Aviso aos Admins: 80% ou 100% da cota de contratos do plano usados no ciclo.</summary>
+    public static EmailMessage PlanUsage(string productName, string to, string name, string organizationName,
+        string planName, int used, int limit, int credits, DateTimeOffset renewsAt, string link)
+    {
+        var renews = renewsAt.ToOffset(TimeSpan.FromHours(-3)).ToString("dd/MM");
+        var org = WebUtility.HtmlEncode(organizationName);
+        var plan = WebUtility.HtmlEncode(planName);
+        string subject, intro, introText;
+        if (used < limit)
+        {
+            subject = $"Você já usou {used * 100 / limit}% dos contratos do plano {planName}";
+            var after = credits > 0
+                ? $"Quando ela acabar, os envios passam a usar os seus {credits} créditos avulsos."
+                : "Quando ela acabar, novos envios ficam bloqueados até a renovação, a menos que você compre um pacote de contratos.";
+            intro = $"<strong>{org}</strong> já enviou {used} dos {limit} contratos do plano {plan} neste ciclo, que renova em {renews}. {after}";
+            introText = $"{organizationName} já enviou {used} dos {limit} contratos do plano {planName} neste ciclo, que renova em {renews}. {after}";
+        }
+        else
+        {
+            subject = $"Os contratos do plano {planName} acabaram neste ciclo";
+            var after = credits > 0
+                ? $"Os próximos envios usam os seus {credits} créditos avulsos."
+                : "Até lá, novos envios ficam bloqueados. Compre um pacote de contratos ou mude de plano para continuar enviando.";
+            intro = $"<strong>{org}</strong> enviou os {limit} contratos do plano {plan} neste ciclo, que renova em {renews}. {after}";
+            introText = $"{organizationName} enviou os {limit} contratos do plano {planName} neste ciclo, que renova em {renews}. {after}";
+        }
+        return Build(productName, to, name, subject, intro, introText,
+            buttonLabel: "Ver plano e uso",
+            link: link,
+            footer: "Você recebe este aviso por ser Admin da conta.");
+    }
+
     private static EmailMessage Build(string productName, string to, string name, string subject,
         string intro, string introText, string buttonLabel, string link, string footer)
     {

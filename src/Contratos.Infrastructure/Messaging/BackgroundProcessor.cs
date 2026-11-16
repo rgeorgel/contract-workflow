@@ -1,3 +1,4 @@
+using Contratos.Application.Email;
 using Contratos.Application.Signatures;
 using Contratos.Application.Storage;
 using Contratos.Domain.Contracts;
@@ -326,10 +327,40 @@ public sealed class BackgroundProcessor(
                 db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SignedDocumentStored));
                 break;
             }
+            case OutboxTypes.UsageAlert:
+                await SendUsageAlertAsync(services, db, message.Read<UsageAlertMessage>(), ct);
+                break;
             default:
                 logger.LogError("Tipo de mensagem desconhecido: {Type}", message.Type);
                 break;
         }
+    }
+
+    /// <summary>E-mail aos Admins ativos: 80% ou 100% da cota do plano no ciclo.</summary>
+    private static async Task SendUsageAlertAsync(IServiceProvider services, AppDbContext db, UsageAlertMessage msg, CancellationToken ct)
+    {
+        var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == msg.OrganizationId, ct);
+        if (org is null)
+            return;
+        var admins = await db.Users
+            .Where(u => u.OrganizationId == org.Id && u.Role == Domain.Users.UserRole.Admin
+                && u.DeactivatedAt == null && u.PasswordHash != null && u.EmailConfirmed)
+            .Select(u => new { u.Email, u.Name })
+            .ToListAsync(ct);
+        if (admins.Count == 0)
+            return;
+
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
+        var credits = await db.CreditGrants
+            .Where(g => g.OrganizationId == org.Id && g.Remaining > 0 && g.ExpiresAt > now)
+            .SumAsync(g => (int?)g.Remaining, ct) ?? 0;
+        var app = services.GetRequiredService<IOptions<AppOptions>>().Value;
+        var email = services.GetRequiredService<IEmailSender>();
+        var link = $"{app.PublicBaseUrl.TrimEnd('/')}/settings.html";
+        var planName = Domain.Billing.Plans.Get(msg.PlanId).Name;
+        foreach (var admin in admins)
+            await email.SendAsync(AccountEmails.PlanUsage(app.ProductName, admin.Email!, admin.Name, org.Name,
+                planName, msg.Used, msg.Limit, credits, msg.PeriodEnd, link), ct);
     }
 
     // ---------- Expiração ----------

@@ -1,3 +1,5 @@
+using Contratos.Domain.Billing;
+
 namespace Contratos.Domain.Organizations;
 
 /// <summary>Uma conta cliente do SaaS. Todo registro de negócio carrega o Id dela.</summary>
@@ -37,6 +39,39 @@ public sealed class Organization
     public int ContractCounter { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>Plano atual (id do catálogo em <see cref="Plans"/>).</summary>
+    public string PlanId { get; private set; } = Plans.FreeId;
+
+    /// <summary>
+    /// Ciclo pago da assinatura, quando há (vem do provedor de cobrança). Sem ele, ou fora dele,
+    /// a cota vale pelo mês do calendário no horário de Brasília.
+    /// </summary>
+    public DateTimeOffset? PlanPeriodStart { get; private set; }
+    public DateTimeOffset? PlanPeriodEnd { get; private set; }
+
+    public Plan Plan => Plans.Get(PlanId);
+
+    public void ChangePlan(string planId, DateTimeOffset? periodStart = null, DateTimeOffset? periodEnd = null)
+    {
+        var plan = Plans.Find(planId) ?? throw new ArgumentException("Plano desconhecido.", nameof(planId));
+        if ((periodStart is null) != (periodEnd is null) || periodStart >= periodEnd)
+            throw new ArgumentException("Informe início e fim do ciclo, com o fim depois do início.", nameof(periodEnd));
+        PlanId = plan.Id;
+        PlanPeriodStart = periodStart;
+        PlanPeriodEnd = periodEnd;
+    }
+
+    /// <summary>Ciclo de cota que contém <paramref name="now"/>.</summary>
+    public (DateTimeOffset Start, DateTimeOffset End) PeriodAt(DateTimeOffset now)
+    {
+        if (PlanPeriodStart is { } start && PlanPeriodEnd is { } end && start <= now && now < end)
+            return (start, end);
+        var brt = TimeSpan.FromHours(-3);
+        var local = now.ToOffset(brt);
+        var monthStart = new DateTimeOffset(local.Year, local.Month, 1, 0, 0, 0, brt);
+        return (monthStart.ToUniversalTime(), monthStart.AddMonths(1).ToUniversalTime());
+    }
 
     public void Rename(string name)
     {

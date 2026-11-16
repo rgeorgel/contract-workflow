@@ -6,6 +6,7 @@ using Contratos.Application.Storage;
 using Contratos.Application.Templates;
 using Contratos.Domain.Contracts;
 using Contratos.Domain.Templates;
+using Contratos.Infrastructure.Billing;
 using Contratos.Infrastructure.Messaging;
 using Contratos.Infrastructure.Persistence;
 using Contratos.Infrastructure.Signatures;
@@ -32,6 +33,7 @@ internal sealed class ContractService(
     ISignatureProvider provider,
     TimeProvider clock,
     IOptions<ContractOptions> options,
+    UsageMeter meter,
     ILogger<ContractService> logger) : IContractService
 {
     private static readonly Error NotFound = Error.NotFound("Contrato não encontrado.");
@@ -212,6 +214,7 @@ internal sealed class ContractService(
             return error!;
 
         var errors = ContractValidator.ValidateSigner(req, contract.Signers);
+        await CheckChannelAsync(req, errors, ct);
         if (!errors.IsEmpty)
             return Error.Validation(errors);
         if (contract.Signers.Count >= Contract.MaxSigners)
@@ -235,6 +238,8 @@ internal sealed class ContractService(
             return Error.NotFound("Signatário não encontrado.");
 
         var errors = ContractValidator.ValidateSigner(req, contract.Signers.Where(s => s.Id != signerId));
+        if (req.DeliveryMethod != current.DeliveryMethod)
+            await CheckChannelAsync(req, errors, ct);
         if (!errors.IsEmpty)
             return Error.Validation(errors);
 
@@ -280,6 +285,14 @@ internal sealed class ContractService(
         if (!errors.IsEmpty)
             return Error.Validation(errors, "Ainda falta algo para enviar.");
 
+        // Plano: canais (pode ter mudado depois do rascunho) e cota, antes de gerar o PDF.
+        var org = await db.Organizations.SingleAsync(o => o.Id == contract.OrganizationId, ct);
+        var blocked = contract.Signers.Select(s => s.DeliveryMethod).Where(m => !org.Plan.Allows(m)).Distinct().ToList();
+        if (blocked.Count > 0)
+            return Error.Conflict(UsageMeter.ChannelNotInPlan(org.Plan, blocked[0]) + " Troque o canal dos signatários ou mude de plano.", "channel_not_in_plan");
+        if (await meter.PrecheckSendAsync(org, ct) is { } noQuota)
+            return noQuota;
+
         byte[] document;
         try
         {
@@ -298,18 +311,35 @@ internal sealed class ContractService(
             await storage.PutAsync(key, stream, "application/pdf", ct);
         var sha = Convert.ToHexStringLower(SHA256.HashData(document));
 
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var consumed = await meter.ConsumeAsync(org, contract.Id, ct);
+        if (!consumed.IsSuccess)
+        {
+            // Outro envio levou a última vaga entre a checagem e agora.
+            await tx.RollbackAsync(ct);
+            await storage.DeletePrefixAsync(key, ct);
+            return consumed.Error!;
+        }
+
         contract.MarkSent(key, sha, idempotencyKey);
         db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Sent, actorUserId: tenant.UserId,
-            payload: new() { ["sha256"] = sha, ["signers"] = contract.Signers.Count.ToString() }));
+            payload: new()
+            {
+                ["sha256"] = sha,
+                ["signers"] = contract.Signers.Count.ToString(),
+                ["usage"] = consumed.Value == UsageSource.Credit ? "credit" : "plan",
+            }));
         db.Enqueue(OutboxTypes.SendContract, new ContractMessage(contract.Id));
 
         try
         {
             await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Outra requisição enviou primeiro (duplo clique sem chave, outra aba).
+            // Outra requisição enviou primeiro (duplo clique sem chave, outra aba). A transação desfaz o consumo.
+            await tx.RollbackAsync(ct);
             db.ChangeTracker.Clear();
             var current = await LoadAsync(id, ct);
             return current is { IsDraft: false } && current.SendIdempotencyKey == idempotencyKey && idempotencyKey is not null
@@ -333,7 +363,8 @@ internal sealed class ContractService(
         if (documentKey is not null)
             await storage.DeletePrefixAsync(documentKey, ct);
         db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.ReturnedToDraft, actorUserId: tenant.UserId));
-        return await SaveAndDetailAsync(contract, ct);
+        // Não chegou ao provedor: o envio não conta e o crédito, se foi um, volta.
+        return await SaveWithRefundAsync(contract, ct);
     }
 
     public async Task<Result<ContractDetail>> RetrySendAsync(Guid id, CancellationToken ct)
@@ -365,8 +396,12 @@ internal sealed class ContractService(
         db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Cancelled, actorUserId: tenant.UserId));
         // A Autentique não tem "cancelar": o documento é removido lá, e o histórico fica aqui.
         if (contract.AutentiqueDocumentId is { } documentId)
+        {
             db.Enqueue(OutboxTypes.DeleteProviderDocument, new ProviderDocumentMessage(documentId));
-        return await SaveAndDetailAsync(contract, ct);
+            return await SaveAndDetailAsync(contract, ct);
+        }
+        // Cancelado antes de chegar ao provedor (nada foi cobrado lá): devolve a cota ou o crédito.
+        return await SaveWithRefundAsync(contract, ct);
     }
 
     public async Task<Result<ContractDetail>> ResendAsync(Guid id, Guid signerId, CancellationToken ct)
@@ -413,7 +448,14 @@ internal sealed class ContractService(
             SentAt = contract.SentAt,
         });
         db.Contracts.Remove(contract); // signatários e eventos vão em cascata
-        await db.SaveChangesAsync(ct);
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            // Excluído antes de chegar ao provedor: o envio, se houve, não conta.
+            if (contract.AutentiqueDocumentId is null)
+                await meter.RefundAsync(contract.Id, ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
         logger.LogInformation("Contrato {ContractId} excluído", contract.Id);
         return Result.Ok();
     }
@@ -493,6 +535,32 @@ internal sealed class ContractService(
         }
         await RefreshSearchAsync(contract.Id, ct);
         return await DetailAsync(contract, ct);
+    }
+
+    private async Task<Result<ContractDetail>> SaveWithRefundAsync(Contract contract, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await meter.RefundAsync(contract.Id, ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await tx.RollbackAsync(ct);
+            return Error.Concurrency();
+        }
+        await RefreshSearchAsync(contract.Id, ct);
+        return await DetailAsync(contract, ct);
+    }
+
+    private async Task CheckChannelAsync(SignerRequest req, ValidationErrors errors, CancellationToken ct)
+    {
+        var method = req.DeliveryMethod ?? DeliveryMethod.Email;
+        var plan = await meter.PlanOfAsync(tenant.RequireOrganizationId(), ct);
+        if (!plan.Allows(method))
+            errors.Add("deliveryMethod", UsageMeter.ChannelNotInPlan(plan, method));
     }
 
     /// <summary>Número sequencial por organização, sem buracos por concorrência (UPDATE ... RETURNING trava a linha).</summary>

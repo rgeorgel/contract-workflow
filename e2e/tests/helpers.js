@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 
 const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8026';
+const PLATFORM_KEY = process.env.PLATFORM_API_KEY ?? 'dev-platform-key-troque-por-uma-de-32-caracteres';
 
 export const unique = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
@@ -20,8 +21,21 @@ export async function linkFromEmail(request, to, path) {
   return link;
 }
 
-/** Cadastro pela tela, confirmação pelo link do e-mail e login. Devolve os dados da conta. */
-export async function signUp(page, request) {
+/** Troca o plano da organização logada na página pela API da plataforma. */
+export async function setPlan(page, plan) {
+  const org = await (await page.request.get('/api/v1/organization/settings')).json();
+  const res = await page.request.put(`/api/platform/organizations/${org.slug}/plan`, {
+    headers: { Authorization: `Bearer ${PLATFORM_KEY}` },
+    data: { plan },
+  });
+  expect(res.status(), 'API da plataforma (PLATFORM_API_KEY)').toBe(200);
+}
+
+/**
+ * Cadastro pela tela, confirmação pelo link do e-mail e login. Devolve os dados da conta.
+ * A conta vai para o plano Empresa (sem esbarrar em cota), a não ser que o teste peça outro.
+ */
+export async function signUp(page, request, { plan = 'empresa' } = {}) {
   const account = {
     org: `Empresa ${unique('e2e')}`,
     name: 'Ana Teste',
@@ -48,5 +62,6 @@ export async function signUp(page, request) {
   await page.getByLabel('Senha', { exact: true }).fill(account.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL(/dashboard\.html/);
+  if (plan) await setPlan(page, plan);
   return account;
 }

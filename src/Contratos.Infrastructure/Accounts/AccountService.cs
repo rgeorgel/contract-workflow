@@ -17,6 +17,7 @@ internal sealed class AccountService(
     UserManager<AppUser> users,
     IEmailSender email,
     IOptions<AppOptions> appOptions,
+    IOptions<Billing.BillingOptions> billing,
     ILogger<AccountService> logger) : IAccountService
 {
     private AppOptions App => appOptions.Value;
@@ -51,6 +52,7 @@ internal sealed class AccountService(
         }
 
         var organization = new Organization(orgName, await UniqueSlugAsync(orgName, ct));
+        organization.ChangePlan(billing.Value.DefaultPlan);
         db.Organizations.Add(organization);
         await db.SaveChangesAsync(ct);
 

@@ -343,6 +343,22 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("name");
 
+                    b.Property<string>("PlanId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("gratis")
+                        .HasColumnName("plan_id");
+
+                    b.Property<DateTimeOffset?>("PlanPeriodEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("plan_period_end");
+
+                    b.Property<DateTimeOffset?>("PlanPeriodStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("plan_period_start");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -472,6 +488,123 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_template_versions_template_id_version");
 
                     b.ToTable("template_versions", (string)null);
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Billing.CreditGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<int>("Remaining")
+                        .HasColumnType("integer")
+                        .HasColumnName("remaining");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("source");
+
+                    b.HasKey("Id")
+                        .HasName("pk_credit_grants");
+
+                    b.HasIndex("OrganizationId", "ExpiresAt")
+                        .HasDatabaseName("ix_credit_grants_organization_id_expires_at");
+
+                    b.HasIndex("OrganizationId", "Reference")
+                        .IsUnique()
+                        .HasDatabaseName("ix_credit_grants_organization_id_reference")
+                        .HasFilter("reference IS NOT NULL");
+
+                    b.ToTable("credit_grants", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_credit_grants_quantity", "quantity > 0");
+
+                            t.HasCheckConstraint("ck_credit_grants_remaining", "remaining >= 0 AND remaining <= quantity");
+                        });
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Billing.UsageRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<Guid?>("CreditGrantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credit_grant_id");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("PlanId")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("plan_id");
+
+                    b.Property<DateTimeOffset?>("RefundedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("refunded_at");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.HasKey("Id")
+                        .HasName("pk_usage_records");
+
+                    b.HasIndex("ContractId")
+                        .HasDatabaseName("ix_usage_records_contract_id");
+
+                    b.HasIndex("CreditGrantId")
+                        .HasDatabaseName("ix_usage_records_credit_grant_id");
+
+                    b.HasIndex("OrganizationId", "ConsumedAt")
+                        .HasDatabaseName("ix_usage_records_organization_id_consumed_at");
+
+                    b.ToTable("usage_records", (string)null);
                 });
 
             modelBuilder.Entity("Contratos.Infrastructure.Identity.AppUser", b =>
@@ -924,6 +1057,32 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_template_versions_templates_template_id");
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Billing.CreditGrant", b =>
+                {
+                    b.HasOne("Contratos.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_credit_grants_organizations_organization_id");
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Billing.UsageRecord", b =>
+                {
+                    b.HasOne("Contratos.Infrastructure.Billing.CreditGrant", null)
+                        .WithMany()
+                        .HasForeignKey("CreditGrantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_usage_records_credit_grants_credit_grant_id");
+
+                    b.HasOne("Contratos.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_usage_records_organizations_organization_id");
                 });
 
             modelBuilder.Entity("Contratos.Infrastructure.Identity.AppUser", b =>

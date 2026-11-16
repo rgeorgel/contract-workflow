@@ -1,4 +1,5 @@
 using Contratos.Application.Accounts;
+using Contratos.Application.Billing;
 using Contratos.Application.Common;
 using Contratos.Application.Contracts;
 using Contratos.Application.Dashboard;
@@ -9,6 +10,7 @@ using Contratos.Application.Templates;
 using Contratos.Application.Organizations;
 using Contratos.Application.Users;
 using Contratos.Infrastructure.Accounts;
+using Contratos.Infrastructure.Billing;
 using Contratos.Infrastructure.Email;
 using Contratos.Infrastructure.Contracts;
 using Contratos.Infrastructure.Dashboard;
@@ -82,6 +84,13 @@ public static class DependencyInjection
         services.AddOptions<GotenbergOptions>().Bind(config.GetSection(GotenbergOptions.Section));
         services.AddOptions<FakeSignatureOptions>().Bind(config.GetSection(FakeSignatureOptions.Section));
         services.AddOptions<WorkerOptions>().Bind(config.GetSection(WorkerOptions.Section));
+        services.AddOptions<BillingOptions>().Bind(config.GetSection(BillingOptions.Section))
+            .Validate(o => Domain.Billing.Plans.Find(o.DefaultPlan) is not null, "Billing:DefaultPlan precisa ser um plano do catálogo.")
+            .ValidateOnStart();
+        services.AddScoped<UsageMeter>();
+        services.AddScoped<BillingReader>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IPlatformBillingService, PlatformBillingService>();
         services.AddScoped<IContractService, ContractService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddSingleton<IFileStorage, S3FileStorage>();

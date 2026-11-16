@@ -6,6 +6,7 @@ import { confirmModal, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { contractNumber, formatDate } from '../utils/format.js';
 import { ACTIONS, DELIVERY } from '../utils/status.js';
+import { cheapestWith, renewsLabel } from '../utils/billing.js';
 
 await requireUser({ roles: ['Admin', 'Editor'] });
 
@@ -15,6 +16,9 @@ let step = Number(params.get('step')) || (contractId ? 2 : 1);
 let contract = null;
 let selectedTemplate = null;
 const sendKey = crypto.randomUUID(); // Idempotency-Key: duplo clique não envia duas vezes
+/** Plano e cota; sem ele a tela funciona igual e o servidor decide no envio. */
+let billing = null;
+const billingReady = api('/organization/billing').then((b) => { billing = b; }).catch(() => {});
 
 const alertEl = document.querySelector('[data-alert]');
 const valuesForm = document.querySelector('[data-values]');
@@ -259,10 +263,13 @@ function field(label, input, name, hint) {
 function openSigner(existing, suggestion) {
   const s = existing ?? { name: '', email: '', phone: '', cpf: '', deliveryMethod: 'Email', role: suggestion?.role ?? '', action: suggestion?.action ?? 'Sign' };
   const alertBox = h('div', { class: 'alert alert--error', role: 'alert', hidden: true });
+  // Canal fora do plano fica desabilitado (a não ser que o signatário já use, para não sumir com o dado).
+  const allowed = (value) => !billing || billing.plan.channels.includes(value) || value === existing?.deliveryMethod;
   const channel = h('div', { class: 'channel-tabs', role: 'radiogroup', 'aria-label': 'Canal de entrega' },
-    Object.entries(DELIVERY).map(([value, label]) => h('label', { class: 'radio-card' },
-      h('input', { type: 'radio', name: 'deliveryMethod', value, checked: value === s.deliveryMethod }),
-      h('span', {}, h('strong', {}, label)))));
+    Object.entries(DELIVERY).map(([value, label]) => h('label', { class: `radio-card${allowed(value) ? '' : ' is-disabled'}` },
+      h('input', { type: 'radio', name: 'deliveryMethod', value, checked: value === s.deliveryMethod, disabled: !allowed(value) }),
+      h('span', {}, h('strong', {}, label),
+        allowed(value) ? null : h('small', { class: 'radio-card__hint' }, `No plano ${cheapestWith(billing.plans, value)?.name ?? 'superior'}`)))));
 
   const form = h('form', { class: 'form', id: 'signer-form', novalidate: true },
     alertBox,
@@ -362,9 +369,32 @@ function renderReview() {
   }
   if (contract.template.variables.length === 0) values.append(h('dd', { class: 'muted' }, 'Sem variáveis.'));
 
+  renderUsageNote();
   document.querySelector('[data-review-mode]').textContent = contract.signingMode === 'Sequential' ? '(em ordem)' : '(todos ao mesmo tempo)';
   document.querySelector('[data-review-signers]').replaceChildren(...contract.signers.map((s) =>
     h('li', {}, h('strong', {}, s.name), ' ', h('span', {}, `${s.role ? `${s.role} · ` : ''}${DELIVERY[s.deliveryMethod]}: ${contactOf(s)}`))));
+}
+
+/** De onde sai este envio: cota do plano, crédito avulso ou nenhum dos dois. */
+function renderUsageNote() {
+  const el = document.querySelector('[data-usage-note]');
+  if (!billing) { el.hidden = true; return; }
+  const left = Math.max(0, billing.contractsLimit - billing.contractsUsed);
+  const settings = h('a', { href: '/settings.html' }, 'Ver plano e uso');
+  let tone = 'alert--info';
+  let text;
+  if (left > 0) {
+    text = `Este envio usa 1 dos ${left} ${left === 1 ? 'contrato restante' : 'contratos restantes'} do plano ${billing.plan.name} neste ciclo.`;
+    if (left > 1 && billing.contractsUsed + 1 < billing.contractsLimit * 0.8) { el.hidden = true; return; }
+  } else if (billing.creditsAvailable > 0) {
+    text = `Os contratos do plano acabaram neste ciclo. Este envio usa 1 crédito avulso (você tem ${billing.creditsAvailable}).`;
+  } else {
+    tone = 'alert--error';
+    text = `Os contratos do plano ${billing.plan.name} acabaram neste ciclo (renova em ${renewsLabel(billing.periodEnd)}) e não há créditos avulsos. Compre um pacote ou mude de plano para enviar.`;
+  }
+  el.className = `alert usage-note ${tone}`;
+  el.replaceChildren(h('div', { class: 'alert__body' }, h('span', {}, text), settings));
+  el.hidden = false;
 }
 
 document.querySelector('[data-send]').addEventListener('click', async (e) => {
@@ -414,6 +444,7 @@ for (const btn of document.querySelectorAll('[data-goto]')) {
 
 // ---------- Carga ----------
 
+await billingReady;
 if (contractId) {
   try {
     contract = await api(`/contracts/${contractId}`);

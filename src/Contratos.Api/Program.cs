@@ -162,6 +162,7 @@ api.MapDashboardEndpoints();
 if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", StringComparison.OrdinalIgnoreCase))
     api.MapFakeProviderEndpoints();
 app.MapWebhookEndpoints();
+app.MapPlatformEndpoints();
 
 app.Run();
 

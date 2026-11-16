@@ -65,6 +65,46 @@ Como funciona:
 
 Para conferir depois de configurar: crie um contrato com o seu próprio e-mail como signatário, envie, assine pelo link da Autentique e veja o status mudar para Concluído e o "PDF assinado" aparecer. Se o status não mudar, veja os "Error Logs" na tela de webhooks da Autentique e procure por `Webhook recusado` no log da app. A mensagem diz se o cabeçalho `X-Autentique-Signature` não veio (a Autentique não está assinando; o log lista os cabeçalhos que vieram) ou se veio e não confere com nenhum secret configurado.
 
+## Planos e créditos
+
+O catálogo de planos e de pacotes fica em código (`src/Contratos.Domain/Billing/Plans.cs`):
+
+| Plano | Mensal | Anual | Contratos/ciclo | Usuários | Templates | Canais |
+|---|---|---|---|---|---|---|
+| `gratis` | R$ 0 | – | 3 | 1 | 2 | e-mail |
+| `essencial` | R$ 39,90 | R$ 399 | 20 | 3 | 10 | + WhatsApp |
+| `profissional` | R$ 89,90 | R$ 899 | 80 | 10 | ilimitados | + SMS |
+| `empresa` | R$ 199,90 | R$ 1.999 | 250 | ilimitados | ilimitados | + SMS |
+
+Pacotes avulsos: 1 (R$ 3,90), 5 (R$ 17,50), 10 (R$ 29,90), 25 (R$ 64,90) e 50 (R$ 119,90), válidos por 12 meses.
+
+Regras:
+
+- **Ciclo:** o mês do calendário (horário de Brasília) ou, quando definido, o período pago da assinatura.
+- **Ordem de consumo:** o envio usa primeiro a cota do plano no ciclo. Quando ela acaba, usa o crédito avulso que vence antes. Sem cota e sem crédito, o envio é recusado (`quota_exceeded`).
+- **O que conta:** o envio desfeito antes de chegar à Autentique não conta e devolve o crédito. Isso vale para voltar para rascunho, cancelar ou excluir. Depois que chegou à Autentique, conta, mesmo cancelado.
+- **Avisos:** os Admins recebem e-mail ao chegar em 80% e em 100% da cota.
+- **Downgrade:** quem já passou do limite de usuários ou templates continua com o que tem, mas não cria mais. Canais fora do plano são recusados ao adicionar signatário e no envio.
+- **Contas novas** entram em `BILLING_DEFAULT_PLAN` (padrão `gratis`). Contas que já existiam quando os planos entraram foram para `empresa`.
+
+Enquanto não há checkout, a equipe troca o plano e concede créditos pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
+
+```bash
+# Organizações (busca por nome ou slug), com plano, uso do ciclo e créditos
+curl -s -H "Authorization: Bearer $PLATFORM_API_KEY" "https://SEU_DOMINIO/api/platform/organizations?q=aurora"
+
+# Trocar o plano (ciclo opcional; sem ele vale o mês do calendário)
+curl -s -X PUT -H "Authorization: Bearer $PLATFORM_API_KEY" -H "Content-Type: application/json" \
+  -d '{"plan":"profissional"}' https://SEU_DOMINIO/api/platform/organizations/SLUG/plan
+
+# Conceder créditos (reference opcional: repetir a mesma não duplica)
+curl -s -X POST -H "Authorization: Bearer $PLATFORM_API_KEY" -H "Content-Type: application/json" \
+  -d '{"quantity":10,"note":"Pacote 10 pago por Pix","reference":"pix-2026-11-15-aurora"}' \
+  https://SEU_DOMINIO/api/platform/organizations/SLUG/credits
+```
+
+`BILLING_CONTACT_EMAIL`, se definido, aparece em Configurações como o contato para mudar de plano ou comprar contratos.
+
 ## Saúde
 
 | Rota | Para quê | Olha |

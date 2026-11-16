@@ -3,6 +3,7 @@ using Contratos.Application.Common;
 using Contratos.Application.Email;
 using Contratos.Application.Users;
 using Contratos.Infrastructure.Accounts;
+using Contratos.Infrastructure.Billing;
 using Contratos.Infrastructure.Identity;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -16,7 +17,8 @@ internal sealed class UserService(
     UserManager<AppUser> users,
     ICurrentTenant tenant,
     IEmailSender email,
-    IOptions<AppOptions> appOptions) : IUserService
+    IOptions<AppOptions> appOptions,
+    UsageMeter meter) : IUserService
 {
     public async Task<IReadOnlyList<UserListItem>> ListAsync(CancellationToken ct)
     {
@@ -57,6 +59,9 @@ internal sealed class UserService(
             await SendInviteAsync(existing, ct);
             return ToItem(existing);
         }
+
+        if (await meter.CheckSeatAsync(orgId, ct) is { } noSeat)
+            return noSeat;
 
         var user = new AppUser
         {
@@ -121,6 +126,8 @@ internal sealed class UserService(
                 return Error.Conflict("Convite pendente: cancele o convite em vez de desativar.", "pending_invite");
             if (active == (user.DeactivatedAt is not null))
             {
+                if (active && await meter.CheckSeatAsync(user.OrganizationId, ct) is { } noSeat)
+                    return noSeat;
                 user.DeactivatedAt = active ? null : DateTimeOffset.UtcNow;
                 changed = true;
             }

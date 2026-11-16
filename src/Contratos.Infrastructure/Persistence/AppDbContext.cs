@@ -1,5 +1,6 @@
 using Contratos.Application.Common;
 using Contratos.Domain.Contracts;
+using Contratos.Infrastructure.Billing;
 using Contratos.Domain.Organizations;
 using Contratos.Domain.Templates;
 using Contratos.Infrastructure.Identity;
@@ -29,6 +30,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<WebhookInboxItem> WebhookInbox => Set<WebhookInboxItem>();
     public DbSet<DeletionLogEntry> DeletionLog => Set<DeletionLogEntry>();
+    public DbSet<CreditGrant> CreditGrants => Set<CreditGrant>();
+    public DbSet<UsageRecord> UsageRecords => Set<UsageRecord>();
 
     /// <summary><c>unaccent</c> marcada como IMMUTABLE, para poder ir em índice (criada na migration Search).</summary>
     public static string ImmutableUnaccent(string text) => throw new NotSupportedException("Só em consultas.");
