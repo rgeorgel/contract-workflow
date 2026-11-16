@@ -1,13 +1,13 @@
 import { DELIVERY } from './status.js';
 
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const dayMonth = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+// Datas do ciclo em UTC, como o Stripe mostra. O mês do calendário vira à meia-noite de Brasília (03:00 UTC):
+// mesmo dia nos dois fusos.
+const dayMonth = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
 
 export const formatMoney = (value) => money.format(value);
 
-/** Último dia do ciclo (o fim é exclusivo: meia-noite do dia seguinte). */
-export const periodEndLabel = (iso) => dayMonth.format(new Date(new Date(iso).getTime() - 1));
-/** Dia em que a cota renova. */
+/** Dia em que a cota renova (ou em que a assinatura cancelada termina). */
 export const renewsLabel = (iso) => dayMonth.format(new Date(iso));
 
 export const limitLabel = (n, one, many) => (n == null ? `${many} ilimitados` : `${n} ${n === 1 ? one : many}`);

@@ -375,9 +375,9 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("stripe_subscription_id");
 
-                    b.Property<bool>("SubscriptionCancelAtPeriodEnd")
-                        .HasColumnType("boolean")
-                        .HasColumnName("subscription_cancel_at_period_end");
+                    b.Property<DateTimeOffset?>("SubscriptionCancelAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("subscription_cancel_at");
 
                     b.Property<string>("SubscriptionInterval")
                         .HasMaxLength(10)

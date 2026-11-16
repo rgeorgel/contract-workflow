@@ -60,7 +60,8 @@ public sealed class Organization
     public string? SubscriptionStatus { get; private set; }
     /// <summary>"month" ou "year".</summary>
     public string? SubscriptionInterval { get; private set; }
-    public bool SubscriptionCancelAtPeriodEnd { get; private set; }
+    /// <summary>Cancelamento agendado: o plano vale até esta data e depois a assinatura acaba.</summary>
+    public DateTimeOffset? SubscriptionCancelAt { get; private set; }
 
     /// <summary>Assinatura que ainda dá direito ao plano (inclui pagamento atrasado, que tem tolerância).</summary>
     public bool HasLiveSubscription => SubscriptionStatus is "active" or "trialing" or "past_due";
@@ -69,13 +70,13 @@ public sealed class Organization
 
     /// <summary>Assinatura vigente: plano e ciclo passam a ser os do Stripe.</summary>
     public void ApplySubscription(string subscriptionId, string status, string planId, string interval,
-        DateTimeOffset periodStart, DateTimeOffset periodEnd, bool cancelAtPeriodEnd)
+        DateTimeOffset periodStart, DateTimeOffset periodEnd, DateTimeOffset? cancelAt)
     {
         ChangePlan(planId, periodStart, periodEnd);
         StripeSubscriptionId = subscriptionId;
         SubscriptionStatus = status;
         SubscriptionInterval = interval;
-        SubscriptionCancelAtPeriodEnd = cancelAtPeriodEnd;
+        SubscriptionCancelAt = cancelAt;
     }
 
     /// <summary>Só registra o status (assinatura incompleta ou pausada): plano e ciclo não mudam.</summary>
@@ -90,7 +91,7 @@ public sealed class Organization
     {
         ChangePlan(Plans.FreeId);
         SubscriptionStatus = status;
-        SubscriptionCancelAtPeriodEnd = false;
+        SubscriptionCancelAt = null;
     }
 
     public void ChangePlan(string planId, DateTimeOffset? periodStart = null, DateTimeOffset? periodEnd = null)

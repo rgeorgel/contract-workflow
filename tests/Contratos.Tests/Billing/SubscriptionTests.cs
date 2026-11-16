@@ -111,7 +111,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         var sub = billing.GetProperty("subscription");
         Assert.Equal("active", sub.GetProperty("status").GetString());
         Assert.Equal("year", sub.GetProperty("interval").GetString());
-        Assert.False(sub.GetProperty("cancelAtPeriodEnd").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, sub.GetProperty("cancelAt").ValueKind);
 
         // Já assina: não abre outro checkout; e a plataforma não troca o plano por fora do Stripe.
         var again = await admin.Client.PostAsync("/api/v1/billing/checkout", new { plan = "empresa", interval = "month" });
@@ -170,7 +170,7 @@ public sealed class SubscriptionTests(ApiFactory factory)
         await SubscriptionEventAsync("customer.subscription.updated", subscriptionId);
         var billing = await BillingAsync(admin);
         Assert.Equal("empresa", billing.GetProperty("plan").GetProperty("id").GetString());
-        Assert.True(billing.GetProperty("subscription").GetProperty("cancelAtPeriodEnd").GetBoolean());
+        Assert.Equal(FakeStripe.PeriodEnd("month"), billing.GetProperty("subscription").GetProperty("cancelAt").GetDateTimeOffset());
 
         // Fim do ciclo: o Stripe encerra e a conta volta ao grátis.
         Stripe.UpdateSubscription(subscriptionId, status: "canceled");
@@ -236,6 +236,49 @@ public sealed class SubscriptionTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
         Assert.Equal("managed_by_stripe", (await res.JsonAsync()).GetProperty("code").GetString());
     }
+
+    [Fact]
+    public async Task Cancellation_scheduled_with_cancel_at_shows_up_without_waiting_for_the_webhook()
+    {
+        var admin = await FreeAccountAsync();
+        var subscriptionId = await SubscribeAsync(admin, "profissional", "month");
+
+        // Como o portal faz nas versões novas da API: cancel_at preenchido, cancel_at_period_end falso.
+        // Nenhum webhook chega: a tela consulta o Stripe ao abrir.
+        var cancelAt = FakeStripe.PeriodEnd("month");
+        Stripe.UpdateSubscription(subscriptionId, cancelAt: cancelAt);
+        var sub = (await BillingAsync(admin)).GetProperty("subscription");
+        Assert.Equal(cancelAt, sub.GetProperty("cancelAt").GetDateTimeOffset());
+        Assert.Equal("active", sub.GetProperty("status").GetString());
+
+        // Desistiu do cancelamento no portal.
+        Stripe.UpdateSubscription(subscriptionId, clearCancelAt: true);
+        Assert.Equal(JsonValueKind.Null, (await BillingAsync(admin)).GetProperty("subscription").GetProperty("cancelAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task Billing_page_still_loads_when_stripe_is_unreachable()
+    {
+        var admin = await FreeAccountAsync();
+        var subscriptionId = await SubscribeAsync(admin);
+        Stripe.Subscriptions.TryRemove(subscriptionId, out var saved); // o Stripe responde 404
+        try
+        {
+            var res = await admin.Client.GetAsync("/api/v1/organization/billing");
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.Equal("essencial", (await res.JsonAsync()).GetProperty("plan").GetProperty("id").GetString());
+        }
+        finally
+        {
+            Stripe.Subscriptions[subscriptionId] = saved!;
+        }
+    }
+
+    [Theory]
+    [InlineData("2026-12-16T00:31:00Z", "16/12")] // ciclo do Stripe: a data em UTC, como o Stripe mostra
+    [InlineData("2026-12-01T03:00:00Z", "01/12")] // mês do calendário: meia-noite em Brasília
+    public void Renewal_date_matches_what_stripe_shows(string periodEnd, string expected) =>
+        Assert.Equal(expected, Contratos.Infrastructure.Billing.UsageMeter.RenewalDate(DateTimeOffset.Parse(periodEnd)));
 
     // ---------- Portal ----------
 

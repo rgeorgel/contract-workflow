@@ -135,12 +135,18 @@ internal sealed class UsageMeter(AppDbContext db, TimeProvider clock)
 
     public static Error QuotaExceeded(Snapshot s)
     {
-        var renews = s.PeriodEnd.ToOffset(TimeSpan.FromHours(-3)).ToString("dd/MM");
+        var renews = RenewalDate(s.PeriodEnd);
         return Error.Conflict(
             $"Você já enviou os {s.Plan.ContractsPerPeriod} contratos do plano {s.Plan.Name} neste ciclo, que renova em {renews}, "
             + "e não tem créditos avulsos. Compre um pacote de contratos ou mude de plano em Configurações.",
             "quota_exceeded");
     }
+
+    /// <summary>
+    /// Dia da renovação como o Stripe mostra (data em UTC). O fim do mês do calendário é meia-noite em
+    /// Brasília (03:00 UTC), que cai no mesmo dia; um ciclo pago que vira às 00:30 UTC fica no dia certo.
+    /// </summary>
+    public static string RenewalDate(DateTimeOffset periodEnd) => periodEnd.UtcDateTime.ToString("dd/MM", System.Globalization.CultureInfo.InvariantCulture);
 
     public static string ChannelLabel(DeliveryMethod m) => m switch
     {

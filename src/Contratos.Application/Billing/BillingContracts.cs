@@ -27,7 +27,8 @@ public sealed record CreditGrantDto(Guid Id, int Quantity, int Remaining, DateTi
 
 /// <param name="Status">Status do Stripe (active, trialing, past_due, canceled...).</param>
 /// <param name="Interval">"month" ou "year".</param>
-public sealed record SubscriptionDto(string Status, string? Interval, bool CancelAtPeriodEnd, DateTimeOffset? CurrentPeriodEnd);
+/// <param name="CancelAt">Cancelamento agendado: o plano vale até esta data.</param>
+public sealed record SubscriptionDto(string Status, string? Interval, DateTimeOffset? CancelAt, DateTimeOffset? CurrentPeriodEnd);
 
 /// <param name="ContractsUsed">Da cota do plano, neste ciclo.</param>
 /// <param name="ContractsFromCredits">Enviados com crédito avulso neste ciclo.</param>

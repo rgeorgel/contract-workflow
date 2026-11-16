@@ -44,7 +44,7 @@ public static class AccountEmails
     public static EmailMessage PlanUsage(string productName, string to, string name, string organizationName,
         string planName, int used, int limit, int credits, DateTimeOffset renewsAt, string link)
     {
-        var renews = renewsAt.ToOffset(TimeSpan.FromHours(-3)).ToString("dd/MM");
+        var renews = renewsAt.UtcDateTime.ToString("dd/MM", System.Globalization.CultureInfo.InvariantCulture); // como o Stripe mostra o ciclo
         var org = WebUtility.HtmlEncode(organizationName);
         var plan = WebUtility.HtmlEncode(planName);
         string subject, intro, introText;

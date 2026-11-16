@@ -129,13 +129,17 @@ public sealed class FakeStripe : HttpMessageHandler
     }
 
     /// <summary>Muda a assinatura como o portal ou a cobrança fariam (status, preço, cancelamento).</summary>
-    public void UpdateSubscription(string id, string? status = null, string? priceId = null, bool? cancelAtPeriodEnd = null)
+    /// <param name="cancelAt">Cancelamento agendado como o portal faz nas versões novas da API (cancel_at, sem cancel_at_period_end).</param>
+    public void UpdateSubscription(string id, string? status = null, string? priceId = null, bool? cancelAtPeriodEnd = null,
+        DateTimeOffset? cancelAt = null, bool clearCancelAt = false)
     {
         var sub = Subscriptions[id];
         var price = priceId ?? sub["items"]!["data"]![0]!["price"]!["id"]!.GetValue<string>();
+        var currentCancelAt = sub["cancel_at"]?.GetValue<long>() is { } unix ? DateTimeOffset.FromUnixTimeSeconds(unix) : (DateTimeOffset?)null;
         Subscriptions[id] = Subscription(id, sub["customer"]!.GetValue<string>(), price,
             status ?? sub["status"]!.GetValue<string>(), sub["metadata"]?["organization_id"]?.GetValue<string>(),
-            cancelAtPeriodEnd ?? sub["cancel_at_period_end"]!.GetValue<bool>());
+            cancelAtPeriodEnd ?? sub["cancel_at_period_end"]!.GetValue<bool>(),
+            clearCancelAt ? null : cancelAt ?? currentCancelAt);
     }
 
     public string PriceId(string lookupKey) =>
@@ -144,7 +148,7 @@ public sealed class FakeStripe : HttpMessageHandler
     public static readonly DateTimeOffset PeriodStart = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeSeconds());
     public static DateTimeOffset PeriodEnd(string interval) => interval == "year" ? PeriodStart.AddYears(1) : PeriodStart.AddMonths(1);
 
-    private JsonObject Subscription(string id, string customer, string priceId, string status, string? orgId, bool cancelAtPeriodEnd = false)
+    private JsonObject Subscription(string id, string customer, string priceId, string status, string? orgId, bool cancelAtPeriodEnd = false, DateTimeOffset? cancelAt = null)
     {
         var price = Prices[priceId].DeepClone().AsObject();
         var interval = price["recurring"]!["interval"]!.GetValue<string>();
@@ -152,6 +156,7 @@ public sealed class FakeStripe : HttpMessageHandler
         {
             ["id"] = id, ["object"] = "subscription", ["status"] = status, ["customer"] = customer,
             ["cancel_at_period_end"] = cancelAtPeriodEnd,
+            ["cancel_at"] = cancelAt?.ToUnixTimeSeconds(),
             ["metadata"] = orgId is null ? new JsonObject() : new JsonObject { ["organization_id"] = orgId },
             ["items"] = new JsonObject
             {

@@ -82,7 +82,7 @@ test('assinar: botão abre o checkout e a volta ativa o plano (Stripe simulado n
     const billing = await (await page.request.get('/api/v1/organization/billing')).json();
     const essencial = billing.plans.find((p) => p.id === 'essencial');
     await route.fulfill({ json: { ...billing, onlineCheckout: true, plan: essencial, contractsLimit: 20,
-      subscription: { status: 'active', interval: 'year', cancelAtPeriodEnd: false, currentPeriodEnd: '2027-11-15T03:00:00Z' } } });
+      subscription: { status: 'active', interval: 'year', cancelAt: null, currentPeriodEnd: '2027-11-15T03:00:00Z' } } });
   });
 
   await page.goto('/settings.html');

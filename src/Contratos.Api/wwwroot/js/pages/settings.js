@@ -4,7 +4,7 @@ import { applyErrors, clearErrors, hideAlert, setBusy, showAlert } from '../ui/f
 import { toast } from '../ui/toast.js';
 import { h } from '../ui/dom.js';
 import { formatDate } from '../utils/format.js';
-import { channelsLabel, formatMoney, limitLabel, pct, periodEndLabel, renewsLabel } from '../utils/billing.js';
+import { channelsLabel, formatMoney, limitLabel, pct, renewsLabel } from '../utils/billing.js';
 
 const me = await requireUser();
 const form = document.getElementById('settings-form');
@@ -33,8 +33,10 @@ function meter(label, used, limit, hint) {
 
 function contractsHint(b) {
   const left = Math.max(0, b.contractsLimit - b.contractsUsed);
-  const renew = `Renova em ${renewsLabel(b.periodEnd)}.`;
-  if (left > 0) return `${left} ${left === 1 ? 'restante' : 'restantes'} neste ciclo (até ${periodEndLabel(b.periodEnd)}). ${renew}`;
+  const renew = b.subscription?.cancelAt
+    ? `O ciclo termina em ${renewsLabel(b.periodEnd)}; depois vale o plano Grátis.`
+    : `Renova em ${renewsLabel(b.periodEnd)}.`;
+  if (left > 0) return `${left} ${left === 1 ? 'restante' : 'restantes'} neste ciclo. ${renew}`;
   if (b.creditsAvailable > 0) return `Os contratos do plano acabaram neste ciclo; os próximos envios usam créditos avulsos. ${renew}`;
   return `Os contratos do plano acabaram neste ciclo e não há créditos avulsos: novos envios ficam bloqueados. ${renew}`;
 }
@@ -65,9 +67,10 @@ function subscriptionNotice(b) {
     return h('div', { class: 'alert alert--error billing-notice', role: 'alert' },
       'O último pagamento não foi aprovado. Atualize o cartão em "Gerenciar assinatura" para não perder o plano.');
   }
-  if (s.cancelAtPeriodEnd && s.currentPeriodEnd) {
-    return h('div', { class: 'alert alert--info billing-notice' },
-      `Assinatura cancelada: o plano ${b.plan.name} vale até ${periodEndLabel(s.currentPeriodEnd)} e depois volta para o Grátis.`);
+  if (s.cancelAt) {
+    return h('div', { class: 'alert alert--warning billing-notice' },
+      `Assinatura cancelada: o plano ${b.plan.name} vale até ${renewsLabel(s.cancelAt)} e depois a conta volta para o Grátis. `
+      + 'Mudou de ideia? Reative em "Gerenciar assinatura".');
   }
   return null;
 }
@@ -102,7 +105,9 @@ function renderBilling(b) {
     : null;
   manage?.addEventListener('click', () => goTo('/billing/portal', undefined, manage));
   const subLine = live(b) && b.subscription.interval
-    ? ` · assinatura ${b.subscription.interval === 'year' ? 'anual' : 'mensal'}${b.subscription.currentPeriodEnd && !b.subscription.cancelAtPeriodEnd ? `, renova em ${renewsLabel(b.subscription.currentPeriodEnd)}` : ''}`
+    ? ` · assinatura ${b.subscription.interval === 'year' ? 'anual' : 'mensal'}${
+      b.subscription.cancelAt ? `, cancela em ${renewsLabel(b.subscription.cancelAt)}`
+        : b.subscription.currentPeriodEnd ? `, renova em ${renewsLabel(b.subscription.currentPeriodEnd)}` : ''}`
     : '';
 
   document.querySelector('[data-billing]').replaceChildren(...[

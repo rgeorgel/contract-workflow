@@ -48,8 +48,11 @@ public sealed class StripeSubscriptionSync(AppDbContext db, StripeClient stripe,
                     ?? throw new InvalidOperationException($"Assinatura {sub.Id} sem itens.");
                 var plan = PlanOf(item.Price)
                     ?? throw new InvalidOperationException($"Preço {item.Price?.Id} da assinatura {sub.Id} não corresponde a um plano.");
+                var periodEnd = ToUtc(item.CurrentPeriodEnd);
+                // O portal agenda o cancelamento em cancel_at (versões novas da API) ou em cancel_at_period_end.
+                DateTimeOffset? cancelAt = sub.CancelAt is { } at ? ToUtc(at) : sub.CancelAtPeriodEnd ? periodEnd : null;
                 org.ApplySubscription(sub.Id, sub.Status, plan.Id, item.Price!.Recurring?.Interval ?? StripeCatalog.Monthly,
-                    ToUtc(item.CurrentPeriodStart), ToUtc(item.CurrentPeriodEnd), sub.CancelAtPeriodEnd);
+                    ToUtc(item.CurrentPeriodStart), periodEnd, cancelAt);
                 break;
             }
             case "canceled" or "unpaid" or "incomplete_expired":

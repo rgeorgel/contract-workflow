@@ -67,6 +67,7 @@
 .alert--error { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgb(184 35 42 / .18); }
 .alert--success { background: var(--color-success-soft); color: var(--color-success); border-color: rgb(18 117 72 / .18); }
 .alert--info { background: var(--color-info-soft); color: var(--color-info); border-color: rgb(39 71 214 / .18); }
+.alert--warning { background: var(--color-warning-soft); color: var(--color-warning); border-color: rgb(143 83 0 / .2); }
 .alert__body { display: grid; gap: 8px; }
 .alert .btn { justify-self: start; }
 

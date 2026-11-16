@@ -4,6 +4,8 @@ using Contratos.Domain.Billing;
 using Contratos.Domain.Organizations;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Contratos.Infrastructure.Billing;
@@ -30,17 +32,36 @@ internal sealed class BillingReader(AppDbContext db, UsageMeter meter, TimeProvi
             grants, PlanCatalogDto.Current.Plans, PlanCatalogDto.Current.Packs,
             string.IsNullOrWhiteSpace(options.Value.ContactEmail) ? null : options.Value.ContactEmail.Trim(),
             org.SubscriptionStatus is { } status
-                ? new SubscriptionDto(status, org.SubscriptionInterval, org.SubscriptionCancelAtPeriodEnd, org.HasLiveSubscription ? org.PlanPeriodEnd : null)
+                ? new SubscriptionDto(status, org.SubscriptionInterval, org.HasLiveSubscription ? org.SubscriptionCancelAt : null, org.HasLiveSubscription ? org.PlanPeriodEnd : null)
                 : null,
             stripe.Value.Enabled);
     }
 }
 
-internal sealed class BillingService(AppDbContext db, ICurrentTenant tenant, BillingReader reader) : IBillingService
+internal sealed class BillingService(
+    AppDbContext db, ICurrentTenant tenant, BillingReader reader, IServiceProvider services, ILogger<BillingService> logger) : IBillingService
 {
     public async Task<BillingDto> GetAsync(CancellationToken ct)
     {
         var org = await db.Organizations.SingleAsync(o => o.Id == tenant.RequireOrganizationId(), ct);
+
+        // Com assinatura, confere o estado atual no Stripe: quem volta do portal vê a mudança na hora,
+        // sem depender de o webhook já ter chegado. Se o Stripe não responder, mostra o que está salvo.
+        if (org.HasLiveSubscription && org.StripeSubscriptionId is { } subscriptionId
+            && services.GetService<Stripe.StripeSubscriptionSync>() is { } sync)
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(8));
+                org = await sync.SyncAsync(subscriptionId, timeout.Token) ?? org;
+            }
+            catch (Exception e) when (e is global::Stripe.StripeException or HttpRequestException or InvalidOperationException
+                || e is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                logger.LogWarning(e, "Não foi possível atualizar a assinatura {SubscriptionId} no Stripe", subscriptionId);
+            }
+        }
         return await reader.BuildAsync(org, ct);
     }
 }
