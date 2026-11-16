@@ -66,6 +66,9 @@ public sealed class Organization
     /// <summary>Assinatura que ainda dá direito ao plano (inclui pagamento atrasado, que tem tolerância).</summary>
     public bool HasLiveSubscription => SubscriptionStatus is "active" or "trialing" or "past_due";
 
+    /// <summary>Cobrança da assinatura recusada: a conta fica bloqueada (sem tolerância) até o pagamento entrar.</summary>
+    public bool IsPaymentOverdue => SubscriptionStatus == "past_due";
+
     public void SetStripeCustomer(string customerId) => StripeCustomerId = customerId;
 
     /// <summary>Assinatura vigente: plano e ciclo passam a ser os do Stripe.</summary>

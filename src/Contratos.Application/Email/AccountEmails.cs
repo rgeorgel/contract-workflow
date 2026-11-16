@@ -72,6 +72,16 @@ public static class AccountEmails
             footer: "Você recebe este aviso por ser Admin da conta.");
     }
 
+    /// <summary>Aviso aos Admins: a cobrança da assinatura foi recusada e a conta está bloqueada.</summary>
+    public static EmailMessage PaymentOverdue(string productName, string to, string name, string organizationName, string planName, string link) =>
+        Build(productName, to, name,
+            subject: $"Pagamento recusado: novos contratos de {organizationName} estão bloqueados",
+            intro: $"A cobrança do plano {WebUtility.HtmlEncode(planName)} de <strong>{WebUtility.HtmlEncode(organizationName)}</strong> não foi aprovada no cartão. Enquanto o pagamento estiver pendente, ninguém da equipe consegue criar nem enviar contratos, criar templates ou convidar usuários. Os contratos existentes continuam disponíveis e os já enviados seguem recebendo assinaturas.",
+            introText: $"A cobrança do plano {planName} de {organizationName} não foi aprovada no cartão. Enquanto o pagamento estiver pendente, ninguém da equipe consegue criar nem enviar contratos, criar templates ou convidar usuários. Os contratos existentes continuam disponíveis e os já enviados seguem recebendo assinaturas.",
+            buttonLabel: "Atualizar o cartão",
+            link: link,
+            footer: "Em Configurações, use \"Gerenciar assinatura\" para trocar o cartão e pagar a fatura em aberto. Tudo volta a funcionar assim que o pagamento é aprovado.");
+
     private static EmailMessage Build(string productName, string to, string name, string subject,
         string intro, string introText, string buttonLabel, string link, string footer)
     {

@@ -17,7 +17,8 @@ public sealed record InviteLookupRequest(Guid UserId, string? Token);
 public sealed record ResetPasswordRequest(Guid UserId, string? Token, string? Password);
 public sealed record CsrfResponse(string Token);
 public sealed record AcceptedResponse(string Message);
-public sealed record OrganizationSummary(Guid Id, string Name, string Slug);
+/// <param name="PaymentOverdue">Assinatura com pagamento recusado: criar contratos, templates e usuários fica bloqueado.</param>
+public sealed record OrganizationSummary(Guid Id, string Name, string Slug, bool PaymentOverdue);
 public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization);
 
 internal static class AuthEndpoints
@@ -127,7 +128,7 @@ internal static class AuthEndpoints
         var me = await db.Users
             .Where(u => u.Id == userId && u.DeactivatedAt == null)
             .Join(db.Organizations, u => u.OrganizationId, o => o.Id, (u, o) => new MeResponse(
-                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug)))
+                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug, o.SubscriptionStatus == "past_due")))
             .SingleOrDefaultAsync(ct);
 
         return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);

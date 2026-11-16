@@ -21,6 +21,7 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
         b.Property(o => o.PlanId).HasMaxLength(30).HasDefaultValue(Contratos.Domain.Billing.Plans.FreeId).IsRequired();
         b.Ignore(o => o.Plan);
         b.Ignore(o => o.HasLiveSubscription);
+        b.Ignore(o => o.IsPaymentOverdue);
         b.Property(o => o.StripeCustomerId).HasMaxLength(100);
         b.Property(o => o.StripeSubscriptionId).HasMaxLength(100);
         b.Property(o => o.SubscriptionStatus).HasMaxLength(30);

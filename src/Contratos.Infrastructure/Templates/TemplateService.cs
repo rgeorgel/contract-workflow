@@ -65,6 +65,8 @@ internal sealed class TemplateService(
         }
         if (!errors.IsEmpty)
             return Error.Validation(errors);
+        if (await meter.CheckNotOverdueAsync(tenant.RequireOrganizationId(), "criar templates", ct) is { } overdue)
+            return overdue;
         if (await meter.CheckTemplateAsync(tenant.RequireOrganizationId(), ct) is { } limit)
             return limit;
 
@@ -150,6 +152,8 @@ internal sealed class TemplateService(
         if (source is null)
             return NotFound;
 
+        if (await meter.CheckNotOverdueAsync(source.OrganizationId, "criar templates", ct) is { } overdue)
+            return overdue;
         if (await meter.CheckTemplateAsync(source.OrganizationId, ct) is { } limit)
             return limit;
 
@@ -179,6 +183,8 @@ internal sealed class TemplateService(
             template.Archive();
         else if (template.ArchivedAt is not null)
         {
+            if (await meter.CheckNotOverdueAsync(template.OrganizationId, "reativar templates", ct) is { } overdue)
+                return overdue;
             if (await meter.CheckTemplateAsync(template.OrganizationId, ct) is { } limit)
                 return limit;
             template.Unarchive();

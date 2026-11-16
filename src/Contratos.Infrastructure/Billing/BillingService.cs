@@ -34,7 +34,8 @@ internal sealed class BillingReader(AppDbContext db, UsageMeter meter, TimeProvi
             org.SubscriptionStatus is { } status
                 ? new SubscriptionDto(status, org.SubscriptionInterval, org.HasLiveSubscription ? org.SubscriptionCancelAt : null, org.HasLiveSubscription ? org.PlanPeriodEnd : null)
                 : null,
-            stripe.Value.Enabled);
+            stripe.Value.Enabled,
+            org.IsPaymentOverdue);
     }
 }
 

@@ -41,6 +41,12 @@ internal static class OrganizationEndpoints
         billing.MapPost("/portal", async (ISubscriptionService subs, CancellationToken ct) =>
                 (await subs.PortalAsync(ct)).ToHttp())
             .WithSummary("Abre o portal do Stripe: trocar plano, cartão, cancelar, faturas (Admin)");
+        billing.MapPost("/packs/checkout", async (BuyPackRequest req, ISubscriptionService subs, CancellationToken ct) =>
+                (await subs.BuyPackAsync(req, ct)).ToHttp())
+            .WithSummary("Abre o pagamento (só cartão) de um pacote de contratos avulsos (Admin)");
+        billing.MapPost("/packs/confirm", async (ConfirmCheckoutRequest req, ISubscriptionService subs, CancellationToken ct) =>
+                (await subs.ConfirmPackAsync(req, ct)).ToHttp())
+            .WithSummary("Confere o pagamento do pacote na volta e libera os créditos (Admin)");
 
         return api;
     }

@@ -62,11 +62,16 @@ async function goTo(path, body, button) {
 
 function subscriptionNotice(b) {
   const s = b.subscription;
-  if (!s || !live(b)) return null;
-  if (s.status === 'past_due') {
+  if (b.paymentOverdue) {
     return h('div', { class: 'alert alert--error billing-notice', role: 'alert' },
-      'O último pagamento não foi aprovado. Atualize o cartão em "Gerenciar assinatura" para não perder o plano.');
+      h('div', { class: 'alert__body' },
+        h('strong', {}, 'O pagamento da assinatura não foi aprovado.'),
+        h('span', {}, 'Enquanto ele estiver pendente, criar e enviar contratos, criar templates e convidar usuários fica bloqueado. Os contratos existentes continuam disponíveis.'),
+        h('span', {}, isAdmin(me)
+          ? 'Atualize o cartão e pague a fatura em "Gerenciar assinatura"; tudo volta a funcionar assim que o pagamento for aprovado.'
+          : 'Peça a um Admin da sua empresa para atualizar o cartão.')));
   }
+  if (!s || !live(b)) return null;
   if (s.cancelAt) {
     return h('div', { class: 'alert alert--warning billing-notice' },
       `Assinatura cancelada: o plano ${b.plan.name} vale até ${renewsLabel(s.cancelAt)} e depois a conta volta para o Grátis. `
@@ -144,10 +149,20 @@ function renderBilling(b) {
   const toggle = document.querySelector('[data-interval]');
   toggle.hidden = !(canPay(b) && !live(b));
 
-  document.querySelector('[data-packs]').replaceChildren(...b.packs.map((p) => h('tr', {},
-    h('td', {}, `${p.quantity} ${p.quantity === 1 ? 'contrato' : 'contratos'}`),
-    h('td', {}, formatMoney(p.price)),
-    h('td', {}, formatMoney(p.unitPrice)))));
+  document.querySelector('[data-pack-actions]').hidden = !canPay(b);
+  document.querySelector('[data-packs]').replaceChildren(...b.packs.map((p) => {
+    const label = `${p.quantity} ${p.quantity === 1 ? 'contrato' : 'contratos'}`;
+    let buy = null;
+    if (canPay(b)) {
+      buy = h('button', { type: 'button', class: 'btn btn--secondary btn--sm', 'aria-label': `Comprar pacote de ${label}` }, 'Comprar');
+      buy.addEventListener('click', () => goTo('/billing/packs/checkout', { quantity: p.quantity }, buy));
+    }
+    return h('tr', {},
+      h('td', {}, label),
+      h('td', {}, formatMoney(p.price)),
+      h('td', {}, formatMoney(p.unitPrice)),
+      buy ? h('td', { class: 'pack-table__action' }, buy) : null);
+  }));
 
   const contact = document.querySelector('[data-contact]');
   if (b.onlineCheckout) {
@@ -179,9 +194,24 @@ document.querySelector('[data-interval]').addEventListener('click', (e) => {
   renderBilling(lastBilling);
 });
 
-/** Volta do Stripe Checkout: ativa o plano na hora (o webhook confirma de novo depois). */
+/** Volta do Stripe Checkout: ativa o plano (ou libera o pacote) na hora; o webhook confirma de novo depois. */
 async function handleCheckoutReturn() {
   const params = new URLSearchParams(location.search);
+  const pack = params.get('pack');
+  if (pack) {
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (pack === 'cancelled') { toast('Compra cancelada. Nada foi cobrado.'); return null; }
+    try {
+      const before = await api('/organization/billing');
+      const b = await api('/billing/packs/confirm', { method: 'POST', body: { sessionId: params.get('session_id') } });
+      const added = b.creditsAvailable - before.creditsAvailable;
+      toast(added > 0 ? `Pacote liberado: ${added} ${added === 1 ? 'contrato' : 'contratos'} a mais.` : 'Pagamento recebido. Os contratos entram assim que o Stripe confirmar.');
+      return b;
+    } catch (err) {
+      toast(err.message, 'error');
+      return null;
+    }
+  }
   const result = params.get('checkout');
   if (!result) return null;
   history.replaceState(null, '', location.pathname);

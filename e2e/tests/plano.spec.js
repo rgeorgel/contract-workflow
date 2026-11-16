@@ -97,3 +97,48 @@ test('assinar: botão abre o checkout e a volta ativa o plano (Stripe simulado n
   await expect(page.getByRole('region', { name: 'Plano e uso' })).toContainText('assinatura anual, renova em 15/11');
   await expect(page.getByRole('region', { name: 'Plano e uso' })).not.toContainText('null');
 });
+
+test('pacote avulso: comprar abre o pagamento e a volta libera os contratos (Stripe simulado)', async ({ page, request }) => {
+  await signUp(page, request, { plan: 'gratis' });
+  let bought = null;
+  let credited = false;
+  await page.route('**/api/v1/organization/billing', async (route) => {
+    const res = await route.fetch();
+    const b = await res.json();
+    await route.fulfill({ response: res, json: { ...b, onlineCheckout: true, ...(credited ? { creditsAvailable: 10 } : {}) } });
+  });
+  await page.route('**/api/v1/billing/packs/checkout', async (route) => {
+    bought = route.request().postDataJSON();
+    await route.fulfill({ json: { url: '/settings.html?pack=success&session_id=cs_test_e2e#pacotes' } });
+  });
+  await page.route('**/api/v1/billing/packs/confirm', async (route) => {
+    credited = true;
+    const b = await (await page.request.get('/api/v1/organization/billing')).json();
+    await route.fulfill({ json: { ...b, onlineCheckout: true, creditsAvailable: 10 } });
+  });
+
+  await page.goto('/settings.html');
+  await page.getByRole('button', { name: 'Comprar pacote de 10 contratos' }).click();
+
+  await expect(page.getByText('Pacote liberado: 10 contratos a mais.')).toBeVisible();
+  expect(bought).toEqual({ quantity: 10 });
+  await expect(page).toHaveURL(/\/settings\.html#pacotes$/);
+  await expect(page.locator('[data-credits]')).toHaveText('10');
+});
+
+test('pagamento atrasado: as páginas continuam abertas, com o aviso de bloqueio no topo', async ({ page, request }) => {
+  await signUp(page, request, { plan: 'gratis' });
+  // O status vem do Stripe; aqui a resposta de /auth/me é simulada com a assinatura atrasada.
+  await page.route('**/api/v1/auth/me', async (route) => {
+    const res = await route.fetch();
+    const me = await res.json();
+    await route.fulfill({ response: res, json: { ...me, organization: { ...me.organization, paymentOverdue: true } } });
+  });
+
+  await page.goto('/dashboard.html');
+  const banner = page.getByRole('alert').filter({ hasText: 'Pagamento da assinatura pendente' });
+  await expect(banner).toContainText('os contratos existentes continuam disponíveis');
+  await expect(page).toHaveURL(/\/dashboard\.html$/); // não manda para outra página
+  await banner.getByRole('link', { name: 'Atualizar pagamento' }).click();
+  await expect(page).toHaveURL(/\/settings\.html$/);
+});

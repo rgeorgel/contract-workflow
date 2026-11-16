@@ -330,6 +330,9 @@ public sealed class BackgroundProcessor(
                 db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.SignedDocumentStored));
                 break;
             }
+            case OutboxTypes.PaymentOverdueAlert:
+                await SendPaymentOverdueAlertAsync(services, db, message.Read<PaymentOverdueMessage>(), ct);
+                break;
             case OutboxTypes.UsageAlert:
                 await SendUsageAlertAsync(services, db, message.Read<UsageAlertMessage>(), ct);
                 break;
@@ -345,11 +348,7 @@ public sealed class BackgroundProcessor(
         var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == msg.OrganizationId, ct);
         if (org is null)
             return;
-        var admins = await db.Users
-            .Where(u => u.OrganizationId == org.Id && u.Role == Domain.Users.UserRole.Admin
-                && u.DeactivatedAt == null && u.PasswordHash != null && u.EmailConfirmed)
-            .Select(u => new { u.Email, u.Name })
-            .ToListAsync(ct);
+        var admins = await ActiveAdminsAsync(db, org.Id, ct);
         if (admins.Count == 0)
             return;
 
@@ -362,9 +361,29 @@ public sealed class BackgroundProcessor(
         var link = $"{app.PublicBaseUrl.TrimEnd('/')}/settings.html";
         var planName = Domain.Billing.Plans.Get(msg.PlanId).Name;
         foreach (var admin in admins)
-            await email.SendAsync(AccountEmails.PlanUsage(app.ProductName, admin.Email!, admin.Name, org.Name,
+            await email.SendAsync(AccountEmails.PlanUsage(app.ProductName, admin.Email, admin.Name, org.Name,
                 planName, msg.Used, msg.Limit, credits, msg.PeriodEnd, link), ct);
     }
+
+    private static async Task SendPaymentOverdueAlertAsync(IServiceProvider services, AppDbContext db, PaymentOverdueMessage msg, CancellationToken ct)
+    {
+        var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == msg.OrganizationId, ct);
+        if (org is not { IsPaymentOverdue: true })
+            return; // já foi pago antes de o aviso sair
+        var app = services.GetRequiredService<IOptions<AppOptions>>().Value;
+        var email = services.GetRequiredService<IEmailSender>();
+        var link = $"{app.PublicBaseUrl.TrimEnd('/')}/settings.html";
+        foreach (var admin in await ActiveAdminsAsync(db, org.Id, ct))
+            await email.SendAsync(AccountEmails.PaymentOverdue(app.ProductName, admin.Email, admin.Name, org.Name, org.Plan.Name, link), ct);
+    }
+
+    private static async Task<List<(string Email, string Name)>> ActiveAdminsAsync(AppDbContext db, Guid organizationId, CancellationToken ct) =>
+        (await db.Users
+            .Where(u => u.OrganizationId == organizationId && u.Role == Domain.Users.UserRole.Admin
+                && u.DeactivatedAt == null && u.PasswordHash != null && u.EmailConfirmed)
+            .Select(u => new { u.Email, u.Name })
+            .ToListAsync(ct))
+        .Select(u => (u.Email!, u.Name)).ToList();
 
     // ---------- Expiração ----------
 

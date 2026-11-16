@@ -212,6 +212,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<Billing.Stripe.StripeCatalog>();
         services.AddScoped<Billing.Stripe.StripeSubscriptionSync>();
+        services.AddScoped<Billing.Stripe.StripeCreditPacks>();
         services.AddScoped<Billing.Stripe.StripeWebhookReceiver>();
         services.AddScoped<ISubscriptionService, Billing.Stripe.StripeSubscriptionService>();
     }

@@ -3,6 +3,7 @@ using Contratos.Application.Billing;
 using Contratos.Application.Common;
 using Contratos.Domain.Billing;
 using Contratos.Domain.Organizations;
+using Contratos.Infrastructure.Messaging;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,8 @@ namespace Contratos.Infrastructure.Billing.Stripe;
 /// Copia o estado de uma assinatura do Stripe para a organização. Sempre busca a assinatura atual na API
 /// (nunca confia no corpo do webhook): eventos fora de ordem ou repetidos dão o mesmo resultado.
 /// </summary>
-public sealed class StripeSubscriptionSync(AppDbContext db, StripeClient stripe, ILogger<StripeSubscriptionSync> logger)
+public sealed class StripeSubscriptionSync(
+    AppDbContext db, StripeClient stripe, StripeCreditPacks packs, ILogger<StripeSubscriptionSync> logger)
 {
     public const string OrganizationMetadata = "organization_id";
 
@@ -40,6 +42,7 @@ public sealed class StripeSubscriptionSync(AppDbContext db, StripeClient stripe,
         }
 
         org.SetStripeCustomer(sub.CustomerId);
+        var wasOverdue = org.IsPaymentOverdue;
         switch (sub.Status)
         {
             case "active" or "trialing" or "past_due":
@@ -64,6 +67,9 @@ public sealed class StripeSubscriptionSync(AppDbContext db, StripeClient stripe,
                     org.EndSubscription(sub.Status);
                 break;
         }
+        // Acabou de atrasar: avisa os Admins que a conta está bloqueada (uma vez por atraso).
+        if (org.IsPaymentOverdue && !wasOverdue)
+            db.Enqueue(Messaging.OutboxTypes.PaymentOverdueAlert, new Messaging.PaymentOverdueMessage(org.Id));
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Assinatura {SubscriptionId} sincronizada: {Status}, plano {Plan}", sub.Id, sub.Status, org.PlanId);
         return org;
@@ -109,6 +115,14 @@ public sealed class StripeSubscriptionSync(AppDbContext db, StripeClient stripe,
         var root = doc.RootElement;
         var type = root.GetProperty("type").GetString();
         var obj = root.GetProperty("data").GetProperty("object");
+
+        // Pacote avulso pago: busca a sessão atual e libera os créditos (uma vez por sessão).
+        if (type == "checkout.session.completed" && Str(obj, "mode") == "payment" && Str(obj, "id") is { } sessionId)
+        {
+            await packs.GrantAsync(await stripe.V1.Checkout.Sessions.GetAsync(sessionId, cancellationToken: ct), ct);
+            return;
+        }
+
         var subscriptionId = SubscriptionIdOf(type, obj);
         if (subscriptionId is null)
         {
@@ -146,6 +160,7 @@ internal sealed class StripeSubscriptionService(
     StripeClient stripe,
     StripeCatalog catalog,
     StripeSubscriptionSync sync,
+    StripeCreditPacks packs,
     BillingReader reader,
     IOptions<AppOptions> app,
     ILogger<StripeSubscriptionService> logger) : ISubscriptionService
@@ -170,19 +185,7 @@ internal sealed class StripeSubscriptionService(
         try
         {
             var synced = await catalog.EnsureAsync(ct);
-            if (org.StripeCustomerId is null)
-            {
-                var email = await db.Users.Where(u => u.Id == tenant.UserId).Select(u => u.Email).SingleAsync(ct);
-                var customer = await stripe.V1.Customers.CreateAsync(new CustomerCreateOptions
-                {
-                    Name = org.Name,
-                    Email = email,
-                    PreferredLocales = ["pt-BR"],
-                    Metadata = new() { [StripeSubscriptionSync.OrganizationMetadata] = org.Id.ToString() },
-                }, new RequestOptions { IdempotencyKey = $"customer-{org.Id}" }, ct);
-                org.SetStripeCustomer(customer.Id);
-                await db.SaveChangesAsync(ct);
-            }
+            await EnsureCustomerAsync(org, ct);
 
             var metadata = new Dictionary<string, string> { [StripeSubscriptionSync.OrganizationMetadata] = org.Id.ToString() };
             var session = await stripe.V1.Checkout.Sessions.CreateAsync(new Checkout.SessionCreateOptions
@@ -211,25 +214,118 @@ internal sealed class StripeSubscriptionService(
         }
     }
 
-    public async Task<Result<BillingDto>> ConfirmCheckoutAsync(ConfirmCheckoutRequest req, CancellationToken ct)
+    public async Task<Result<RedirectDto>> BuyPackAsync(BuyPackRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.SessionId) || !req.SessionId.StartsWith("cs_", StringComparison.Ordinal))
-            return Error.Validation("sessionId", "Sessão de pagamento inválida.");
+        var pack = StripeCreditPacks.Find(req.Quantity);
+        if (pack is null)
+            return Error.Validation("quantity", $"Escolha um pacote: {string.Join(", ", Plans.Packs.Select(p => p.Quantity))} contratos.");
 
-        var orgId = tenant.RequireOrganizationId();
-        Checkout.Session session;
+        var org = await db.Organizations.SingleAsync(o => o.Id == tenant.RequireOrganizationId(), ct);
         try
         {
-            session = await stripe.V1.Checkout.Sessions.GetAsync(req.SessionId, cancellationToken: ct);
+            await EnsureCustomerAsync(org, ct);
+            var label = $"Pacote de {pack.Quantity} {(pack.Quantity == 1 ? "contrato" : "contratos")}";
+            var metadata = new Dictionary<string, string>
+            {
+                [StripeSubscriptionSync.OrganizationMetadata] = org.Id.ToString(),
+                [StripeCreditPacks.KindMetadata] = StripeCreditPacks.Kind,
+                [StripeCreditPacks.QuantityMetadata] = pack.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            };
+            var session = await stripe.V1.Checkout.Sessions.CreateAsync(new Checkout.SessionCreateOptions
+            {
+                Mode = "payment",
+                Customer = org.StripeCustomerId,
+                ClientReferenceId = org.Id.ToString(),
+                // Preço vem do catálogo em código, não de um preço cadastrado no painel.
+                LineItems =
+                [
+                    new()
+                    {
+                        Quantity = 1,
+                        PriceData = new()
+                        {
+                            Currency = "brl",
+                            UnitAmount = StripeCatalog.Cents(pack.Price),
+                            ProductData = new()
+                            {
+                                Name = label,
+                                Description = $"Válido por {Plans.CreditValidityMonths} meses. Usado depois que os contratos do plano acabam no ciclo.",
+                            },
+                        },
+                    },
+                ],
+                AllowedPaymentMethodTypes = ["card"],
+                Locale = "pt-BR",
+                BillingAddressCollection = "required",
+                TaxIdCollection = new() { Enabled = true },
+                CustomerUpdate = new() { Name = "auto", Address = "auto" },
+                Metadata = metadata,
+                PaymentIntentData = new() { Metadata = metadata, Description = label },
+                SuccessUrl = $"{SettingsUrl}?pack=success&session_id={{CHECKOUT_SESSION_ID}}#pacotes",
+                CancelUrl = $"{SettingsUrl}?pack=cancelled#pacotes",
+            }, cancellationToken: ct);
+            return new RedirectDto(session.Url);
+        }
+        catch (StripeException e)
+        {
+            logger.LogError(e, "Stripe recusou o checkout de pacote da organização {OrgId}: {Code}", org.Id, e.StripeError?.Code);
+            return Error.Conflict("Não foi possível abrir o pagamento agora. Tente de novo em instantes.", "payment_unavailable");
+        }
+    }
+
+    public async Task<Result<BillingDto>> ConfirmPackAsync(ConfirmCheckoutRequest req, CancellationToken ct)
+    {
+        var session = await OwnSessionAsync(req.SessionId, ct);
+        if (!session.IsSuccess)
+            return session.Error!;
+        await packs.GrantAsync(session.Value!, ct);
+        var org = await db.Organizations.SingleAsync(o => o.Id == tenant.RequireOrganizationId(), ct);
+        return await reader.BuildAsync(org, ct);
+    }
+
+    /// <summary>Sessão de checkout desta organização (a de outra empresa responde como inexistente).</summary>
+    private async Task<Result<Checkout.Session>> OwnSessionAsync(string? sessionId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId) || !sessionId.StartsWith("cs_", StringComparison.Ordinal))
+            return Error.Validation("sessionId", "Sessão de pagamento inválida.");
+        try
+        {
+            var session = await stripe.V1.Checkout.Sessions.GetAsync(sessionId, cancellationToken: ct);
+            return session.ClientReferenceId == tenant.RequireOrganizationId().ToString()
+                ? session
+                : Error.NotFound("Sessão de pagamento não encontrada.");
         }
         catch (StripeException e) when (e.StripeError?.Code == "resource_missing")
         {
             return Error.NotFound("Sessão de pagamento não encontrada.");
         }
+    }
+
+    private async Task EnsureCustomerAsync(Domain.Organizations.Organization org, CancellationToken ct)
+    {
+        if (org.StripeCustomerId is not null)
+            return;
+        var email = await db.Users.Where(u => u.Id == tenant.UserId).Select(u => u.Email).SingleAsync(ct);
+        var customer = await stripe.V1.Customers.CreateAsync(new CustomerCreateOptions
+        {
+            Name = org.Name,
+            Email = email,
+            PreferredLocales = ["pt-BR"],
+            Metadata = new() { [StripeSubscriptionSync.OrganizationMetadata] = org.Id.ToString() },
+        }, new RequestOptions { IdempotencyKey = $"customer-{org.Id}" }, ct);
+        org.SetStripeCustomer(customer.Id);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<Result<BillingDto>> ConfirmCheckoutAsync(ConfirmCheckoutRequest req, CancellationToken ct)
+    {
         // A sessão precisa ser desta organização: não dá para "ativar" com a sessão de outra empresa.
-        if (session.ClientReferenceId != orgId.ToString())
-            return Error.NotFound("Sessão de pagamento não encontrada.");
-        if (session.Status == "complete" && session.SubscriptionId is { } subscriptionId)
+        var result = await OwnSessionAsync(req.SessionId, ct);
+        if (!result.IsSuccess)
+            return result.Error!;
+        var session = result.Value!;
+        var orgId = tenant.RequireOrganizationId();
+        if (session.Mode == "subscription" && session.Status == "complete" && session.SubscriptionId is { } subscriptionId)
             await sync.SyncAsync(subscriptionId, ct);
 
         var org = await db.Organizations.SingleAsync(o => o.Id == orgId, ct);
@@ -268,4 +364,6 @@ internal sealed class DisabledSubscriptionService : ISubscriptionService
     public Task<Result<RedirectDto>> CheckoutAsync(CheckoutRequest request, CancellationToken ct) => Task.FromResult<Result<RedirectDto>>(Disabled);
     public Task<Result<BillingDto>> ConfirmCheckoutAsync(ConfirmCheckoutRequest request, CancellationToken ct) => Task.FromResult<Result<BillingDto>>(Disabled);
     public Task<Result<RedirectDto>> PortalAsync(CancellationToken ct) => Task.FromResult<Result<RedirectDto>>(Disabled);
+    public Task<Result<RedirectDto>> BuyPackAsync(BuyPackRequest request, CancellationToken ct) => Task.FromResult<Result<RedirectDto>>(Disabled);
+    public Task<Result<BillingDto>> ConfirmPackAsync(ConfirmCheckoutRequest request, CancellationToken ct) => Task.FromResult<Result<BillingDto>>(Disabled);
 }

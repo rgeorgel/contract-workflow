@@ -158,6 +158,25 @@ internal sealed class UsageMeter(AppDbContext db, TimeProvider clock)
     public static string ChannelNotInPlan(Plan plan, DeliveryMethod m) =>
         $"Envio por {ChannelLabel(m)} não faz parte do plano {plan.Name}. Ele está disponível a partir do plano {Plans.CheapestWith(m).Name}.";
 
+    // ---------- Pagamento atrasado ----------
+
+    public const string PaymentOverdueCode = "payment_overdue";
+
+    /// <summary>
+    /// Pagamento da assinatura recusado: nada novo (contrato, template, usuário) até regularizar. O que já existe
+    /// continua acessível; os contratos enviados já foram pagos pela assinatura ou pelos créditos da época.
+    /// </summary>
+    public async Task<Error?> CheckNotOverdueAsync(Guid organizationId, string what, CancellationToken ct)
+    {
+        var status = await db.Organizations.Where(o => o.Id == organizationId).Select(o => o.SubscriptionStatus).SingleAsync(ct);
+        return status == "past_due" ? PaymentOverdue(what) : null;
+    }
+
+    public static Error PaymentOverdue(string what) => Error.PaymentRequired(
+        $"O pagamento da assinatura não foi aprovado: {what} fica bloqueado até ele ser regularizado. "
+        + "Os contratos existentes continuam disponíveis. Um Admin atualiza o cartão em Configurações, \"Gerenciar assinatura\".",
+        PaymentOverdueCode);
+
     // ---------- Usuários e templates ----------
 
     public async Task<int> CountSeatsAsync(Guid organizationId, CancellationToken ct) =>

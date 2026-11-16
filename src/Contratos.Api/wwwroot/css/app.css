@@ -200,6 +200,7 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .plan-card__features { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: .875rem; }
 .billing-subtitle { font-size: 1rem; margin-bottom: 4px; }
 .pack-table { margin-top: 12px; }
+.pack-table__action { text-align: right; }
 .pack-table td, .pack-table th { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 480px) { .pack-table td, .pack-table th { padding-left: 8px; padding-right: 8px; } }
 .billing-contact { margin-top: 16px; color: var(--color-muted); font-size: .9rem; }
@@ -208,3 +209,10 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .usage-note { margin-top: 16px; }
 .radio-card.is-disabled { opacity: .6; cursor: not-allowed; background: var(--color-surface); }
 .radio-card__hint { display: block; font-size: .78rem; color: var(--color-muted); }
+
+/* Pagamento da assinatura pendente (app-nav) */
+.overdue-banner { background: var(--color-danger-soft); color: var(--color-danger); border-bottom: 1px solid rgb(184 35 42 / .18); font-size: .9rem; }
+.overdue-banner__inner { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
+.overdue-banner__inner > span { flex: 1 1 420px; }
+.overdue-banner__btn { background: var(--color-danger); color: #fff; flex: none; }
+.overdue-banner__btn:hover { background: #9a1d23; color: #fff; }

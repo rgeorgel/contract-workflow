@@ -101,6 +101,10 @@ public sealed class FakeStripe : HttpMessageHandler
                     ["url"] = $"https://checkout.stripe.test/c/pay/{id}", ["subscription"] = null,
                     ["line_item_price"] = form.GetValueOrDefault("line_items[0][price]"),
                     ["subscription_metadata_org"] = form.GetValueOrDefault("subscription_data[metadata][organization_id]"),
+                    ["metadata"] = Metadata(form),
+                    ["payment_status"] = "unpaid",
+                    ["currency"] = form.GetValueOrDefault("line_items[0][price_data][currency]") ?? "brl",
+                    ["amount_total"] = long.TryParse(form.GetValueOrDefault("line_items[0][price_data][unit_amount]"), out var amount) ? amount : null,
                 };
                 Sessions[id] = session;
                 return Ok(session);
@@ -126,6 +130,13 @@ public sealed class FakeStripe : HttpMessageHandler
         session["status"] = "complete";
         session["subscription"] = subscriptionId;
         return subscriptionId;
+    }
+
+    /// <summary>O cliente pagou o pacote avulso: a sessão de pagamento único completa e fica paga.</summary>
+    public void CompletePackCheckout(string sessionId)
+    {
+        Sessions[sessionId]["status"] = "complete";
+        Sessions[sessionId]["payment_status"] = "paid";
     }
 
     /// <summary>Muda a assinatura como o portal ou a cobrança fariam (status, preço, cancelamento).</summary>

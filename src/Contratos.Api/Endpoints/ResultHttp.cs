@@ -17,6 +17,7 @@ internal static class ResultHttp
             ErrorKind.Conflict => StatusCodes.Status409Conflict,
             ErrorKind.Forbidden => StatusCodes.Status403Forbidden,
             ErrorKind.PreconditionFailed => StatusCodes.Status412PreconditionFailed,
+            ErrorKind.PaymentRequired => StatusCodes.Status402PaymentRequired,
             _ => StatusCodes.Status400BadRequest,
         };
         return TypedResults.Problem(statusCode: status, title: e.Title, extensions: extensions);

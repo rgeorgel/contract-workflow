@@ -51,7 +51,8 @@ public sealed record BillingDto(
     IReadOnlyList<CreditPackDto> Packs,
     string? ContactEmail,
     SubscriptionDto? Subscription,
-    bool OnlineCheckout);
+    bool OnlineCheckout,
+    bool PaymentOverdue);
 
 public interface IBillingService
 {
@@ -65,6 +66,7 @@ public interface IBillingService
 public sealed record CheckoutRequest(string? Plan, string? Interval);
 public sealed record ConfirmCheckoutRequest(string? SessionId);
 public sealed record RedirectDto(string Url);
+public sealed record BuyPackRequest(int? Quantity);
 
 public interface ISubscriptionService
 {
@@ -74,6 +76,10 @@ public interface ISubscriptionService
     Task<Result<BillingDto>> ConfirmCheckoutAsync(ConfirmCheckoutRequest request, CancellationToken ct);
     /// <summary>Portal do Stripe: trocar de plano, trocar cartão, cancelar, ver faturas.</summary>
     Task<Result<RedirectDto>> PortalAsync(CancellationToken ct);
+    /// <summary>Pagamento único (só cartão) de um pacote de contratos avulsos.</summary>
+    Task<Result<RedirectDto>> BuyPackAsync(BuyPackRequest request, CancellationToken ct);
+    /// <summary>Na volta do pagamento do pacote: confere a sessão e libera os créditos na hora.</summary>
+    Task<Result<BillingDto>> ConfirmPackAsync(ConfirmCheckoutRequest request, CancellationToken ct);
 }
 
 // ---------- Operação da plataforma (sem tenant) ----------

@@ -60,6 +60,8 @@ internal sealed class UserService(
             return ToItem(existing);
         }
 
+        if (await meter.CheckNotOverdueAsync(orgId, "convidar usuários", ct) is { } overdue)
+            return overdue;
         if (await meter.CheckSeatAsync(orgId, ct) is { } noSeat)
             return noSeat;
 
@@ -126,6 +128,8 @@ internal sealed class UserService(
                 return Error.Conflict("Convite pendente: cancele o convite em vez de desativar.", "pending_invite");
             if (active == (user.DeactivatedAt is not null))
             {
+                if (active && await meter.CheckNotOverdueAsync(user.OrganizationId, "reativar usuários", ct) is { } overdue)
+                    return overdue;
                 if (active && await meter.CheckSeatAsync(user.OrganizationId, ct) is { } noSeat)
                     return noSeat;
                 user.DeactivatedAt = active ? null : DateTimeOffset.UtcNow;

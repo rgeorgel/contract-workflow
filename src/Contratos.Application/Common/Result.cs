@@ -1,12 +1,13 @@
 namespace Contratos.Application.Common;
 
-public enum ErrorKind { Validation, NotFound, Conflict, Forbidden, PreconditionFailed }
+public enum ErrorKind { Validation, NotFound, Conflict, Forbidden, PreconditionFailed, PaymentRequired }
 
 public sealed record Error(ErrorKind Kind, string Title, string? Code = null, ValidationErrors? Fields = null)
 {
     public static Error NotFound(string title = "Registro não encontrado.") => new(ErrorKind.NotFound, title, "not_found");
     public static Error Conflict(string title, string code) => new(ErrorKind.Conflict, title, code);
     public static Error Forbidden(string title, string code = "forbidden") => new(ErrorKind.Forbidden, title, code);
+    public static Error PaymentRequired(string title, string code) => new(ErrorKind.PaymentRequired, title, code);
     public static Error Validation(ValidationErrors fields, string title = "Confira os dados informados.") =>
         new(ErrorKind.Validation, title, "validation", fields);
     public static Error Validation(string field, string message) =>

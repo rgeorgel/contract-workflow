@@ -157,6 +157,8 @@ internal sealed class ContractService(
         if (!tenant.CanEditContracts())
             return CannotEdit;
 
+        if (await meter.CheckNotOverdueAsync(tenant.RequireOrganizationId(), "criar contratos", ct) is { } overdue)
+            return overdue;
         var template = await db.Templates.SingleOrDefaultAsync(t => t.Id == req.TemplateId, ct);
         if (template is null)
             return Error.Validation("templateId", "Escolha um template.");
@@ -287,6 +289,8 @@ internal sealed class ContractService(
 
         // Plano: canais (pode ter mudado depois do rascunho) e cota, antes de gerar o PDF.
         var org = await db.Organizations.SingleAsync(o => o.Id == contract.OrganizationId, ct);
+        if (org.IsPaymentOverdue)
+            return UsageMeter.PaymentOverdue("enviar contratos");
         var blocked = contract.Signers.Select(s => s.DeliveryMethod).Where(m => !org.Plan.Allows(m)).Distinct().ToList();
         if (blocked.Count > 0)
             return Error.Conflict(UsageMeter.ChannelNotInPlan(org.Plan, blocked[0]) + " Troque o canal dos signatários ou mude de plano.", "channel_not_in_plan");

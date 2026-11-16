@@ -391,6 +391,10 @@ function renderUsageNote() {
   } else {
     tone = 'alert--error';
     text = `Os contratos do plano ${billing.plan.name} acabaram neste ciclo (renova em ${renewsLabel(billing.periodEnd)}) e não há créditos avulsos. Compre um pacote ou mude de plano para enviar.`;
+    if (billing.onlineCheckout) {
+      settings.textContent = 'Comprar pacote de contratos';
+      settings.href = '/settings.html#pacotes';
+    }
   }
   el.className = `alert usage-note ${tone}`;
   el.replaceChildren(h('div', { class: 'alert__body' }, h('span', {}, text), settings));

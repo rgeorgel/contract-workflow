@@ -117,7 +117,16 @@ Como funciona:
   - Downgrade e troca de anual para mensal ficam para o fim do ciclo.
   - Cancelar mantém o plano até o fim do ciclo pago.
 - **Ciclo:** a cota de contratos segue o período pago da assinatura.
-- **Pagamento atrasado (`past_due`):** o plano continua, com um aviso para atualizar o cartão. O Stripe tenta cobrar de novo.
+- **Pagamento atrasado (`past_due`):** nada novo, **na hora e sem tolerância**.
+  - Ficam bloqueados: criar e enviar contratos, criar, duplicar ou desarquivar templates, e convidar ou reativar usuários. A API responde 402 (`payment_overdue`).
+  - Continua disponível o que já existe: ver e baixar contratos, acompanhar, cancelar e reenviar links. Os contratos enviados já foram pagos pela assinatura ou pelos créditos da época.
+  - Todas as páginas mostram um aviso no topo; para Admins, com o botão para atualizar o pagamento.
+  - Os Admins recebem um e-mail, uma vez por atraso.
+  - Quando o pagamento é aprovado (cartão trocado no portal ou nova tentativa do Stripe), tudo é liberado na hora.
+- **Pacotes avulsos:** "Comprar" na tabela de pacotes em Configurações (só Admin) abre um pagamento único, só cartão, com o preço de `Plans.cs`.
+  - Os créditos entram na volta do pagamento e de novo pelo webhook `checkout.session.completed`, uma vez por sessão.
+  - O valor pago precisa ser o do pacote no catálogo; se não for, nada é liberado e o erro vai para o log.
+  - Valem 12 meses e funcionam em qualquer plano, inclusive o Grátis.
 - **Fim da assinatura:** cancelada ou não paga (`canceled`, `unpaid`), a conta volta ao plano Grátis.
 - **Webhooks:** cada evento é guardado na `webhook_inbox` (o mesmo evento reenviado conta uma vez só). O worker então busca a assinatura atual na API do Stripe, então a ordem dos eventos e a versão da API do webhook não importam.
 - **Plano e preços:** os produtos e preços no Stripe são criados pelo sistema na primeira assinatura, a partir de `Plans.cs`.
@@ -137,7 +146,11 @@ Como funciona:
    - Copie o *signing secret* (`whsec_...`) para `STRIPE_WEBHOOK_SECRET`.
    - A app não sobe com a chave e sem o secret: sem webhook, renovações e cancelamentos não chegariam.
 5. **Testar:** reinicie a app e assine pela tela de Configurações com o cartão de teste `4242 4242 4242 4242` (qualquer validade futura e qualquer CVC). Para testar recusa, use `4000 0000 0000 0341` (o cartão é aceito no cadastro e recusado na cobrança).
-6. **Produção:** troque para as chaves `sk_live_...` e crie o webhook de novo no modo de produção (o *signing secret* é outro). O catálogo é recriado sozinho no modo de produção.
+6. **Recuperação de receita:** em Configurações → Billing → Recuperação de receita (*Revenue recovery*):
+   - Deixe as novas tentativas de cobrança ligadas (*Smart Retries*).
+   - Escolha o que fazer quando todas falharem: **cancelar a assinatura**. A conta volta ao plano Grátis e desbloqueia; com "marcar como não paga" também volta ao Grátis.
+   - Opcional: ligue os e-mails do próprio Stripe para cartão recusado.
+7. **Produção:** troque para as chaves `sk_live_...` e crie o webhook de novo no modo de produção (o *signing secret* é outro). O catálogo é recriado sozinho no modo de produção.
 
 Em desenvolvimento, o webhook chega pelo Stripe CLI: `stripe listen --forward-to localhost:7700/api/v1/webhooks/stripe` mostra o `whsec_...` para usar em `STRIPE_WEBHOOK_SECRET`.
 

@@ -36,8 +36,22 @@ class AppNav extends HTMLElement {
           h('span', { class: 'app-nav__who' }, h('strong', {}, me.name), h('small', {}, roleLabel(me.role))),
           h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: logout }, 'Sair'),
           toggle)),
-      drawer));
+      drawer),
+    overdueBanner(me));
   }
+}
+
+/** Pagamento da assinatura recusado: aviso em todas as páginas, com o que está bloqueado e como regularizar. */
+function overdueBanner(me) {
+  if (!me.organization.paymentOverdue) return null;
+  const admin = me.role === 'Admin';
+  return h('div', { class: 'overdue-banner', role: 'alert' },
+    h('div', { class: 'container overdue-banner__inner' },
+      h('span', {},
+        h('strong', {}, 'Pagamento da assinatura pendente. '),
+        'Criar contratos, templates e usuários está bloqueado até o pagamento ser aprovado; os contratos existentes continuam disponíveis.',
+        admin ? null : ' Peça a um Admin para atualizar o cartão.'),
+      admin ? h('a', { class: 'btn btn--sm overdue-banner__btn', href: '/settings.html' }, 'Atualizar pagamento') : null));
 }
 
 customElements.define('app-nav', AppNav);
