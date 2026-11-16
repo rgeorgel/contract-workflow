@@ -28,7 +28,8 @@ class AppNav extends HTMLElement {
       },
     }, icon(ICONS.menu));
 
-    this.replaceChildren(h('header', { class: 'app-nav' },
+    // replaceChildren escreve null como texto: só entra o que existe (o aviso aparece só com pagamento pendente).
+    this.replaceChildren(...[h('header', { class: 'app-nav' },
       h('div', { class: 'container app-nav__inner' },
         h('a', { class: 'app-nav__brand', href: '/dashboard.html' }, icon(ICONS.logo), h('span', { class: 'app-nav__org' }, me.organization.name)),
         h('nav', { class: 'app-nav__links', 'aria-label': 'Principal' }, links.map(linkEl)),
@@ -37,7 +38,7 @@ class AppNav extends HTMLElement {
           h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: logout }, 'Sair'),
           toggle)),
       drawer),
-    overdueBanner(me));
+    overdueBanner(me)].filter(Boolean));
   }
 }
 
