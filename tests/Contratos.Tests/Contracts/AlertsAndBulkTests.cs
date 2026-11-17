@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Contratos.Application.Contracts;
 using Contratos.Domain.Contracts;
 using Contratos.Infrastructure.Persistence;
 using Contratos.Tests.Infrastructure;
@@ -74,7 +75,7 @@ public sealed class AlertsAndBulkTests(ApiFactory factory)
     {
         var admin = await TestAccounts.CreateAdminAsync(factory);
         var templateId = (await TemplatesApiTests.CreatePublishedAsync(admin)).GetProperty("id").GetGuid();
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-3)).DateTime);
+        var today = ContractValidator.TodayInBrazil(DateTimeOffset.UtcNow);
         var id = await SentAsync(admin, templateId, "Locação com prazo", today.AddDays(2));
         await factory.ProcessBackgroundAsync(); // entrega ao provedor
         await factory.ProcessBackgroundAsync(); // confere os alertas (só contratos que já estão no provedor)
@@ -105,7 +106,7 @@ public sealed class AlertsAndBulkTests(ApiFactory factory)
 
         // Desligado: nem aviso nem reenvio.
         var templateId = (await TemplatesApiTests.CreatePublishedAsync(admin)).GetProperty("id").GetGuid();
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-3)).DateTime);
+        var today = ContractValidator.TodayInBrazil(DateTimeOffset.UtcNow);
         var id = await SentAsync(admin, templateId, "Sem alertas", today.AddDays(1));
         await factory.ProcessBackgroundAsync();
         await BackdateSentAsync(id, 10);

@@ -188,7 +188,7 @@ internal sealed class ContractService(
         if (template.ArchivedAt is not null || template.CurrentVersionId is null)
             return Error.Validation("templateId", "Este template não tem versão publicada ativa.");
         var version = await db.TemplateVersions.SingleAsync(v => v.Id == template.CurrentVersionId, ct);
-        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        var today = ContractValidator.TodayInBrazil(clock.GetUtcNow());
         var userId = tenant.RequireUserId();
 
         var results = new List<BulkRowResult>();
@@ -304,7 +304,7 @@ internal sealed class ContractService(
 
         var row = req.Row with { Title = string.IsNullOrWhiteSpace(req.Row.Title) ? template.Name : req.Row.Title };
         var userId = tenant.RequireUserId();
-        var (errors, draft) = ValidateRow(row, version, org, userId, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
+        var (errors, draft) = ValidateRow(row, version, org, userId, ContractValidator.TodayInBrazil(clock.GetUtcNow()));
         if (req.ExternalReference is { Length: > Contract.ExternalReferenceMaxLength })
             errors.Add("externalReference", $"Use no máximo {Contract.ExternalReferenceMaxLength} caracteres.");
         if (draft is null || !errors.IsEmpty)
@@ -383,7 +383,7 @@ internal sealed class ContractService(
             return error!;
 
         var version = await db.TemplateVersions.SingleAsync(v => v.Id == contract.TemplateVersionId, ct);
-        var errors = ContractValidator.ValidateDraft(req, version.Variables, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime));
+        var errors = ContractValidator.ValidateDraft(req, version.Variables, ContractValidator.TodayInBrazil(clock.GetUtcNow()));
         if (!errors.IsEmpty)
             return Error.Validation(errors);
 

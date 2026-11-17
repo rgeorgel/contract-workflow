@@ -12,6 +12,13 @@ public static partial class ContractValidator
     [GeneratedRegex(@"^\+[1-9]\d{9,14}$")]
     public static partial Regex PhonePattern();
 
+    /// <summary>
+    /// O dia de hoje em Brasília, que é o calendário do usuário. Em UTC, das 21h à meia-noite já é o dia
+    /// seguinte, e "amanhã" escolhido pelo usuário seria recusado como passado.
+    /// </summary>
+    public static DateOnly TodayInBrazil(DateTimeOffset now) =>
+        DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(-3)).DateTime);
+
     public static ValidationErrors ValidateDraft(UpdateContractRequest req, IReadOnlyList<TemplateVariable> variables, DateOnly today)
     {
         var errors = new ValidationErrors();
