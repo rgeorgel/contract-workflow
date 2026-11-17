@@ -39,6 +39,11 @@ public sealed class FakeAutentique : HttpMessageHandler
     /// <summary>Enquanto definido, todo createDocument responde com isto.</summary>
     public Func<HttpResponseMessage>? FailCreateDocument { get; set; }
 
+    /// <summary>Enquanto verdadeiro, createLinkToSignature responde com erro.</summary>
+    public bool FailSignLink { get; set; }
+
+    public static string LinkFor(string publicId) => $"https://assina.ae/{publicId[..8]}";
+
     public IEnumerable<Captured> Mutations(string name) => Requests.Where(r => r.Query?.Contains(name, StringComparison.Ordinal) == true);
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -88,6 +93,8 @@ public sealed class FakeAutentique : HttpMessageHandler
             {
                 ["has_premium_features"] = false, ["documents"] = Balance.Documents, ["credits"] = Balance.Credits,
             } } } }.ToJsonString());
+        if (query.Contains("createLinkToSignature", StringComparison.Ordinal))
+            return SignLink(query);
         if (query.Contains("createDocument", StringComparison.Ordinal))
             return FailCreateDocument?.Invoke() ?? CreateDocument(variables!);
         if (query.Contains("updateDocument", StringComparison.Ordinal))
@@ -123,7 +130,8 @@ public sealed class FakeAutentique : HttpMessageHandler
                 ["name"] = signer!["name"]!.GetValue<string>(),
                 ["email"] = signer["email"]?.GetValue<string>(),
                 ["action"] = new JsonObject { ["name"] = signer["action"]!.GetValue<string>() },
-                ["link"] = new JsonObject { ["short_link"] = $"https://assina.ae/{publicId[..8]}" },
+                // Como a real: link só para quem não recebe por e-mail nem telefone; os outros pedem createLinkToSignature.
+                ["link"] = signer["email"] is null && signer["phone"] is null ? new JsonObject { ["short_link"] = LinkFor(publicId) } : null,
                 ["user"] = new JsonObject { ["email"] = signer["email"]?.GetValue<string>(), ["phone"] = signer["phone"]?.GetValue<string>() },
             });
         }
@@ -138,6 +146,16 @@ public sealed class FakeAutentique : HttpMessageHandler
             ["data"] = new JsonObject { ["createDocument"] = new JsonObject { ["id"] = documentId, ["signatures"] = signatures } },
         };
         return Json(response.ToJsonString());
+    }
+
+    private HttpResponseMessage SignLink(string query)
+    {
+        if (FailSignLink)
+            return Json("""{"errors":[{"message":"internal_error"}],"data":null}""");
+        var publicId = Documents.Values.SelectMany(ids => ids).FirstOrDefault(id => query.Contains(id, StringComparison.Ordinal));
+        return publicId is null
+            ? Json("""{"errors":[{"message":"signature_not_found"}],"data":null}""")
+            : Json(new JsonObject { ["data"] = new JsonObject { ["createLinkToSignature"] = new JsonObject { ["short_link"] = LinkFor(publicId) } } }.ToJsonString());
     }
 
     private HttpResponseMessage DocumentStatus(string query)

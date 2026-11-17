@@ -117,8 +117,46 @@ internal sealed class AutentiqueSignatureProvider(
         var document = data.GetProperty("createDocument");
         var documentId = NormalizeId(document.GetProperty("id").GetString()
             ?? throw new AutentiqueException("A Autentique não devolveu o id do documento."));
-        return new CreatedDocument(documentId, MatchSignatures(req.Signers, Signatures(document)));
+        var signatures = MatchSignatures(req.Signers, Signatures(document));
+        return new CreatedDocument(documentId, await WithSignLinksAsync(documentId, signatures, ct));
     }
+
+    /// <summary>
+    /// A Autentique só devolve <c>link</c> para quem não recebe por e-mail nem telefone. Para os outros, o link
+    /// (exclusivo daquele signatário) vem de <c>createLinkToSignature</c>. O documento já existe: uma falha aqui
+    /// não pode virar exceção, senão a outbox criaria outro documento; fica sem link e a entrega segue normal.
+    /// </summary>
+    private async Task<IReadOnlyList<CreatedSignature>> WithSignLinksAsync(
+        string documentId, IReadOnlyList<CreatedSignature> signatures, CancellationToken ct)
+    {
+        var result = new List<CreatedSignature>(signatures.Count);
+        foreach (var signature in signatures)
+        {
+            if (signature.ShortLink is not null)
+            {
+                result.Add(signature);
+                continue;
+            }
+            string? link = null;
+            try
+            {
+                // Mesmo formato do resendSignatures: o id direto na mutation.
+                var data = await QueryAsync(
+                    $"mutation {{ createLinkToSignature(public_id: {Literal(signature.PublicId)}) {{ short_link }} }}", [], ct);
+                if (data.TryGetProperty("createLinkToSignature", out var created))
+                    link = Str(created, "short_link");
+            }
+            catch (Exception e) when (e is AutentiqueException or HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+            {
+                logger.LogWarning(e, "Link de assinatura não gerado para {PublicId} no documento {DocumentId}", signature.PublicId, documentId);
+            }
+            result.Add(signature with { ShortLink = link is { Length: > 0 and <= MaxLinkLength } ? link : null });
+        }
+        return result;
+    }
+
+    /// <summary>Tamanho da coluna contract_signers.short_link.</summary>
+    private const int MaxLinkLength = 300;
 
     public async Task DeleteDocumentAsync(string documentId, CancellationToken ct)
     {

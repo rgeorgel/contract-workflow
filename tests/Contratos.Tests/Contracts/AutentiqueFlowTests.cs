@@ -101,6 +101,66 @@ public sealed class AutentiqueFlowTests(AutentiqueApiFactory factory)
     }
 
     [Fact]
+    public async Task Every_signer_gets_a_sign_link_that_disappears_once_they_cannot_sign()
+    {
+        var (admin, id) = await SentAsync("Links de assinatura");
+        var contract = await LoadAsync(id);
+        var ids = Autentique.Documents[contract.AutentiqueDocumentId!];
+
+        // E-mail e WhatsApp: a Autentique não devolve link no createDocument, então cada um é pedido à parte.
+        var ordered = contract.SignersInSendOrder();
+        Assert.Equal(FakeAutentique.LinkFor(ids[0]), ordered[0].ShortLink);
+        Assert.Equal(FakeAutentique.LinkFor(ids[1]), ordered[1].ShortLink);
+        var linkRequests = Autentique.Mutations("createLinkToSignature").Select(r => r.Query!).ToList();
+        Assert.Contains(linkRequests, q => q.Contains(ids[0], StringComparison.Ordinal));
+        Assert.Contains(linkRequests, q => q.Contains(ids[1], StringComparison.Ordinal));
+
+        var key = (await (await admin.Client.PostAsync("/api/v1/integrations/keys", new { name = "CRM" })).JsonAsync()).GetProperty("token").GetString()!;
+        using var api = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        api.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+        async Task<Dictionary<string, JsonElement>> SignersAsync() =>
+            (await (await api.GetAsync($"/api/public/v1/contracts/{id}")).JsonAsync()).GetProperty("signers").EnumerateArray()
+                .ToDictionary(s => s.GetProperty("name").GetString()!, s => s);
+
+        var signers = await SignersAsync();
+        Assert.Equal(FakeAutentique.LinkFor(ids[0]), signers["Marina Costa"].GetProperty("signLink").GetString());
+        Assert.Equal(FakeAutentique.LinkFor(ids[1]), signers["João Pereira"].GetProperty("signLink").GetString());
+        Assert.Equal("whatsapp", signers["João Pereira"].GetProperty("deliveryMethod").GetString());
+
+        // Quem assinou não tem mais link; quem falta continua com o dele.
+        var (signed, signature) = FakeAutentique.Webhook("signature.accepted", new JsonObject { ["public_id"] = FakeAutentique.Dashed(ids[0]) });
+        Assert.Equal(HttpStatusCode.OK, await PostWebhookAsync(signed, signature));
+        await factory.ProcessBackgroundAsync();
+        signers = await SignersAsync();
+        Assert.Equal("signed", signers["Marina Costa"].GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, signers["Marina Costa"].GetProperty("signLink").ValueKind);
+        Assert.Equal(FakeAutentique.LinkFor(ids[1]), signers["João Pereira"].GetProperty("signLink").GetString());
+
+        // Cancelado: nenhum link.
+        Assert.Equal(HttpStatusCode.OK, (await api.PostAsync($"/api/public/v1/contracts/{id}/cancel", null)).StatusCode);
+        Assert.All((await SignersAsync()).Values, s => Assert.Equal(JsonValueKind.Null, s.GetProperty("signLink").ValueKind));
+    }
+
+    [Fact]
+    public async Task A_failure_creating_sign_links_does_not_create_the_document_twice()
+    {
+        Autentique.FailSignLink = true;
+        try
+        {
+            var (_, id) = await SentAsync("Sem links da Autentique");
+            var contract = await LoadAsync(id);
+            Assert.NotNull(contract.AutentiqueDocumentId);
+            Assert.All(contract.Signers, s => Assert.Null(s.ShortLink));
+            Assert.Single(Autentique.Mutations("createDocument"),
+                r => r.Variables!["document"]!["name"]!.GetValue<string>().StartsWith("Sem links", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Autentique.FailSignLink = false;
+        }
+    }
+
+    [Fact]
     public async Task Signed_webhooks_drive_the_contract_to_completed_and_archive_the_signed_pdf()
     {
         var (admin, id) = await SentAsync();

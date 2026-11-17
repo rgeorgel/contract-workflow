@@ -280,8 +280,8 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
                 <tr><td>403</td><td><code>api_not_in_plan</code></td><td>O plano atual da conta não inclui a API.</td></tr>
                 <tr><td>404</td><td><code>not_found</code></td><td>O recurso não existe nesta conta.</td></tr>
                 <tr><td>409</td><td><code>quota_exceeded</code></td><td>Acabaram os contratos do ciclo e os créditos avulsos. O rascunho é criado; envie depois de comprar créditos.</td></tr>
-                <tr><td>409</td><td><code>already_sent</code></td><td>O contrato já foi enviado.</td></tr>
-                <tr><td>409</td><td><code>already_final</code></td><td>Cancelar um contrato já concluído, recusado, expirado ou cancelado.</td></tr>
+                <tr><td>409</td><td><code>already_sent</code></td><td>Enviar um contrato que já foi enviado e está em andamento (<code>sent</code>, <code>partially_signed</code>).</td></tr>
+                <tr><td>409</td><td><code>already_final</code></td><td>Enviar ou cancelar um contrato já concluído, recusado, expirado ou cancelado (inclusive um rascunho cancelado, que nunca saiu).</td></tr>
                 <tr><td>409</td><td><code>channel_not_in_plan</code></td><td>Canal (SMS, por exemplo) fora do plano.</td></tr>
                 <tr><td>409</td><td><code>cannot_resend</code></td><td>O signatário já assinou ou recusou, ou o contrato não está mais aberto.</td></tr>
                 <tr><td>409</td><td><code>embed_origin_required</code></td><td>Criar uma sessão de embed sem nenhum site cadastrado em Integrações → Embed de templates.</td></tr>
@@ -541,7 +541,8 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
             </table>
           </div>
           <h3>Status do signatário</h3>
-          <p><code>pending</code> (link enviado), <code>viewed</code> (abriu o documento), <code>signed</code>, <code>declined</code> (com <code>declineReason</code>) e <code>delivery_failed</code> (o link não chegou: e-mail ou telefone errado). <code>signLink</code> é o link curto de assinatura quando o provedor gera um; pode vir nulo, e o link sempre chega à pessoa pelo canal escolhido.</p>
+          <p><code>pending</code> (link enviado), <code>viewed</code> (abriu o documento), <code>signed</code>, <code>declined</code> (com <code>declineReason</code>) e <code>delivery_failed</code> (o link não chegou: e-mail ou telefone errado). <code>signLink</code> é o link de assinatura daquele signatário, para mostrar a ele no seu sistema (um portal, um app) ou mandar por um canal seu. Ele aparece depois do evento <code>contract.sent</code> e só enquanto a pessoa ainda pode assinar: contrato em <code>sent</code> ou <code>partially_signed</code> e signatário em <code>pending</code>, <code>viewed</code> ou <code>delivery_failed</code>. Depois que ela assina ou recusa, ou quando o contrato é finalizado ou cancelado, volta <code>null</code>. Também vem <code>null</code> se o provedor não gerou o link; o link sempre chega à pessoa pelo canal escolhido, de qualquer forma.</p>
+          <div class="callout callout--warning"><p>O <code>signLink</code> abre a assinatura em nome daquele signatário. Mostre só para a própria pessoa, já identificada no seu sistema, e não grave em log. Se você configurou o <code>cpf</code>, a página de assinatura confere o CPF antes de assinar.</p></div>
         </section>
 
         <section id="documentos" aria-labelledby="documentos-t">
@@ -621,7 +622,7 @@ open("contrato-assinado.pdf", "wb").write(res.content)</code></pre>
               <thead><tr><th>type</th><th>Quando</th></tr></thead>
               <tbody>
                 <tr><td><code>contract.created</code></td><td>Contrato criado (pela tela, pela API ou em lote).</td></tr>
-                <tr><td><code>contract.sent</code></td><td>Entregue ao provedor de assinatura; os signatários receberam os links.</td></tr>
+                <tr><td><code>contract.sent</code></td><td>Entregue ao provedor de assinatura; os signatários receberam os links, e o <code>signLink</code> de cada um já está no contrato.</td></tr>
                 <tr><td><code>contract.send_failed</code></td><td>O envio falhou depois das tentativas (dados recusados pelo provedor, por exemplo). Precisa de correção na tela.</td></tr>
                 <tr><td><code>signer.viewed</code></td><td>Um signatário abriu o documento.</td></tr>
                 <tr><td><code>signer.signed</code></td><td>Um signatário assinou.</td></tr>
@@ -939,6 +940,7 @@ $url = json_decode(curl_exec($ch), true)['url'];</code></pre>
           <h2 id="mudancas-t">Mudanças</h2>
           <p>A versão faz parte do endereço (<code>/v1</code>). Dentro dela, só entram mudanças compatíveis: campos novos nas respostas, novos tipos de evento e novos parâmetros opcionais. Escreva o seu código para ignorar campos que ele não conhece.</p>
           <ul>
+            <li><strong>17/11/2026</strong>: correções. <code>deliveryMethod</code> volta como <code>"whatsapp"</code>, como documentado (antes saía <code>"whats_app"</code>, que continua aceito na entrada). Enviar um contrato finalizado ou cancelado responde <code>already_final</code> em vez de <code>already_sent</code>. <code>signLink</code> passa a vir preenchido para quem recebe por e-mail, WhatsApp ou SMS, nos contratos enviados a partir de agora.</li>
             <li><strong>17/11/2026</strong>: <a href="#embed">embed de templates</a> (<code>POST /embed/sessions</code>) e os eventos <code>template.published</code> e <code>template.archived</code>.</li>
             <li><strong>16/11/2026</strong>: primeira versão: conta, templates, contratos (criar, enviar, cancelar, reenviar, PDFs, linha do tempo) e webhooks.</li>
           </ul>

@@ -110,7 +110,7 @@ internal static class WebhookEventWriter
             var reason = ev.Payload.GetValueOrDefault("reason") ?? ev.Payload.GetValueOrDefault("error");
             var template = templates.GetValueOrDefault(contract.TemplateVersionId) ?? new PublicTemplateRef(Guid.Empty, "—", 0);
             pending.Add(new Pending(contract.OrganizationId, type!, contract.Id, ev.OccurredAt,
-                () => new WebhookData(PublicMapper.Contract(contract, template), signer is null ? null : PublicMapper.Signer(signer), reason)));
+                () => new WebhookData(PublicMapper.Contract(contract, template), signer is null ? null : PublicMapper.Signer(signer, contract.Status), reason)));
         }
     }
 

@@ -473,7 +473,7 @@ internal sealed class ContractService(
             // Duplo clique com a mesma chave: responde como se fosse a primeira vez.
             if (idempotencyKey is not null && contract.SendIdempotencyKey == idempotencyKey)
                 return await DetailAsync(contract, ct);
-            return Error.Conflict("Este contrato já foi enviado.", "already_sent");
+            return NotSendable(contract);
         }
 
         var version = await db.TemplateVersions.SingleAsync(v => v.Id == contract.TemplateVersionId, ct);
@@ -542,10 +542,15 @@ internal sealed class ContractService(
             var current = await LoadAsync(id, ct);
             return current is { IsDraft: false } && current.SendIdempotencyKey == idempotencyKey && idempotencyKey is not null
                 ? await DetailAsync(current, ct)
-                : Error.Conflict("Este contrato já foi enviado.", "already_sent");
+                : NotSendable(current ?? contract);
         }
         return await DetailAsync(contract, ct);
     }
+
+    /// <summary>Já saiu do rascunho: em andamento (já enviado) ou finalizado, inclusive cancelado sem nunca ter saído.</summary>
+    private static Error NotSendable(Contract contract) => contract.IsFinal
+        ? Error.Conflict("Este contrato já foi finalizado.", "already_final")
+        : Error.Conflict("Este contrato já foi enviado.", "already_sent");
 
     public async Task<Result<ContractDetail>> ReturnToDraftAsync(Guid id, CancellationToken ct)
     {

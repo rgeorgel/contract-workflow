@@ -253,6 +253,56 @@ public sealed class PublicApiTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Sending_a_cancelled_draft_says_it_is_final_not_sent()
+    {
+        var (_, api, templateId) = await SetupAsync(factory, this);
+        var id = (await (await api.PostAsJsonAsync("/api/public/v1/contracts", NewContract(templateId))).JsonAsync()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await api.PostAsync($"/api/public/v1/contracts/{id}/cancel", null)).StatusCode);
+
+        var send = await api.PostAsync($"/api/public/v1/contracts/{id}/send", null);
+        Assert.Equal(HttpStatusCode.Conflict, send.StatusCode);
+        var error = await send.JsonAsync();
+        Assert.Equal("already_final", error.GetProperty("code").GetString());
+        Assert.Equal("Este contrato já foi finalizado.", error.GetProperty("title").GetString());
+    }
+
+    [Theory]
+    [InlineData("whatsapp")]
+    [InlineData("whats_app")] // valor que as respostas usavam até 16/11/2026: continua aceito na entrada
+    [InlineData("WhatsApp")]
+    public async Task Whatsapp_channel_always_comes_back_as_documented(string sent)
+    {
+        var (_, api, templateId) = await SetupAsync(factory, this);
+        var created = await api.PostAsJsonAsync("/api/public/v1/contracts", new
+        {
+            templateId,
+            title = "Consultoria Café Aurora",
+            variables = Variables,
+            signers = new object[] { new { name = "Testemunha", phone = "+55 11 90000-0000", deliveryMethod = sent } },
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Contains("\"deliveryMethod\":\"whatsapp\"", await created.Content.ReadAsStringAsync());
+
+        var id = (await created.JsonAsync()).GetProperty("id").GetGuid();
+        var detail = await (await api.GetAsync($"/api/public/v1/contracts/{id}")).JsonAsync();
+        Assert.Equal("whatsapp", detail.GetProperty("signers")[0].GetProperty("deliveryMethod").GetString());
+        // Contrato ainda não enviado: sem link de assinatura.
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("signers")[0].GetProperty("signLink").ValueKind);
+    }
+
+    [Fact]
+    public async Task Unknown_channel_is_rejected()
+    {
+        var (_, api, templateId) = await SetupAsync(factory, this);
+        var res = await api.PostAsJsonAsync("/api/public/v1/contracts", new
+        {
+            templateId,
+            signers = new object[] { new { name = "Testemunha", phone = "+55 11 90000-0000", deliveryMethod = "telegram" } },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [Fact]
     public async Task One_organization_never_sees_another_one_through_the_api()
     {
         var (_, apiA, templateA) = await SetupAsync(factory, this);

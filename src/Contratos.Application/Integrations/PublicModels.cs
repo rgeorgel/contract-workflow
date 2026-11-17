@@ -20,7 +20,8 @@ public static class PublicJson
     {
         var o = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false) },
+            // O canal antes do conversor genérico, que faria "WhatsApp" virar "whats_app".
+            Converters = { new DeliveryMethodConverter(), new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false) },
         };
         o.MakeReadOnly(populateMissingResolver: true);
         return o;
@@ -30,6 +31,38 @@ public static class PublicJson
 
     /// <summary>"SignerSigned" → "signer_signed" (tipos da linha do tempo na API pública).</summary>
     public static string Snake(string pascal) => JsonNamingPolicy.SnakeCaseLower.ConvertName(pascal);
+}
+
+/// <summary>
+/// Canal de entrega na API pública: <c>email</c>, <c>whatsapp</c>, <c>sms</c>. Até 16/11/2026 a resposta saía como
+/// <c>whats_app</c>; a entrada continua aceitando esse valor para quem já se adaptou a ele.
+/// </summary>
+public sealed class DeliveryMethodConverter : JsonConverter<DeliveryMethod>
+{
+    public override DeliveryMethod Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            switch (reader.GetString()?.Trim().ToLowerInvariant())
+            {
+                case "email": return DeliveryMethod.Email;
+                case "whatsapp" or "whats_app": return DeliveryMethod.WhatsApp;
+                case "sms": return DeliveryMethod.Sms;
+            }
+        }
+        throw new JsonException("Canal inválido: use email, whatsapp ou sms.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, DeliveryMethod value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(Name(value));
+
+    public static string Name(DeliveryMethod value) => value switch
+    {
+        DeliveryMethod.Email => "email",
+        DeliveryMethod.WhatsApp => "whatsapp",
+        DeliveryMethod.Sms => "sms",
+        _ => throw new JsonException($"Canal desconhecido: {value}."),
+    };
 }
 
 /// <summary>
@@ -120,19 +153,29 @@ public static class PublicMapper
         new PublicTemplateRef(c.Template.Id, c.Template.Name, c.Template.Version),
         c.SigningMode, c.ExpiresAt, c.Message, c.VariableValues,
         c.Signers.Select(s => new PublicSigner(s.Id, s.Name, s.Email, s.Phone, s.Cpf, s.DeliveryMethod, s.Role, s.Action,
-            s.SignOrder, s.Status, s.ShortLink, s.ViewedAt, s.SignedAt, s.DeclinedAt, s.DeclineReason)).ToList(),
+            s.SignOrder, s.Status, SignLink(c.Status, s.Status, s.ShortLink), s.ViewedAt, s.SignedAt, s.DeclinedAt, s.DeclineReason)).ToList(),
         c.DocumentSha256, c.HasDocument, c.HasSignedDocument, c.SendError,
         c.CreatedAt, c.UpdatedAt, c.SentAt, c.CompletedAt, c.CancelledAt);
 
     public static PublicContract Contract(Contract c, PublicTemplateRef template) => new(
         c.Id, c.Number, c.Title, c.Status, c.ExternalReference, template, c.SigningMode, c.ExpiresAt, c.Message,
-        c.VariableValues, c.SignersInSendOrder().Select(Signer).ToList(), c.DocumentSha256,
+        c.VariableValues, c.SignersInSendOrder().Select(s => Signer(s, c.Status)).ToList(), c.DocumentSha256,
         c.DocumentKey is not null, c.SignedDocumentKey is not null, c.SendError,
         c.CreatedAt, c.UpdatedAt, c.SentAt, c.CompletedAt, c.CancelledAt);
 
-    public static PublicSigner Signer(ContractSigner s) => new(
-        s.Id, s.Name, s.Email, s.Phone, s.Cpf, s.DeliveryMethod, s.Role, s.Action, s.SignOrder, s.Status, s.ShortLink,
-        s.ViewedAt, s.SignedAt, s.DeclinedAt, s.DeclineReason);
+    public static PublicSigner Signer(ContractSigner s, ContractStatus contractStatus) => new(
+        s.Id, s.Name, s.Email, s.Phone, s.Cpf, s.DeliveryMethod, s.Role, s.Action, s.SignOrder, s.Status,
+        SignLink(contractStatus, s.Status, s.ShortLink), s.ViewedAt, s.SignedAt, s.DeclinedAt, s.DeclineReason);
+
+    /// <summary>
+    /// O link só sai enquanto a pessoa ainda pode assinar: contrato aberto e ela sem assinar nem recusar.
+    /// Com falha na entrega ele continua: é justamente quando o sistema do cliente pode entregar por outro canal.
+    /// </summary>
+    public static string? SignLink(ContractStatus contract, SignerStatus signer, string? link) =>
+        contract is ContractStatus.Sent or ContractStatus.PartiallySigned
+        && signer is SignerStatus.Pending or SignerStatus.Viewed or SignerStatus.DeliveryFailed
+            ? link
+            : null;
 
     public static PublicContractListItem ListItem(ContractListItem c) => new(
         c.Id, c.Number, c.Title, c.Status, c.ExternalReference, c.TemplateName, c.SignersTotal, c.SignersSigned,

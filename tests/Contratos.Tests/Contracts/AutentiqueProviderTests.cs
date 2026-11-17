@@ -286,7 +286,7 @@ public sealed class AutentiqueProviderTests
                 [new DocumentSigner("Ana", null, "+5521999990000", Contratos.Domain.Contracts.DeliveryMethod.Sms, Contratos.Domain.Templates.SignerAction.SignAsWitness, null)]),
             new MemoryStream("%PDF-1.4"u8.ToArray()), CancellationToken.None);
 
-        var request = Assert.Single(fake.Requests);
+        var request = Assert.Single(fake.Mutations("createDocument"));
         Assert.DoesNotContain("sandbox", request.Query);
         Assert.Contains("folder_id: \"pasta-1\"", request.Query);
         Assert.Equal("WEEKLY", request.Variables!["document"]!["reminder"]!.GetValue<string>());
@@ -295,7 +295,11 @@ public sealed class AutentiqueProviderTests
         Assert.Equal("DELIVERY_METHOD_SMS", signer["delivery_method"]!.GetValue<string>());
         Assert.Equal("SIGN_AS_A_WITNESS", signer["action"]!.GetValue<string>());
         Assert.Null(signer["configs"]);
-        Assert.Equal(fake.Documents[created.DocumentId][0], Assert.Single(created.Signatures).PublicId);
+        var signature = Assert.Single(created.Signatures);
+        Assert.Equal(fake.Documents[created.DocumentId][0], signature.PublicId);
+        // SMS: a assinatura não vem com link; ele é pedido logo depois.
+        Assert.Contains(signature.PublicId, Assert.Single(fake.Mutations("createLinkToSignature")).Query);
+        Assert.Equal(FakeAutentique.LinkFor(signature.PublicId), signature.ShortLink);
     }
 
     [Theory]

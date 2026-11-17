@@ -1657,7 +1657,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Link de assinatura exclusivo deste signatário. Preenchido depois de contract.sent e só enquanto ele pode assinar (contrato sent ou partially_signed; signatário pending, viewed ou delivery_failed); null nos outros casos ou se o provedor não gerou o link."
           },
           "viewedAt": {
             "type": [
