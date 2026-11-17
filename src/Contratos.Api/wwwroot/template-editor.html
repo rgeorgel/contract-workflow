@@ -70,11 +70,11 @@
           <div class="panel__body">
             <div class="field">
               <div data-visual></div>
-              <p class="field__hint" data-visual-hint>Formate pela barra (ou Ctrl+B, Ctrl+I). As partes que mudam a cada contrato são etiquetas: use “Inserir variável” ou digite <code>{{nome_da_variavel}}</code>. Dá para colar do Word ou do Google Docs.</p>
+              <p class="field__hint" data-visual-hint>Formate pela barra (ou Ctrl+B, Ctrl+I). As partes que mudam a cada contrato são etiquetas: use “Inserir variável” ou digite <code>{{nome_da_variavel}}</code>. Para um trecho que só aparece quando a variável é preenchida, use <code>{{#se nome_da_variavel}}</code> … <code>{{/se}}</code>. Dá para colar do Word ou do Google Docs.</p>
               <div data-html-field hidden>
                 <label class="visually-hidden" for="bodyHtml">Texto do contrato em HTML</label>
                 <textarea class="input code-input" id="bodyHtml" name="bodyHtml" spellcheck="false" aria-describedby="body-hint bodyHtml-error"></textarea>
-                <p class="field__hint" id="body-hint">HTML simples: &lt;h1&gt;, &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;, &lt;table&gt;. Marque o que muda com <code>{{nome_da_variavel}}</code>. Scripts e imagens de fora são removidos ao salvar.</p>
+                <p class="field__hint" id="body-hint">HTML simples: &lt;h1&gt;, &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;, &lt;table&gt;. Marque o que muda com <code>{{nome_da_variavel}}</code>; um trecho entre <code>{{#se nome_da_variavel}}</code> e <code>{{/se}}</code> só aparece com a variável preenchida. Scripts e imagens de fora são removidos ao salvar.</p>
               </div>
               <p class="field__error" id="bodyHtml-error" data-error-for="bodyHtml"></p>
             </div>

@@ -12,7 +12,10 @@ public sealed class DocumentRenderer(IHtmlSanitizer sanitizer)
         IReadOnlyDictionary<string, string> values)
     {
         var byKey = variables.ToDictionary(v => v.Key, StringComparer.Ordinal);
-        var filled = Placeholders.Replace(bodyHtml, key =>
+        // Trechos {{#se chave}} … {{/se}} só aparecem quando a variável foi preenchida.
+        var resolved = Placeholders.ApplyConditionals(bodyHtml,
+            key => values.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(raw));
+        var filled = Placeholders.Replace(resolved, key =>
         {
             byKey.TryGetValue(key, out var variable);
             if (values.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(raw))

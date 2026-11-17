@@ -31,13 +31,14 @@ public sealed class TemplateStartersTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Admin_lists_the_three_starters()
+    public async Task Admin_lists_the_starters()
     {
         var admin = await TestAccounts.CreateAdminAsync(factory);
 
         var list = await (await admin.Client.GetAsync("/api/v1/templates/starters")).JsonAsync();
 
-        Assert.Equal(3, list.GetArrayLength());
+        Assert.Equal(TemplateStarters.All.Count, list.GetArrayLength());
+        Assert.Contains(list.EnumerateArray(), s => s.GetProperty("id").GetString() == "honorarios-advocaticios");
         Assert.All(list.EnumerateArray(), s =>
         {
             Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("name").GetString()));
@@ -62,6 +63,57 @@ public sealed class TemplateStartersTests(ApiFactory factory)
 
         var publish = await admin.Client.PostAsync($"/api/v1/templates/{created.GetProperty("id").GetGuid()}/publish");
         Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+    }
+
+    [Fact]
+    public void Honorarios_starter_groups_keys_by_party_and_suggests_optional_witnesses()
+    {
+        var starter = TemplateStarters.Find("honorarios-advocaticios")!;
+        var byKey = starter.Variables.ToDictionary(v => v.Key);
+
+        // O Causify reconhece a parte pela chave e pelo rótulo, e a fonte pelo tipo.
+        Assert.All(starter.Variables.Where(v => v.Key.StartsWith("contratante.", StringComparison.Ordinal)),
+            v => Assert.Contains("contratante", v.Label, StringComparison.Ordinal));
+        Assert.Equal(VariableType.CpfCnpj, byKey["contratante.documento"].Type);
+        Assert.Equal(VariableType.CpfCnpj, byKey["contratada.cnpj"].Type);
+        Assert.Equal(VariableType.Money, byKey["valor.total"].Type);
+        Assert.Equal(VariableType.Money, byKey["valor.entrada"].Type);
+        Assert.Equal(VariableType.Date, byKey["contrato.inicio"].Type);
+        Assert.Equal(VariableType.Number, byKey["multa.percentual"].Type);
+        Assert.DoesNotContain(starter.Variables, v => v.Label.Contains("comarca", StringComparison.OrdinalIgnoreCase));
+
+        string[] optional = ["contratante.qualificacao", "contratante.email", "contratada.cnpj", "processo.numero",
+            "valor.entrada", "parcelas.quantidade", "pagamento.primeiro_vencimento", "exito.percentual"];
+        Assert.Equal(optional.Order(), starter.Variables.Where(v => !v.Required).Select(v => v.Key).Order());
+
+        Assert.Equal(
+            [("Contratante", SignerAction.Sign), ("Contratada", SignerAction.Sign),
+             ("Testemunha", SignerAction.SignAsWitness), ("Testemunha", SignerAction.SignAsWitness)],
+            starter.DefaultSignerRoles.OrderBy(r => r.Order).Select(r => (r.Role, r.Action)));
+    }
+
+    [Fact]
+    public void Honorarios_starter_reads_well_without_the_optional_variables()
+    {
+        var starter = TemplateStarters.Find("honorarios-advocaticios")!;
+        var renderer = new DocumentRenderer(new TemplateHtmlSanitizer());
+        var required = starter.Variables.Where(v => v.Required)
+            .ToDictionary(v => v.Key, VariableValues.Sample, StringComparer.Ordinal);
+
+        var html = renderer.Render(starter.Name, starter.BodyHtml, starter.Variables, required);
+
+        Assert.DoesNotContain("class=\"missing\"", html);
+        Assert.DoesNotContain("{{", html);
+        Assert.DoesNotContain("Processo relacionado", html);
+        Assert.DoesNotContain("êxito", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Entrada de", html);
+        Assert.Contains("Forma de pagamento: Forma de pagamento.</p>", html);
+        Assert.Contains("com sede em", html);
+
+        var all = renderer.RenderSample(starter.Name, starter.BodyHtml, starter.Variables);
+        Assert.Contains("1.3. Processo relacionado", all);
+        Assert.Contains("2.4. Honorários de êxito: 10%", all);
+        Assert.Contains("Pagamento em 10 parcela(s), com o primeiro vencimento em", all);
     }
 
     [Fact]

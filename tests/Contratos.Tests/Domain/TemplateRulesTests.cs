@@ -52,4 +52,65 @@ public sealed class TemplateRulesTests
 
         Assert.Contains("[Nome completo]", html);
     }
+
+    private static readonly Func<string, bool> OnlyA = key => key == "a";
+
+    [Theory]
+    [InlineData("<p>x{{#se a}} y{{/se}}.</p>", "<p>x y.</p>")]
+    [InlineData("<p>x{{#se b}} y{{/se}}.</p>", "<p>x.</p>")]
+    [InlineData("<p>1</p>{{#se b}}<p>2</p>{{/se}}<p>3</p>", "<p>1</p><p>3</p>")]
+    // Marca sozinha no parágrafo (como o editor visual grava): o parágrafo vai junto.
+    [InlineData("<p>1</p><p>{{#se b}}</p><p>2</p><p>{{/se}}</p><p>3</p>", "<p>1</p><p>3</p>")]
+    [InlineData("<p>1</p><p>{{#se a}}</p><p>2</p><p> {{/se}}<br></p>", "<p>1</p><p>2</p>")]
+    // Marca no começo de um parágrafo com texto: o <p> fica.
+    [InlineData("<p>{{#se a}}x{{/se}} y</p>", "<p>x y</p>")]
+    [InlineData("<p>{{ #se  a }}x{{ /se }}</p>", "<p>x</p>")]
+    // Trecho dentro de trecho.
+    [InlineData("{{#se a}}A{{#se b}}B{{/se}}C{{/se}}", "AC")]
+    [InlineData("{{#se b}}A{{#se a}}B{{/se}}C{{/se}}D", "D")]
+    public void Conditional_blocks_show_only_when_the_variable_is_filled(string html, string expected) =>
+        Assert.Equal(expected, Placeholders.ApplyConditionals(html, OnlyA));
+
+    [Fact]
+    public void Conditional_keys_count_as_used_variables()
+    {
+        Assert.Equal(["x", "a", "y"], Placeholders.Extract("<p>{{x}} {{#se a}}texto{{/se}} {{#se y}}{{y}}{{/se}}</p>"));
+
+        var errors = TemplateValidator.ValidatePublish("<p>{{#se a}}texto{{/se}}</p>", []).ToDictionary();
+        Assert.Contains("a", Assert.Single(errors["bodyHtml"]));
+    }
+
+    [Theory]
+    [InlineData("<p>{{#se a}}texto</p>", "{{#se a}}")]
+    [InlineData("<p>texto{{/se}}</p>", "{{/se}} sem")]
+    [InlineData("<p>{{/se}}{{#se a}}</p>", "{{/se}} sem")]
+    public void Publishing_refuses_unbalanced_conditionals(string body, string message)
+    {
+        var errors = TemplateValidator.ValidatePublish(body, [new TemplateVariable("a", "A", VariableType.Text, false)]).ToDictionary();
+        Assert.Contains(message, Assert.Single(errors["bodyHtml"]));
+    }
+
+    [Fact]
+    public void Renderer_drops_conditional_text_of_empty_optional_variables()
+    {
+        var renderer = new DocumentRenderer(new TemplateHtmlSanitizer());
+        TemplateVariable[] vars =
+        [
+            new("nome", "Nome", VariableType.Text, true),
+            new("processo", "Número do processo", VariableType.Text, false),
+            new("exito", "Êxito (%)", VariableType.Number, false),
+        ];
+        const string body = "<p>{{nome}}{{#se processo}}, processo {{processo}}{{/se}}.</p>{{#se exito}}<p>Êxito de {{exito}}%.</p>{{/se}}";
+
+        var empty = renderer.Render("T", body, vars, new Dictionary<string, string> { ["nome"] = "Ana", ["processo"] = "  " });
+        Assert.Contains("<p>Ana.</p>", empty);
+        Assert.DoesNotContain("processo", empty);
+        Assert.DoesNotContain("Êxito", empty);
+        Assert.DoesNotContain("{{", empty);
+
+        var full = renderer.Render("T", body, vars,
+            new Dictionary<string, string> { ["nome"] = "Ana", ["processo"] = "0001", ["exito"] = "1,5" });
+        Assert.Contains("<p>Ana, processo 0001.</p>", full);
+        Assert.Contains("<p>Êxito de 1,5%.</p>", full);
+    }
 }

@@ -67,6 +67,9 @@ public static class TemplateValidator
             return errors;
         }
 
+        if (Placeholders.CheckConditionals(bodyHtml) is { } unbalanced)
+            errors.Add("bodyHtml", unbalanced);
+
         var declared = variables.Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
         var missing = Placeholders.Extract(bodyHtml).Where(k => !declared.Contains(k)).ToList();
         if (missing.Count > 0)

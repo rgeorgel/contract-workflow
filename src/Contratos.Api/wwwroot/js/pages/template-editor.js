@@ -10,7 +10,8 @@ import { formatDateTime, humanize } from '../utils/format.js';
 
 const TYPES = { Text: 'Texto', Number: 'Número', Date: 'Data', Money: 'Moeda', CpfCnpj: 'CPF/CNPJ' };
 const ACTIONS = { Sign: 'Assinar', SignAsWitness: 'Assinar como testemunha', Approve: 'Aprovar', Recognize: 'Reconhecer' };
-const PLACEHOLDER = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*\}\}/g;
+// {{chave}} e também a chave de um trecho condicional {{#se chave}} … {{/se}}.
+const PLACEHOLDER = /\{\{\s*(?:#se\s+)?([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*\}\}/gi;
 
 const me = await requireUser();
 // Na tela, Admin pode tudo; no embed, vale o que a sessão permite (publicar e arquivar exigem editar).

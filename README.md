@@ -12,7 +12,7 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - CI no GitHub Actions (build, testes com Postgres real e imagem Docker)
 
 **Fase 2 (templates)**
-- Criar, editar, duplicar, arquivar; corpo em HTML com variáveis `{{chave}}` tipadas (texto, número, data, moeda, CPF/CNPJ)
+- Criar, editar, duplicar, arquivar; corpo em HTML com variáveis `{{chave}}` tipadas (texto, número, data, moeda, CPF/CNPJ) e trechos condicionais `{{#se chave}} … {{/se}}`, que só aparecem com a variável preenchida
 - Rascunho + versões publicadas imutáveis; concorrência otimista com ETag/If-Match
 - Sanitização no servidor (sem scripts nem URLs externas, para o Gotenberg não buscar nada na rede) e pré-visualização com dados de exemplo
 

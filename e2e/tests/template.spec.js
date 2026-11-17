@@ -9,8 +9,9 @@ test('template a partir de modelo pronto, com pré-visualização ao vivo antes 
   await page.getByRole('button', { name: 'Novo template' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('radio', { name: /Em branco/ })).toBeChecked();
-  await expect(dialog.getByRole('radio')).toHaveCount(4);
-  await dialog.getByRole('radio', { name: /Prestação de serviços/ }).check();
+  await expect(dialog.getByRole('radio')).toHaveCount(5);
+  await expect(dialog.getByRole('radio', { name: /Prestação de serviços advocatícios/ })).toBeVisible();
+  await dialog.getByRole('radio', { name: /Prestação de serviços(?! advocatícios)/ }).check();
   await expect(dialog.getByLabel('Nome', { exact: true })).toHaveValue('Prestação de serviços');
   await dialog.getByRole('button', { name: 'Criar e editar' }).click();
 
@@ -83,6 +84,40 @@ test('editor visual: formatação, variável digitada vira etiqueta e o HTML sai
   await expect(html).toHaveValue(/<h1>Contrato simples<\/h1>/);
   await expect(html).toHaveValue(/<p>Cliente: \{\{cliente\.nome\}\}, com prazo <strong>importante<\/strong>\.\{\{cliente\.nome\}\}<\/p>/);
 
+  await page.getByRole('button', { name: /^Publicar v1/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Publicar' }).click();
+  await expect(page.getByText('Publicado · v1')).toBeVisible();
+});
+
+test('trecho condicional {{#se}}: a chave é cadastrada e a publicação recusa trecho aberto', async ({ page, request }) => {
+  await signUp(page, request);
+  await page.goto('/templates.html');
+  await page.getByRole('button', { name: 'Novo template' }).click();
+  await page.getByRole('dialog').getByLabel('Nome', { exact: true }).fill('Com condicional');
+  await page.getByRole('dialog').getByRole('button', { name: 'Criar e editar' }).click();
+  await expect(page).toHaveURL(/template-editor\.html/);
+
+  await page.getByRole('tab', { name: 'HTML' }).click();
+  const body = page.getByLabel('Texto do contrato em HTML');
+  await body.fill('<h1>Acordo</h1><p>{{cliente.nome}}{{#se processo.numero}}, no processo {{processo.numero}}{{/se}}.</p><p>{{#se exito}}Êxito de {{exito}}%.</p>');
+
+  // A chave do {{#se}} também entra em "Cadastrar variáveis do texto".
+  await page.getByRole('button', { name: 'Cadastrar variáveis do texto' }).click();
+  await expect(page.getByRole('textbox', { name: 'Chave' })).toHaveCount(3);
+  await expect(page.getByRole('textbox', { name: 'Chave' }).nth(2)).toHaveValue('exito');
+
+  // Na pré-visualização (dados de exemplo) os trechos aparecem, sem as marcas.
+  const preview = page.frameLocator('[data-frame]');
+  await expect(preview.getByText(/no processo/)).toBeVisible();
+  await expect(preview.getByText(/#se|\/se/)).toHaveCount(0);
+
+  // Trecho sem {{/se}} não publica.
+  await page.getByRole('button', { name: /^Publicar v1/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Publicar' }).click();
+  await expect(page.getByText('Feche o trecho {{#se exito}} com {{/se}}.')).toBeVisible();
+
+  await page.getByRole('tab', { name: 'HTML' }).click();
+  await body.fill((await body.inputValue()).replace('%.</p>', '%.{{/se}}</p>'));
   await page.getByRole('button', { name: /^Publicar v1/ }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Publicar' }).click();
   await expect(page.getByText('Publicado · v1')).toBeVisible();
