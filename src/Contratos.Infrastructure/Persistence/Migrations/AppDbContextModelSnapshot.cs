@@ -510,6 +510,11 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("CreatedByExternal")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("created_by_external");
+
                     b.Property<string>("DefaultSignerRoles")
                         .IsRequired()
                         .HasColumnType("jsonb")
@@ -839,6 +844,130 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_api_keys_organization_id");
 
                     b.ToTable("api_keys", (string)null);
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Integrations.EmbedOrigin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("origin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_embed_origins");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_embed_origins_created_by");
+
+                    b.HasIndex("OrganizationId", "Origin")
+                        .IsUnique()
+                        .HasDatabaseName("ix_embed_origins_organization_id_origin");
+
+                    b.ToTable("embed_origins", (string)null);
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Integrations.EmbedSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("AccessTokenHash")
+                        .HasColumnType("bytea")
+                        .HasColumnName("access_token_hash");
+
+                    b.Property<Guid>("ApiKeyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("api_key_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("ExternalUserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_user_id");
+
+                    b.Property<string>("ExternalUserName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("external_user_name");
+
+                    b.Property<DateTimeOffset>("LaunchExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("launch_expires_at");
+
+                    b.Property<byte[]>("LaunchTokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("launch_token_hash");
+
+                    b.Property<DateTimeOffset?>("OpenedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("ParentOrigin")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("parent_origin");
+
+                    b.PrimitiveCollection<List<string>>("Permissions")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("permissions");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_embed_sessions");
+
+                    b.HasIndex("AccessTokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_embed_sessions_access_token_hash")
+                        .HasFilter("access_token_hash IS NOT NULL");
+
+                    b.HasIndex("ApiKeyId")
+                        .HasDatabaseName("ix_embed_sessions_api_key_id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_embed_sessions_expires_at");
+
+                    b.HasIndex("OrganizationId")
+                        .HasDatabaseName("ix_embed_sessions_organization_id");
+
+                    b.ToTable("embed_sessions", (string)null);
                 });
 
             modelBuilder.Entity("Contratos.Infrastructure.Integrations.WebhookDelivery", b =>
@@ -1421,6 +1550,40 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_api_keys_organizations_organization_id");
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Integrations.EmbedOrigin", b =>
+                {
+                    b.HasOne("Contratos.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_embed_origins_users_created_by");
+
+                    b.HasOne("Contratos.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_embed_origins_organizations_organization_id");
+                });
+
+            modelBuilder.Entity("Contratos.Infrastructure.Integrations.EmbedSession", b =>
+                {
+                    b.HasOne("Contratos.Infrastructure.Integrations.ApiKey", null)
+                        .WithMany()
+                        .HasForeignKey("ApiKeyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_embed_sessions_api_keys_api_key_id");
+
+                    b.HasOne("Contratos.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_embed_sessions_organizations_organization_id");
                 });
 
             modelBuilder.Entity("Contratos.Infrastructure.Integrations.WebhookDelivery", b =>

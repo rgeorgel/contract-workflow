@@ -74,6 +74,32 @@
         <button class="btn btn--secondary btn--sm" type="button" data-next>Mais antigas</button>
       </div>
     </section>
+
+    <section class="panel" id="embed" aria-labelledby="embed-title">
+      <div class="panel__header">
+        <div>
+          <h2 id="embed-title">Embed de templates</h2>
+          <p class="panel__subtitle">A tela de templates dentro do seu sistema, num iframe. Só os sites cadastrados aqui conseguem mostrar o embed.</p>
+        </div>
+      </div>
+      <div class="panel__body">
+        <form class="origin-form" data-origin-form novalidate>
+          <div class="field">
+            <label class="field__label" for="origin">Endereço do site</label>
+            <div class="origin-form__row">
+              <input class="input" id="origin" name="origin" type="url" inputmode="url" maxlength="200" placeholder="https://crm.suaempresa.com.br" aria-describedby="origin-hint" disabled>
+              <button class="btn btn--primary" type="submit" data-add-origin disabled>Cadastrar</button>
+            </div>
+            <p class="field__hint" id="origin-hint">Só o domínio, sem caminho. Use <code>https://*.suaempresa.com.br</code> para todos os subdomínios e <code>http://localhost:3000</code> para testar.</p>
+            <p class="field__error" data-error-for="origin"></p>
+          </div>
+        </form>
+      </div>
+      <div class="table-wrap" data-origins></div>
+      <div class="panel__body panel__footnote">
+        <p class="muted">O seu servidor cria uma sessão com a chave de API e coloca o link num iframe. <a href="/desenvolvedores/#embed" target="_blank" rel="noopener">Como integrar o embed</a></p>
+      </div>
+    </section>
   </main>
 </body>
 </html>

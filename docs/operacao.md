@@ -185,7 +185,7 @@ API: `POST /api/v1/contracts/bulk` com `{ templateId, rows, dryRun }`.
 
 ## API pública e webhooks
 
-Plano Empresa (`Plan.ApiAccess`). Documentação para os clientes em `/desenvolvedores/` (portal público) e `/desenvolvedores/openapi.json`. Um teste confere que o OpenAPI lista exatamente as rotas de `/api/public/v1`: ao criar ou mudar uma rota, atualize o `openapi.json` e o portal.
+Todos os planos (`Plan.ApiAccess`, ligado em todos hoje). Documentação para os clientes em `/desenvolvedores/` (portal público) e `/desenvolvedores/openapi.json`. Um teste confere que o OpenAPI lista exatamente as rotas de `/api/public/v1`: ao criar ou mudar uma rota, atualize o `openapi.json` e o portal.
 
 **Chaves:** criadas por um Admin em Integrações (`/integrations.html`).
 - Formato `ctr_` mais 43 caracteres. O banco guarda só o SHA-256 e o começo da chave, para reconhecer na lista.
@@ -206,7 +206,15 @@ Plano Empresa (`Plan.ApiAccess`). Documentação para os clientes em `/desenvolv
 - **SSRF:** a URL precisa ser `https://` e pública. No cadastro, localhost, IPs privados, link-local (169.254.x, metadados da nuvem) e `.internal`/`.local` são recusados. Na conexão, o IP resolvido é conferido de novo, o que barra um DNS trocado depois do cadastro.
   - `WEBHOOKS_ALLOW_PRIVATE_NETWORKS=true` libera http e rede interna. Só em dev: o `docker-compose.override.yml` já liga.
   - Nunca ligue em produção.
-- **Plano sem API:** se a conta muda para um plano sem API, as chaves respondem 403 `api_not_in_plan` e nenhum evento é gerado. Nada é apagado; voltando ao Empresa, tudo volta a funcionar.
+**Embed de templates:** a tela de templates dentro do sistema do cliente, num iframe (`/embed/templates` e `/embed/template-editor`, os mesmos HTML da tela).
+- **Sites:** o Admin cadastra em Integrações → Embed os sites que podem mostrar o iframe (até 10; `https://`, `https://*.dominio` ou `http://localhost:porta`). Viram o `frame-ancestors` da CSP da página; sem site cadastrado, `POST /embed/sessions` responde 409 `embed_origin_required`. As outras páginas continuam com `frame-ancestors 'none'`.
+- **Sessão:** o servidor do cliente cria com a chave de API (`POST /api/public/v1/embed/sessions`), com permissões (`edit`, `publish`, `archive`), nome de quem usa e duração (5 min a 8 h). A URL leva um token de uso único no `#`, válido por 10 minutos. A página troca esse token por um token de acesso `ces_` (`POST /api/embed/v1/session`), guardado na `sessionStorage` do iframe. O banco guarda só os hashes.
+- **API do embed:** `/api/embed/v1` repete as rotas de templates da tela, autenticada só pelo token da sessão (sem cookie nem antiforgery) e com as permissões dela. A pré-visualização é carregada pelo `src` do iframe, então usa um ticket de 10 minutos que só abre aquele template.
+- **Encerramento:** a sessão acaba no horário, em `DELETE /embed/sessions/{id}`, ao revogar a chave ou ao remover o site. O worker apaga sessões vencidas há mais de 7 dias.
+- **Autoria:** as versões criadas pelo embed ficam no nome do dono da chave, com o nome informado na sessão (`created_by_external`). O histórico mostra "Maria Souza (pela integração)".
+- **Webhooks de template:** `template.published` e `template.archived` saem do mesmo `SaveChanges` que publica ou arquiva, tanto pela tela quanto pelo embed.
+
+- **Plano sem API:** hoje todos os planos incluem a API. Se algum plano voltar a ficar sem (`ApiAccess: false`), as chaves dessa conta respondem 403 `api_not_in_plan` e nenhum evento é gerado; nada é apagado, e voltando a um plano com API tudo volta a funcionar.
 
 ## Saúde
 
@@ -234,6 +242,7 @@ A app escuta HTTP na porta 7700. Em produção, ponha um proxy com TLS na frente
 | `RateLimiting__AuthPermitsPerMinute` | 10 | Cadastro, login, confirmação, senha: por IP |
 | `API_RATE_LIMIT_PER_MINUTE` | 300 | Toda a `/api`: por usuário logado, ou por IP |
 | `PUBLIC_API_PERMITS_PER_MINUTE` | 120 | API pública (`/api/public/v1`): por chave |
+| `API_RATE_LIMIT_PER_MINUTE` | 300 | API do embed (`/api/embed/v1`): por sessão |
 
 ## Backup
 

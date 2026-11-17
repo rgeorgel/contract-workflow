@@ -73,12 +73,16 @@ public sealed class TemplateVersion
 {
     private TemplateVersion() { } // EF Core
 
-    public TemplateVersion(Guid templateId, int version, Guid createdBy)
+    public const int ExternalAuthorMaxLength = 120;
+
+    /// <param name="createdByExternal">Pessoa do sistema do cliente que criou a versão pelo embed (não tem usuário aqui).</param>
+    public TemplateVersion(Guid templateId, int version, Guid createdBy, string? createdByExternal = null)
     {
         Id = Guid.CreateVersion7();
         TemplateId = templateId;
         Version = version;
         CreatedBy = createdBy;
+        CreatedByExternal = string.IsNullOrWhiteSpace(createdByExternal) ? null : createdByExternal.Trim();
         CreatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -89,6 +93,8 @@ public sealed class TemplateVersion
     public List<TemplateVariable> Variables { get; private set; } = [];
     public List<SignerRoleSuggestion> DefaultSignerRoles { get; private set; } = [];
     public Guid CreatedBy { get; private set; }
+    /// <summary>Nome informado pelo sistema do cliente na sessão de embed; o <see cref="CreatedBy"/> é o dono da chave.</summary>
+    public string? CreatedByExternal { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? PublishedAt { get; private set; }
 

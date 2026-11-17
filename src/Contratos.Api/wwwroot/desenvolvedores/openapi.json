@@ -3,7 +3,7 @@
   "info": {
     "title": "Contratos: API pública",
     "version": "1.0.0",
-    "description": "Crie, envie e acompanhe contratos para assinatura eletrônica. Guia completo, webhooks e exemplos em /desenvolvedores/. Autenticação: `Authorization: Bearer ctr_...` (chave criada em Integrações, plano Empresa). Limite: 120 requisições por minuto por chave."
+    "description": "Crie, envie e acompanhe contratos para assinatura eletrônica. Guia completo, webhooks, embed de templates e exemplos em /desenvolvedores/. Autenticação: `Authorization: Bearer ctr_...` (chave criada em Integrações, em qualquer plano). Limite: 120 requisições por minuto por chave."
   },
   "servers": [
     {
@@ -25,6 +25,9 @@
     },
     {
       "name": "Contratos"
+    },
+    {
+      "name": "Embed"
     }
   ],
   "paths": {
@@ -1066,6 +1069,133 @@
           }
         }
       }
+    },
+    "/embed/sessions": {
+      "post": {
+        "tags": [
+          "Embed"
+        ],
+        "operationId": "createEmbedSession",
+        "summary": "Cria uma sessão do embed de templates (link para um iframe no seu sistema)",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmbedSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Criada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados inválidos (`validation`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nenhum site cadastrado para o embed (`embed_origin_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embed/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "Embed"
+        ],
+        "operationId": "revokeEmbedSession",
+        "summary": "Encerra a sessão antes do prazo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Id da sessão."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Encerrada"
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não encontrada nesta conta (`not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
@@ -1246,6 +1376,8 @@
           "contract.signed_document_ready",
           "contract.expired",
           "contract.cancelled",
+          "template.published",
+          "template.archived",
           "webhook.test"
         ]
       },
@@ -1834,8 +1966,145 @@
                   "string",
                   "null"
                 ]
+              },
+              "template": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Template"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Nos eventos template.*: o template com a versão publicada."
               }
             }
+          }
+        }
+      },
+      "EmbedPermission": {
+        "type": "string",
+        "enum": [
+          "edit",
+          "publish",
+          "archive"
+        ]
+      },
+      "CreateEmbedSession": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedPermission"
+            },
+            "description": "Omitido: todas. Lista vazia: só leitura. publish e archive precisam de edit."
+          },
+          "user": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 100
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              }
+            },
+            "description": "Quem usa, no seu sistema; o nome aparece no histórico de versões."
+          },
+          "parentOrigin": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Site exato que vai abrir o iframe; precisa estar entre os cadastrados em Integrações."
+          },
+          "expiresInMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 5,
+            "maximum": 480,
+            "default": 60
+          },
+          "templateId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Abre direto no editor deste template."
+          }
+        }
+      },
+      "EmbedSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "permissions",
+          "launchExpiresAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "description": "Endereço do iframe. Abre uma vez, até launchExpiresAt."
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbedPermission"
+            }
+          },
+          "user": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 100
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              }
+            }
+          },
+          "parentOrigin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "launchExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

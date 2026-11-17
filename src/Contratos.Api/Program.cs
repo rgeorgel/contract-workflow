@@ -39,7 +39,8 @@ builder.Services.AddOpenApi();
 var secureCookies = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null);
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null)
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, EmbedAuthenticationHandler>(EmbedAuthenticationHandler.SchemeName, null);
 builder.Services.AddAuthentication().AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(o =>
 {
@@ -100,7 +101,18 @@ builder.Services.AddRateLimiter(o =>
     {
         if (!ctx.Request.Path.StartsWithSegments("/api"))
             return RateLimitPartition.GetNoLimiter("static");
-        // API pública: por chave (o cabeçalho, com hash), antes de saber se ela é válida.
+        // API pública e do embed: por chave ou sessão (o cabeçalho, com hash), antes de saber se é válida.
+        if (ctx.Request.Path.StartsWithSegments(EmbedEndpoints.ApiPrefix))
+        {
+            var auth = ctx.Request.Headers.Authorization.ToString();
+            var partition = auth.Length > 0
+                ? "embed:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(auth)), 0, 12)
+                : $"ip:{ClientIp(ctx)}";
+            return RateLimitPartition.GetSlidingWindowLimiter(partition, _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = apiPermitsPerMinute, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6,
+            });
+        }
         if (ctx.Request.Path.StartsWithSegments(PublicApiEndpoints.Prefix))
         {
             var auth = ctx.Request.Headers.Authorization.ToString();
@@ -200,6 +212,7 @@ if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", Str
 app.MapWebhookEndpoints();
 app.MapPlatformEndpoints();
 app.MapPublicApiEndpoints();
+app.MapEmbedEndpoints();
 
 app.Run();
 

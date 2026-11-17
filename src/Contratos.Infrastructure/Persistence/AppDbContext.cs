@@ -37,6 +37,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<EmbedOrigin> EmbedOrigins => Set<EmbedOrigin>();
+    public DbSet<EmbedSession> EmbedSessions => Set<EmbedSession>();
 
     /// <summary>
     /// Antes de gravar: eventos novos da linha do tempo viram eventos de webhook (na mesma transação),

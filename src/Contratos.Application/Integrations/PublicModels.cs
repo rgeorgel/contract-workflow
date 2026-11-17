@@ -101,12 +101,20 @@ public sealed record PublicCreateContractRequest(
 // ---------- Webhooks ----------
 
 /// <param name="Reason">Motivo da recusa (contract.declined) ou do erro (contract.send_failed).</param>
-public sealed record WebhookData(PublicContract? Contract, PublicSigner? Signer, string? Reason, string? Message = null);
+/// <param name="Template">Nos eventos template.*: o template, com a versão publicada.</param>
+public sealed record WebhookData(
+    PublicContract? Contract, PublicSigner? Signer, string? Reason, string? Message = null, PublicTemplate? Template = null);
 
 public sealed record WebhookPayload(Guid Id, string Type, DateTimeOffset CreatedAt, WebhookData Data);
 
 public static class PublicMapper
 {
+    public static PublicTemplate Template(Template t, TemplateVersion v) => new(
+        t.Id, t.Name, t.Description, v.Version,
+        v.Variables.Select(x => new PublicVariable(x.Key, x.Label, x.Type, x.Required)).ToList(),
+        v.DefaultSignerRoles.OrderBy(r => r.Order).Select(r => new PublicSignerRole(r.Role, r.Action, r.Order)).ToList(),
+        t.UpdatedAt);
+
     public static PublicContract Contract(ContractDetail c) => new(
         c.Id, c.Number, c.Title, c.Status, c.ExternalReference,
         new PublicTemplateRef(c.Template.Id, c.Template.Name, c.Template.Version),
@@ -149,7 +157,12 @@ public static class WebhookEventTypes
         new("contract.signed_document_ready", "O PDF assinado está disponível para download."),
         new("contract.expired", "O prazo para assinar terminou sem todas as assinaturas."),
         new("contract.cancelled", "O contrato foi cancelado."),
+        new("template.published", "Uma versão nova de um template foi publicada (pela tela ou pelo embed)."),
+        new("template.archived", "Um template foi arquivado e não aceita mais contratos novos."),
     ];
+
+    public const string TemplatePublished = "template.published";
+    public const string TemplateArchived = "template.archived";
 
     private static readonly Dictionary<string, string> FromTimeline = new(StringComparer.Ordinal)
     {

@@ -116,23 +116,23 @@ public sealed class PublicApiTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Plans_without_the_api_cannot_create_keys_and_existing_keys_stop_working()
+    public async Task Every_plan_includes_the_api_and_webhooks()
     {
+        Assert.All(Contratos.Domain.Billing.Plans.All, p => Assert.True(p.ApiAccess, p.Id));
+
         var admin = await TestAccounts.CreateAdminAsync(factory);
         var token = await CreateKeyAsync(admin);
         var slug = (await (await admin.Client.GetAsync("/api/v1/organization/settings")).JsonAsync()).GetProperty("slug").GetString();
         var platform = Public(ApiFactory.PlatformKey);
-        Assert.Equal(HttpStatusCode.OK, (await platform.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan = "profissional" })).StatusCode);
 
-        var denied = await Public(token).GetAsync("/api/public/v1/account");
-        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        Assert.Equal("api_not_in_plan", (await denied.JsonAsync()).GetProperty("code").GetString());
-
-        var create = await admin.Client.PostAsync("/api/v1/integrations/keys", new { name = "outra" });
-        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
-        var overview = await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync();
-        Assert.False(overview.GetProperty("available").GetBoolean());
-        Assert.Equal("Empresa", Assert.Single(overview.GetProperty("plansWithApi").EnumerateArray()).GetString());
+        foreach (var plan in new[] { "avulso", "essencial", "profissional" })
+        {
+            Assert.Equal(HttpStatusCode.OK, (await platform.PutAsJsonAsync($"/api/platform/organizations/{slug}/plan", new { plan })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Public(token).GetAsync("/api/public/v1/account")).StatusCode);
+            Assert.Equal(HttpStatusCode.Created, (await admin.Client.PostAsync("/api/v1/integrations/keys", new { name = $"chave {plan}" })).StatusCode);
+            var overview = await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync();
+            Assert.True(overview.GetProperty("available").GetBoolean(), plan);
+        }
     }
 
     // ---------- Templates e contratos ----------

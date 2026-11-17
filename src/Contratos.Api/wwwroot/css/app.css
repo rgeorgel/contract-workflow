@@ -255,3 +255,17 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
   .detail-row { grid-template-columns: 1fr; gap: 2px; }
   .secret-box { flex-direction: column; }
 }
+
+/* ---------- Embed: a tela dentro do sistema do cliente (iframe) ---------- */
+.is-embed body.app { min-height: 0; }
+.is-embed .page { padding-top: 16px; padding-bottom: 24px; }
+.is-embed .editor__preview { top: 16px; }
+.is-embed .rte-toolbar { top: 0; }
+/* Altura fixa: com 70vh, um iframe que cresce com o conteúdo cresceria sem parar. */
+.is-embed .preview-frame { height: 640px; }
+.embed-ended { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
+.embed-ended h1 { font-size: 1.3rem; }
+.embed-ended p { color: var(--color-muted); margin-top: 8px; }
+.origin-form__row { display: flex; flex-wrap: wrap; gap: 8px; }
+.origin-form__row .input { flex: 1 1 260px; }
+.panel__footnote { border-top: 1px solid var(--color-border); }

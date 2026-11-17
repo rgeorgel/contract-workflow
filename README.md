@@ -43,9 +43,10 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Reconciliação a cada 30 min para contratos em aberto há mais de 24 h (webhooks perdidos)
 - Configuração em [docs/operacao.md](docs/operacao.md#assinatura-autentique)
 
-**Integrações (plano Empresa)**
+**Integrações (todos os planos)**
 - API pública em `/api/public/v1` com chave por sistema (`Authorization: Bearer ctr_...`): templates, criar e enviar contrato numa chamada (com `Idempotency-Key` e `externalReference`), consultar, cancelar, reenviar link, linha do tempo e PDFs
 - Webhooks assinados com HMAC para os eventos dos contratos, com novas tentativas por ~2 dias, histórico de entregas, "Entregar de novo" e proteção contra SSRF
+- Embed de templates: o sistema do cliente mostra a tela de templates (editor, variáveis, pré-visualização, publicação) num iframe, com sessão criada pela API, permissões por sessão e só nos sites cadastrados
 - Tela de Integrações (Admin) e portal público de documentação em `/desenvolvedores/`, com OpenAPI em `/desenvolvedores/openapi.json`
 - Detalhes em [docs/operacao.md](docs/operacao.md#api-pública-e-webhooks)
 

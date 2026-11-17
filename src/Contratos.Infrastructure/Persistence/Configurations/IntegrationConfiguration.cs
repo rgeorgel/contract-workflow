@@ -72,3 +72,38 @@ internal sealed class WebhookDeliveryConfiguration : IEntityTypeConfiguration<We
         b.HasOne<WebhookEndpoint>().WithMany().HasForeignKey(d => d.EndpointId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+internal sealed class EmbedOriginConfiguration : IEntityTypeConfiguration<EmbedOrigin>
+{
+    public void Configure(EntityTypeBuilder<EmbedOrigin> b)
+    {
+        b.ToTable("embed_origins");
+        b.HasKey(o => o.Id);
+        b.Property(o => o.Id).ValueGeneratedNever();
+        b.Property(o => o.Origin).HasMaxLength(EmbedOrigin.MaxLength).IsRequired();
+        b.HasIndex(o => new { o.OrganizationId, o.Origin }).IsUnique();
+        b.HasOne<Organization>().WithMany().HasForeignKey(o => o.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<AppUser>().WithMany().HasForeignKey(o => o.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class EmbedSessionConfiguration : IEntityTypeConfiguration<EmbedSession>
+{
+    public void Configure(EntityTypeBuilder<EmbedSession> b)
+    {
+        b.ToTable("embed_sessions");
+        b.HasKey(s => s.Id);
+        b.Property(s => s.Id).ValueGeneratedNever();
+        b.Property(s => s.Permissions).HasColumnType("text[]");
+        b.Property(s => s.ExternalUserId).HasMaxLength(EmbedSession.ExternalIdMaxLength);
+        b.Property(s => s.ExternalUserName).HasMaxLength(Domain.Templates.TemplateVersion.ExternalAuthorMaxLength);
+        b.Property(s => s.ParentOrigin).HasMaxLength(EmbedOrigin.MaxLength);
+        b.Property(s => s.LaunchTokenHash).IsRequired();
+        // Cada requisição da página acha a sessão pelo hash do token de acesso.
+        b.HasIndex(s => s.AccessTokenHash).IsUnique().HasFilter("access_token_hash IS NOT NULL");
+        b.HasIndex(s => s.ExpiresAt);
+        b.HasIndex(s => s.OrganizationId);
+        b.HasOne<Organization>().WithMany().HasForeignKey(s => s.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<ApiKey>().WithMany().HasForeignKey(s => s.ApiKeyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

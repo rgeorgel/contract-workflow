@@ -1,10 +1,12 @@
 import { api, resetCsrf } from './api.js';
+import { EMBED, embedMe } from './embed.js';
 
 let mePromise = null;
 
 /** Usuário logado (uma chamada por página). Sem sessão, o api.js manda para o login. */
 export function getMe() {
-  mePromise ??= api('/auth/me');
+  // No embed não há usuário logado: a sessão traz a organização e as permissões.
+  mePromise ??= EMBED ? embedMe() : api('/auth/me');
   return mePromise;
 }
 
@@ -12,6 +14,7 @@ export function getMe() {
 export async function requireUser({ roles } = {}) {
   const me = await getMe();
   if (roles && !roles.includes(me.role)) {
+    if (EMBED) throw new Error('Página fora do embed');
     location.replace('/dashboard.html');
     throw new Error('Sem permissão');
   }

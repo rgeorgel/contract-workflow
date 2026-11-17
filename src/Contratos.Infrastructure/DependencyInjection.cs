@@ -196,6 +196,7 @@ public static class DependencyInjection
     {
         services.AddOptions<Integrations.WebhookOptions>().Bind(config.GetSection(Integrations.WebhookOptions.Section));
         services.AddScoped<Integrations.ApiKeyStore>();
+        services.AddScoped<Integrations.EmbedSessions>();
         services.AddSingleton<Integrations.WebhookSecrets>();
         services.AddScoped<Application.Integrations.IIntegrationService, Integrations.IntegrationService>();
         services.AddSingleton<Integrations.WebhookDispatcher>();

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { signUp } from './helpers.js';
 
 test('integrações: chave aparece uma vez, abre a API pública e para ao revogar', async ({ page, request }) => {
-  await signUp(page, request); // plano Empresa: tem API
+  await signUp(page, request);
   await page.goto('/dashboard.html');
   await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Integrações' }).click();
   await expect(page.getByRole('heading', { name: 'Integrações', level: 1 })).toBeVisible();
@@ -41,7 +41,7 @@ test('integrações: webhook com segredo, evento de teste e histórico de entreg
   // Ninguém escuta nesta porta: a entrega falha e entra em nova tentativa (rede interna é liberada só em dev).
   await page.getByLabel('URL').fill('http://127.0.0.1:9/webhooks/contratos');
   await page.getByLabel('Descrição').fill('CRM de teste');
-  await page.getByRole('button', { name: 'Cadastrar' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cadastrar' }).click();
   const secret = await page.getByLabel('Segredo de assinatura').inputValue();
   expect(secret).toMatch(/^whsec_/);
   await page.getByRole('button', { name: 'Concluir' }).click();
@@ -71,12 +71,12 @@ test('integrações: webhook com segredo, evento de teste e histórico de entreg
   await expect(hook).toContainText('contract.completed');
 });
 
-test('integrações: fora do plano Empresa, convite para mudar de plano', async ({ page, request }) => {
-  await signUp(page, request, { plan: 'profissional' });
+test('integrações: liberadas também no plano Avulso', async ({ page, request }) => {
+  await signUp(page, request, { plan: 'avulso' });
   await page.goto('/integrations.html');
-  await expect(page.getByRole('heading', { name: /fazem parte do plano Empresa/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Nova chave' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Novo webhook' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Nova chave' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Novo webhook' })).toBeEnabled();
+  await expect(page.getByRole('heading', { name: /fazem parte do plano/ })).toBeHidden();
 });
 
 test('portal de desenvolvedores: endereço real nos exemplos, abas e OpenAPI', async ({ page, baseURL }) => {
@@ -92,10 +92,14 @@ test('portal de desenvolvedores: endereço real nos exemplos, abas e OpenAPI', a
   await quick.getByRole('tab', { name: 'Python' }).click();
   await expect(page.getByRole('tablist', { name: 'Criar e enviar um contrato' }).getByRole('tab', { name: 'Python' }))
     .toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel').filter({ hasText: 'requests.post' })).toBeVisible();
+  await expect(page.getByRole('tabpanel').filter({ hasText: 'api/public/v1/contracts' }).filter({ hasText: 'requests.post' })).toBeVisible();
+  // Inclusive nos exemplos do embed.
+  await expect(page.getByRole('tablist', { name: 'Criar uma sessão de embed' }).getByRole('tab', { name: 'Python' }))
+    .toHaveAttribute('aria-selected', 'true');
 
   const spec = await page.request.get('/desenvolvedores/openapi.json');
   expect(spec.ok()).toBeTruthy();
   expect((await spec.json()).paths['/contracts'].post.operationId).toBe('createContract');
+  expect((await spec.json()).paths['/embed/sessions'].post.operationId).toBe('createEmbedSession');
   expect(scriptErrors).toEqual([]);
 });

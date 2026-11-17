@@ -9,7 +9,7 @@ namespace Contratos.Domain.Billing;
 /// <param name="MaxUsers">Usuários ativos mais convites pendentes; null = ilimitado.</param>
 /// <param name="MaxTemplates">Templates não arquivados; null = ilimitado.</param>
 /// <param name="BulkSend">Criar contratos em lote a partir de uma planilha.</param>
-/// <param name="ApiAccess">API pública (chaves de API) e webhooks para integrar com CRM e ERP.</param>
+/// <param name="ApiAccess">API pública (chaves de API) e webhooks para integrar com CRM e ERP. Hoje todos os planos incluem.</param>
 public sealed record Plan(
     string Id,
     string Name,
@@ -20,7 +20,7 @@ public sealed record Plan(
     int? MaxTemplates,
     IReadOnlyList<DeliveryMethod> Channels,
     bool BulkSend = false,
-    bool ApiAccess = false)
+    bool ApiAccess = true)
 {
     public bool Allows(DeliveryMethod channel) => Channels.Contains(channel);
 }
@@ -55,7 +55,7 @@ public static class Plans
     public static readonly Plan Professional = new(ProfessionalId, "Profissional", 89.90m, 899m, 80, 10, null,
         [DeliveryMethod.Email, DeliveryMethod.WhatsApp, DeliveryMethod.Sms], BulkSend: true);
     public static readonly Plan Business = new(BusinessId, "Empresa", 199.90m, 1999m, 250, null, null,
-        [DeliveryMethod.Email, DeliveryMethod.WhatsApp, DeliveryMethod.Sms], BulkSend: true, ApiAccess: true);
+        [DeliveryMethod.Email, DeliveryMethod.WhatsApp, DeliveryMethod.Sms], BulkSend: true);
 
     /// <summary>Do mais barato para o mais caro.</summary>
     public static IReadOnlyList<Plan> All { get; } = [PayAsYouGo, Essential, Professional, Business];

@@ -1,11 +1,13 @@
 import { api, ApiError } from '../api.js';
-import { isAdmin, requireUser } from '../auth.js';
+import { requireUser } from '../auth.js';
+import { can, EMBED, href, notify } from '../embed.js';
 import { clear, h, icon, ICONS } from '../ui/dom.js';
 import { applyErrors, clearErrors, setBusy, setFieldError, showAlert } from '../ui/form.js';
 import { openModal } from '../ui/modal.js';
 import { formatRelative } from '../utils/format.js';
 
 const me = await requireUser();
+const canEdit = can(me, 'edit');
 const listEl = document.querySelector('[data-list]');
 const searchEl = document.querySelector('[data-search]');
 let filter = 'active';
@@ -29,9 +31,10 @@ function render() {
       h('span', { class: 'empty__icon' }, icon(ICONS.doc)),
       h('h2', {}, empty ? 'Nenhum template ainda' : 'Nada encontrado'),
       h('p', {}, empty
-        ? (isAdmin(me) ? 'Crie o primeiro modelo de contrato. Você cola o texto e marca as partes que mudam.' : 'Um Admin da sua empresa precisa criar os modelos de contrato.')
+        ? (canEdit ? 'Crie o primeiro modelo de contrato. Você cola o texto e marca as partes que mudam.'
+          : EMBED ? 'Ainda não há modelos de contrato.' : 'Um Admin da sua empresa precisa criar os modelos de contrato.')
         : 'Tente outro termo ou troque o filtro.'),
-      empty && isAdmin(me) ? h('button', { type: 'button', class: 'btn btn--primary', onclick: openNew }, 'Criar template') : null));
+      empty && canEdit ? h('button', { type: 'button', class: 'btn btn--primary', onclick: openNew }, 'Criar template') : null));
     return;
   }
 
@@ -39,17 +42,20 @@ function render() {
     h('thead', {}, h('tr', {}, h('th', {}, 'Template'), h('th', {}, 'Situação'), h('th', {}, 'Variáveis'), h('th', {}, 'Atualizado'))),
     h('tbody', {}, visible.map((t) => h('tr', {},
       h('td', { 'data-label': 'Template' },
-        h('a', { class: 'row-link', href: `/template-editor.html?id=${t.id}` }, t.name),
+        h('a', { class: 'row-link', href: href(`/template-editor.html?id=${t.id}`) }, t.name),
         t.description ? h('span', { class: 'cell-sub' }, t.description) : null),
       h('td', { 'data-label': 'Situação' }, statusBadge(t)),
       h('td', { 'data-label': 'Variáveis' }, String(t.variableCount)),
       h('td', { 'data-label': 'Atualizado' }, formatRelative(t.updatedAt)))))));
 }
 
+let ready = false;
+
 async function load() {
   try {
     items = await api(`/templates?archived=${filter === 'archived'}`);
     render();
+    if (!ready) { ready = true; notify('ready', { page: 'templates' }); }
   } catch (err) {
     clear(listEl).append(h('div', { class: 'panel__body' }, h('div', { class: 'alert alert--error' }, err.message)));
   }
@@ -124,7 +130,8 @@ async function openNew() {
           starterId: form.elements.starter.value || null,
         },
       });
-      location.assign(`/template-editor.html?id=${t.id}`);
+      notify('template.created', { template: { id: t.id, name: t.name } });
+      location.assign(href(`/template-editor.html?id=${t.id}`));
     } catch (err) {
       setBusy(submit, false);
       if (!(err instanceof ApiError && applyErrors(form, err.errors))) showAlert(alertEl, err.message);
@@ -141,7 +148,7 @@ for (const tab of document.querySelectorAll('[data-filter]')) {
 }
 searchEl.addEventListener('input', render);
 
-if (isAdmin(me)) {
+if (canEdit) {
   const btn = document.querySelector('[data-new]');
   btn.hidden = false;
   btn.addEventListener('click', openNew);

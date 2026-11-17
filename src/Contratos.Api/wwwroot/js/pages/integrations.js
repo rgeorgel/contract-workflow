@@ -16,6 +16,8 @@ const filterEl = document.querySelector('[data-delivery-filter]');
 const pagerEl = document.querySelector('[data-pager]');
 const newKeyBtn = document.querySelector('[data-new-key]');
 const newHookBtn = document.querySelector('[data-new-hook]');
+const originsEl = document.querySelector('[data-origins]');
+const originForm = document.querySelector('[data-origin-form]');
 
 let overview = null;
 let page = 1;
@@ -323,6 +325,63 @@ async function deleteHook(hook) {
   } catch (err) { toast(err.message, 'error'); }
 }
 
+// ---------- Embed ----------
+
+function renderOrigins() {
+  const origins = overview.embedOrigins;
+  if (origins.length === 0) {
+    clear(originsEl).append(h('div', { class: 'panel__body' },
+      h('p', { class: 'muted' }, 'Nenhum site ainda. Sem um site cadastrado, a API não cria sessões de embed.')));
+    return;
+  }
+  clear(originsEl).append(h('table', { class: 'table table--stack' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Site'), h('th', {}, 'Cadastrado'), h('th', {}, h('span', { class: 'visually-hidden' }, 'Ações')))),
+    h('tbody', {}, origins.map((o) => h('tr', {},
+      h('td', { 'data-label': 'Site' }, h('code', { class: 'cell-main' }, o.origin)),
+      h('td', { 'data-label': 'Cadastrado' },
+        h('span', { class: 'cell-main' }, formatDateTime(o.createdAt)),
+        o.createdByName ? h('span', { class: 'cell-sub' }, `por ${o.createdByName}`) : null),
+      h('td', { class: 'cell-actions' }, linkBtn('Remover', () => removeOrigin(o), true)))))));
+}
+
+async function removeOrigin(origin) {
+  const ok = await confirmModal({
+    title: `Remover ${origin.origin}?`,
+    description: 'O embed para de abrir neste site, inclusive nas sessões que já estão abertas.',
+    confirmLabel: 'Remover', danger: true,
+  });
+  if (!ok) return;
+  try {
+    await api(`/integrations/embed-origins/${origin.id}`, { method: 'DELETE' });
+    toast('Site removido.');
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+originForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearErrors(originForm);
+  const submit = originForm.querySelector('[data-add-origin]');
+  setBusy(submit, true);
+  try {
+    await api('/integrations/embed-origins', { method: 'POST', body: { origin: originForm.elements.origin.value.trim() } });
+    originForm.reset();
+    toast('Site cadastrado.');
+    await load();
+  } catch (err) {
+    if (!(err instanceof ApiError && applyErrors(originForm, err.errors))) toast(err.message, 'error');
+  } finally {
+    setBusy(submit, false);
+    renderOriginForm();
+  }
+});
+
+function renderOriginForm() {
+  const blocked = !overview.available || overview.embedOrigins.length >= overview.maxEmbedOrigins;
+  originForm.elements.origin.disabled = blocked;
+  originForm.querySelector('[data-add-origin]').disabled = blocked;
+}
+
 // ---------- Entregas ----------
 
 function deliveryStatus(d) {
@@ -420,6 +479,7 @@ async function load() {
     clear(keysEl).append(errorBox(err));
     clear(hooksEl);
     clear(deliveriesEl);
+    clear(originsEl);
     return;
   }
   const upgrade = document.querySelector('[data-upgrade]');
@@ -430,6 +490,8 @@ async function load() {
   newHookBtn.disabled = !overview.available || overview.endpoints.length >= overview.maxEndpoints;
   renderKeys();
   renderHooks();
+  renderOrigins();
+  renderOriginForm();
   renderFilter();
   await loadDeliveries();
 }

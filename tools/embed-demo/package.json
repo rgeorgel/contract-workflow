@@ -1,0 +1,9 @@
+{
+  "name": "contratos-embed-demo",
+  "private": true,
+  "type": "module",
+  "description": "Página de teste do embed de templates (faz o papel do sistema do cliente).",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

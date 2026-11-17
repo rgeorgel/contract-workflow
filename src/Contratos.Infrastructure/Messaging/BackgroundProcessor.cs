@@ -94,6 +94,7 @@ public sealed class BackgroundProcessor(
             await alerts.RunIfDueAsync(ct);
             for (var i = 0; i < BatchLimit && await ProcessNextOutboxAsync(ct); i++) { }
             await ExpireContractsAsync(ct);
+            await PurgeEmbedSessionsAsync(ct);
             await ReconcileAsync(ct);
             // Depois de tudo que gera eventos: o webhook sai na mesma rodada.
             await webhooks.DeliverDueAsync(ct);
@@ -439,6 +440,15 @@ public sealed class BackgroundProcessor(
             db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.Expired));
         if (expired.Count > 0)
             await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Sessões de embed vencidas há mais de 7 dias não servem para nada (só os hashes dos tokens).</summary>
+    private async Task PurgeEmbedSessionsAsync(CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var cutoff = clock.GetUtcNow().AddDays(-7);
+        await db.EmbedSessions.Where(s => s.ExpiresAt < cutoff).ExecuteDeleteAsync(ct);
     }
 
     // ---------- Reconciliação ----------

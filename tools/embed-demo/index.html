@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRM Exemplo · teste do embed</title>
+  <link rel="stylesheet" href="/demo.css">
+  <script type="module" src="/demo.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <strong class="logo">CRM Exemplo</strong>
+    <span class="topbar__note">Página de teste: faz o papel do sistema do cliente que mostra o embed de templates do Contratos.</span>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="card">
+        <h2>Sessão do embed</h2>
+        <form id="session-form">
+          <fieldset>
+            <legend>Permissões</legend>
+            <label><input type="checkbox" name="permissions" value="edit" checked> edit (criar e editar)</label>
+            <label><input type="checkbox" name="permissions" value="publish" checked> publish (publicar)</label>
+            <label><input type="checkbox" name="permissions" value="archive" checked> archive (arquivar)</label>
+            <p class="hint">Desmarque todas para testar o modo só leitura.</p>
+          </fieldset>
+          <label class="field">Nome de quem usa
+            <input name="userName" value="Maria Souza" maxlength="120">
+          </label>
+          <label class="field">Duração (minutos)
+            <input name="expiresInMinutes" type="number" min="5" max="480" value="60">
+          </label>
+          <label class="field">Abrir direto no template
+            <select name="templateId"><option value="">— lista de templates —</option></select>
+          </label>
+          <label class="check"><input type="checkbox" name="autoHeight"> Ajustar a altura ao conteúdo (evento resize)</label>
+          <div class="buttons">
+            <button type="submit" class="primary">Abrir embed</button>
+            <button type="button" id="end-session" disabled>Encerrar sessão</button>
+          </div>
+        </form>
+        <dl class="session" id="session-info" hidden></dl>
+        <p class="error" id="error" role="alert" hidden></p>
+      </section>
+
+      <section class="card">
+        <div class="card__header">
+          <h2>Templates publicados</h2>
+          <button type="button" id="reload-templates" class="small">Atualizar</button>
+        </div>
+        <p class="hint">Vem da API pública (GET /templates). Atualiza sozinho quando o embed avisa que publicou ou arquivou.</p>
+        <ul id="templates" class="templates"></ul>
+      </section>
+
+      <section class="card">
+        <div class="card__header">
+          <h2>Avisos do embed</h2>
+          <button type="button" id="clear-log" class="small">Limpar</button>
+        </div>
+        <p class="hint">Mensagens recebidas por postMessage, já conferida a origem.</p>
+        <ol id="log" class="log"></ol>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="placeholder" id="placeholder">
+        <p>Escolha as opções e clique em <strong>Abrir embed</strong>.</p>
+        <p class="hint" id="account"></p>
+      </div>
+      <iframe id="embed" title="Templates de contrato" hidden></iframe>
+    </main>
+  </div>
+</body>
+</html>

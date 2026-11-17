@@ -39,6 +39,12 @@ internal static class IntegrationsEndpoints
         g.MapPost("/deliveries/{id:long}/redeliver", async (long id, IIntegrationService s, CancellationToken ct) =>
             (await s.RedeliverAsync(id, ct)).ToHttp());
 
+        g.MapPost("/embed-origins", async (EmbedOriginRequest req, IIntegrationService s, CancellationToken ct) =>
+                (await s.AddEmbedOriginAsync(req, ct)).ToHttp(o => TypedResults.Created($"/api/v1/integrations/embed-origins/{o.Id}", o)))
+            .WithSummary("Cadastra um site que pode mostrar o embed de templates");
+        g.MapDelete("/embed-origins/{id:guid}", async (Guid id, IIntegrationService s, CancellationToken ct) =>
+            (await s.DeleteEmbedOriginAsync(id, ct)).ToHttp());
+
         return api;
     }
 }

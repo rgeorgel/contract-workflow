@@ -5,6 +5,7 @@ using Contratos.Application.Contracts;
 using Contratos.Application.Integrations;
 using Contratos.Application.Templates;
 using Contratos.Domain.Contracts;
+using Contratos.Infrastructure.Integrations;
 using Contratos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -151,12 +152,38 @@ internal static class PublicApiEndpoints
         g.MapGet("/contracts/{id:guid}/document", (Guid id, IContractService contracts, CancellationToken ct) => File(contracts, id, false, ct));
         g.MapGet("/contracts/{id:guid}/signed-document", (Guid id, IContractService contracts, CancellationToken ct) => File(contracts, id, true, ct));
 
+        // ---------- Embed ----------
+
+        g.MapPost("/embed/sessions", async (HttpRequest http, EmbedSessions sessions, CancellationToken ct) =>
+        {
+            // Corpo vazio: todas as permissões, 60 minutos.
+            PublicCreateEmbedSessionRequest? body = new(null, null, null, null, null);
+            if (http.ContentLength > 0 || http.HasJsonContentType())
+            {
+                (body, var invalid) = await ReadAsync<PublicCreateEmbedSessionRequest>(http, ct);
+                if (invalid is not null)
+                    return invalid;
+            }
+            var keyId = Guid.Parse(http.HttpContext.User.FindFirst(ApiKeyAuthenticationHandler.KeyIdClaim)!.Value);
+            var created = await sessions.CreateAsync(keyId, body!, ct);
+            if (!created.IsSuccess)
+                return PublicError(created.Error!);
+            http.HttpContext.Response.Headers.Location = $"{Prefix}/embed/sessions/{created.Value!.Id}";
+            return Json(created.Value, StatusCodes.Status201Created);
+        });
+
+        g.MapDelete("/embed/sessions/{id:guid}", async (Guid id, EmbedSessions sessions, CancellationToken ct) =>
+        {
+            var result = await sessions.RevokeAsync(id, ct);
+            return result.IsSuccess ? TypedResults.NoContent() : PublicError(result.Error!);
+        });
+
         // Qualquer outra rota sob o prefixo: 404 em JSON, não a página do site.
         g.MapFallback(() => ResultHttp.Problem(StatusCodes.Status404NotFound, "Rota inexistente na API pública. Confira a documentação.", "route_not_found"));
     }
 
     /// <summary>Chave válida, mas o plano atual não inclui a API (mudou de plano depois de criar a chave).</summary>
-    private static async ValueTask<object?> RequirePlanAsync(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
+    internal static async ValueTask<object?> RequirePlanAsync(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
     {
         var http = ctx.HttpContext;
         var tenant = http.RequestServices.GetRequiredService<ICurrentTenant>();

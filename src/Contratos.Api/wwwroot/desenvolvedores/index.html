@@ -25,6 +25,7 @@
         <a href="#inicio-rapido">Início rápido</a>
         <a href="#contratos">Referência</a>
         <a href="#webhooks">Webhooks</a>
+        <a href="#embed">Embed</a>
         <a href="/desenvolvedores/openapi.json">OpenAPI</a>
       </nav>
       <div class="site-header__actions">
@@ -75,6 +76,13 @@
             <li><a href="#assinatura">Conferir a assinatura</a></li>
             <li><a href="#tentativas">Tentativas e ordem</a></li>
           </ul>
+          <p class="docs-toc__group">Embed de templates</p>
+          <ul>
+            <li><a href="#embed">Como funciona</a></li>
+            <li><a href="#embed-sessao">Criar a sessão</a></li>
+            <li><a href="#embed-iframe">Mostrar no seu site</a></li>
+            <li><a href="#embed-avisos">Avisos da página</a></li>
+          </ul>
           <p class="docs-toc__group">Guias</p>
           <ul>
             <li><a href="#guia-crm">Integrar com um CRM</a></li>
@@ -92,11 +100,11 @@
             <li>lista os <strong>templates</strong> publicados e as variáveis de cada um;</li>
             <li>cria um <strong>contrato</strong> já preenchido, com os signatários, e envia na mesma chamada;</li>
             <li>acompanha o andamento e baixa o <strong>PDF assinado</strong>;</li>
-            <li>recebe <strong>webhooks</strong> quando alguém abre, assina ou recusa, e quando o contrato termina.</li>
+            <li>recebe <strong>webhooks</strong> quando alguém abre, assina ou recusa, e quando o contrato termina;</li>
+            <li>mostra a <strong>tela de templates</strong> dentro dele (<a href="#embed">embed</a>), para quem usa o seu sistema criar, editar e publicar os modelos de contrato sem sair dele.</li>
           </ul>
-          <p>Os templates continuam sendo montados na tela do Contratos, por quem cuida dos contratos. A integração só preenche e envia.</p>
           <div class="callout">
-            <p><strong>Disponível no plano Empresa.</strong> Um Admin cria as chaves e cadastra os webhooks em <a href="/integrations.html">Integrações</a>. Se a conta mudar para um plano sem API, as chaves param de responder (403 <code>api_not_in_plan</code>) e os webhooks deixam de ser enviados; nada é apagado.</p>
+            <p><strong>Disponível em todos os planos.</strong> Um Admin cria as chaves e cadastra os webhooks em <a href="/integrations.html">Integrações</a>. Cada contrato enviado pela API conta na cota do plano (ou usa um crédito avulso), como os enviados pela tela.</p>
           </div>
         </section>
 
@@ -276,6 +284,7 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
                 <tr><td>409</td><td><code>already_final</code></td><td>Cancelar um contrato já concluído, recusado, expirado ou cancelado.</td></tr>
                 <tr><td>409</td><td><code>channel_not_in_plan</code></td><td>Canal (SMS, por exemplo) fora do plano.</td></tr>
                 <tr><td>409</td><td><code>cannot_resend</code></td><td>O signatário já assinou ou recusou, ou o contrato não está mais aberto.</td></tr>
+                <tr><td>409</td><td><code>embed_origin_required</code></td><td>Criar uma sessão de embed sem nenhum site cadastrado em Integrações → Embed de templates.</td></tr>
                 <tr><td>409</td><td><code>pdf_failed</code></td><td>Falha temporária ao gerar o PDF. Tente de novo em instantes com a mesma <code>Idempotency-Key</code>.</td></tr>
                 <tr><td>413</td><td><code>payload_too_large</code></td><td>Corpo da requisição acima de 256 KB.</td></tr>
                 <tr><td>415</td><td><code>unsupported_media_type</code></td><td>Faltou o <code>Content-Type: application/json</code>.</td></tr>
@@ -291,6 +300,7 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
           <ul>
             <li><strong>120 requisições por minuto por chave.</strong> Acima disso a resposta é <code>429</code> com <code>Retry-After</code> (em segundos).</li>
             <li>Até <strong>30 signatários</strong> por contrato; título com até 200 caracteres; mensagem com até 500; <code>externalReference</code> com até 100.</li>
+            <li>Sessões de embed: de 5 minutos a 8 horas (padrão: 60). O link de cada sessão abre uma vez, em até 10 minutos. Até 10 sites cadastrados por conta.</li>
             <li>Cada contrato <strong>enviado</strong> usa um contrato da cota do plano ou, acabada a cota, um crédito avulso. Rascunhos não contam. Veja quanto resta em <code>GET /account</code>.</li>
           </ul>
         </section>
@@ -601,7 +611,7 @@ open("contrato-assinado.pdf", "wb").write(res.content)</code></pre>
     "message": null
   }
 }</code></pre></div>
-          <p><code>data.contract</code> é o <a href="#objeto-contrato">objeto contrato</a> como estava no momento do evento. <code>data.signer</code> vem nos eventos de signatário e na recusa. <code>data.reason</code> traz o motivo da recusa (<code>contract.declined</code>) ou o erro do envio (<code>contract.send_failed</code>).</p>
+          <p><code>data.contract</code> é o <a href="#objeto-contrato">objeto contrato</a> como estava no momento do evento. <code>data.signer</code> vem nos eventos de signatário e na recusa. <code>data.reason</code> traz o motivo da recusa (<code>contract.declined</code>) ou o erro do envio (<code>contract.send_failed</code>). Nos eventos <code>template.*</code>, <code>data.contract</code> vem nulo e <code>data.template</code> traz o template, no formato de <a href="#templates"><code>GET /templates/{id}</code></a>.</p>
         </section>
 
         <section id="eventos" aria-labelledby="eventos-t">
@@ -621,6 +631,8 @@ open("contrato-assinado.pdf", "wb").write(res.content)</code></pre>
                 <tr><td><code>contract.signed_document_ready</code></td><td>O PDF assinado pode ser baixado em <code>/contracts/{id}/signed-document</code>.</td></tr>
                 <tr><td><code>contract.expired</code></td><td>O prazo acabou sem todas as assinaturas.</td></tr>
                 <tr><td><code>contract.cancelled</code></td><td>Contrato cancelado.</td></tr>
+                <tr><td><code>template.published</code></td><td>Uma versão nova de um template foi publicada (pela tela ou pelo <a href="#embed">embed</a>). Use para atualizar as variáveis mapeadas no seu sistema.</td></tr>
+                <tr><td><code>template.archived</code></td><td>Um template foi arquivado: some de <code>GET /templates</code> e não aceita contratos novos.</td></tr>
                 <tr><td><code>webhook.test</code></td><td>Enviado pelo botão “Enviar teste”, sem <code>data.contract</code>.</td></tr>
               </tbody>
             </table>
@@ -734,6 +746,170 @@ http_response_code(200);</code></pre>
           </ul>
         </section>
 
+        <section id="embed" aria-labelledby="embed-t">
+          <h2 id="embed-t">Embed de templates: como funciona</h2>
+          <p>Com o embed, quem usa o seu sistema monta os modelos de contrato sem sair dele. A tela de templates do Contratos aparece num iframe, com o editor visual, as variáveis, a pré-visualização e o histórico de versões. O que for publicado ali já pode ser usado em <code>POST /contracts</code>.</p>
+          <ol class="docs-steps">
+            <li><strong>Cadastre o seu site</strong> em <a href="/integrations.html#embed">Integrações → Embed de templates</a> (ex.: <code>https://crm.suaempresa.com.br</code>). Só esses sites conseguem mostrar o embed: nos outros, o navegador bloqueia o iframe.</li>
+            <li><strong>No seu servidor, crie uma sessão</strong> com a chave de API (<code>POST /embed/sessions</code>). A resposta traz a <code>url</code> da tela.</li>
+            <li><strong>Coloque a <code>url</code> num iframe.</strong> Cada link abre uma vez: crie uma sessão nova sempre que a tela for aberta.</li>
+          </ol>
+          <div class="callout"><p><strong>A chave de API nunca vai para o navegador.</strong> O seu servidor cria a sessão e entrega só o link. Dentro do iframe, a página usa um token próprio, que só abre a tela de templates, só tem as permissões que você deu e vence no horário da sessão.</p></div>
+        </section>
+
+        <section id="embed-sessao" aria-labelledby="embed-sessao-t">
+          <h2 id="embed-sessao-t">Criar a sessão</h2>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/embed/sessions</span></div>
+          <p>O corpo é opcional: sem ele, a sessão tem todas as permissões e dura 60 minutos.</p>
+          <div class="code code-tabs" data-label="Criar uma sessão de embed">
+            <pre data-lang="curl" data-title="cURL"><code>curl {{BASE_URL}}/api/public/v1/embed/sessions \
+  -H "Authorization: Bearer $CONTRATOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": ["edit", "publish"],
+    "user": { "id": "u-381", "name": "Maria Souza" },
+    "parentOrigin": "https://crm.suaempresa.com.br",
+    "expiresInMinutes": 60
+  }'</code></pre>
+            <pre data-lang="node" data-title="Node.js"><code>// Rota do SEU servidor, chamada pela sua página antes de mostrar o iframe.
+app.post('/contratos/embed', requireLogin, async (req, res) =&gt; {
+  const r = await fetch('{{BASE_URL}}/api/public/v1/embed/sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CONTRATOS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      permissions: req.user.isManager ? ['edit', 'publish', 'archive'] : ['edit'],
+      user: { id: req.user.id, name: req.user.name },
+      parentOrigin: 'https://crm.suaempresa.com.br',
+    }),
+  });
+  const session = await r.json();
+  res.json({ url: session.url });
+});</code></pre>
+            <pre data-lang="python" data-title="Python"><code>res = requests.post(
+    "{{BASE_URL}}/api/public/v1/embed/sessions",
+    headers={"Authorization": f"Bearer {os.environ['CONTRATOS_API_KEY']}"},
+    json={
+        "permissions": ["edit", "publish"],
+        "user": {"id": str(user.id), "name": user.name},
+        "parentOrigin": "https://crm.suaempresa.com.br",
+    },
+    timeout=30,
+)
+url = res.json()["url"]</code></pre>
+            <pre data-lang="php" data-title="PHP"><code>$ch = curl_init('{{BASE_URL}}/api/public/v1/embed/sessions');
+curl_setopt_array($ch, [
+    CURLOPT_POST =&gt; true,
+    CURLOPT_HTTPHEADER =&gt; [
+        'Authorization: Bearer ' . getenv('CONTRATOS_API_KEY'),
+        'Content-Type: application/json',
+    ],
+    CURLOPT_POSTFIELDS =&gt; json_encode([
+        'permissions' =&gt; ['edit', 'publish'],
+        'user' =&gt; ['id' =&gt; (string) $user-&gt;id, 'name' =&gt; $user-&gt;name],
+        'parentOrigin' =&gt; 'https://crm.suaempresa.com.br',
+    ]),
+    CURLOPT_RETURNTRANSFER =&gt; true,
+]);
+$url = json_decode(curl_exec($ch), true)['url'];</code></pre>
+          </div>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code>permissions</code></td><td>lista</td><td>O que a pessoa pode fazer além de ver os templates: <code>edit</code> (criar, editar, duplicar, descartar rascunho), <code>publish</code> (publicar versões) e <code>archive</code> (arquivar e desarquivar). <code>publish</code> e <code>archive</code> precisam de <code>edit</code>. Omitido: todas. <code>[]</code>: só leitura.</td></tr>
+                <tr><td><code>user.name</code></td><td>texto</td><td>Quem está usando, no seu sistema. Aparece no histórico de versões como “Maria Souza (pela integração)”. Até 120 caracteres.</td></tr>
+                <tr><td><code>user.id</code></td><td>texto</td><td>Id da pessoa no seu sistema, só para referência. Até 100 caracteres.</td></tr>
+                <tr><td><code>parentOrigin</code></td><td>texto</td><td>Site exato que vai abrir o iframe (precisa caber num dos cadastrados, inclusive em <code>https://*.suaempresa.com.br</code>). Omitido: qualquer site cadastrado.</td></tr>
+                <tr><td><code>expiresInMinutes</code></td><td>número</td><td>Duração da sessão, de 5 a 480. Padrão: 60.</td></tr>
+                <tr><td><code>templateId</code></td><td>uuid</td><td>Abre direto no editor deste template, em vez da lista.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="code"><div class="code__title">201 Created</div><pre><code>{
+  "id": "0193a2b0-5555-7000-8000-00000000e001",
+  "url": "{{BASE_URL}}/embed/templates?session=0193a2b0-5555-…#token=cel_…",
+  "permissions": ["edit", "publish"],
+  "user": { "id": "u-381", "name": "Maria Souza" },
+  "parentOrigin": "https://crm.suaempresa.com.br",
+  "launchExpiresAt": "2026-11-17T14:10:00+00:00",
+  "expiresAt": "2026-11-17T15:00:00+00:00"
+}</code></pre></div>
+          <p>O link precisa ser aberto até <code>launchExpiresAt</code> (10 minutos) e abre uma vez só. Depois de aberto, a tela funciona até <code>expiresAt</code>, inclusive se a pessoa recarregar o iframe. O token vai depois do <code>#</code>: não aparece nos logs de nenhum servidor.</p>
+          <p>Para encerrar antes (a pessoa saiu do seu sistema, por exemplo): <code>DELETE /embed/sessions/{id}</code>, que responde <code>204</code>. Revogar a chave de API ou remover o site em Integrações também encerra as sessões.</p>
+        </section>
+
+        <section id="embed-iframe" aria-labelledby="embed-iframe-t">
+          <h2 id="embed-iframe-t">Mostrar no seu site</h2>
+          <p>Peça a <code>url</code> ao seu servidor e coloque num iframe. Uma altura fixa, com rolagem dentro do iframe, é o jeito mais simples e mantém as janelas de confirmação à vista.</p>
+          <div class="code code-tabs" data-label="Iframe do embed">
+            <pre data-lang="html" data-title="HTML"><code>&lt;iframe id="contratos-templates" class="contratos-embed" title="Templates de contrato"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+  async function abrirTemplates() {
+    // Sua rota, que cria a sessão com a chave de API (ver acima).
+    const { url } = await fetch('/contratos/embed', { method: 'POST' }).then((r) =&gt; r.json());
+    document.getElementById('contratos-templates').src = url;
+  }
+  abrirTemplates();
+&lt;/script&gt;</code></pre>
+            <pre data-lang="css" data-title="CSS"><code>.contratos-embed {
+  width: 100%;
+  height: 80vh;
+  min-height: 600px;
+  border: 0;
+}</code></pre>
+            <pre data-lang="react" data-title="React"><code>function TemplatesDeContrato() {
+  const [url, setUrl] = useState(null);
+
+  useEffect(() =&gt; {
+    fetch('/contratos/embed', { method: 'POST' })
+      .then((r) =&gt; r.json())
+      .then((s) =&gt; setUrl(s.url));
+  }, []);
+
+  if (!url) return &lt;p&gt;Carregando…&lt;/p&gt;;
+  return &lt;iframe src={url} title="Templates de contrato" className="contratos-embed" /&gt;;
+}</code></pre>
+          </div>
+          <div class="callout"><p>O embed não usa cookies (os navegadores bloqueiam cookies de terceiros em iframes), então funciona no Safari e no Chrome sem configuração. Para testar no seu computador, cadastre <code>http://localhost:3000</code> (ou a porta que você usa): <code>http://</code> só é aceito para <code>localhost</code>.</p></div>
+        </section>
+
+        <section id="embed-avisos" aria-labelledby="embed-avisos-t">
+          <h2 id="embed-avisos-t">Avisos da página</h2>
+          <p>A página do embed avisa o seu site do que acontece, com <code>postMessage</code>. Cada mensagem é um objeto <code>{ source: "contratos", type, sessionId, … }</code>. Confira sempre a origem antes de usar.</p>
+          <div class="code"><div class="code__title">No seu site</div><pre><code>window.addEventListener('message', (event) =&gt; {
+  if (event.origin !== '{{BASE_URL}}' || event.data?.source !== 'contratos') return;
+
+  switch (event.data.type) {
+    case 'template.published':
+      // { template: { id, name, publishedVersion, draftVersion, archived } }
+      atualizarTemplates(event.data.template);
+      break;
+    case 'session.expired':
+      abrirTemplates(); // cria outra sessão e troca o src do iframe
+      break;
+  }
+});</code></pre></div>
+          <div class="table-scroll">
+            <table class="docs-table">
+              <thead><tr><th>type</th><th>Quando</th><th>Dados</th></tr></thead>
+              <tbody>
+                <tr><td><code>ready</code></td><td>A página carregou.</td><td><code>page</code> (<code>templates</code> ou <code>template-editor</code>) e, no editor, <code>template</code>.</td></tr>
+                <tr><td><code>template.created</code></td><td>Template criado ou duplicado.</td><td><code>template.id</code>, <code>template.name</code></td></tr>
+                <tr><td><code>template.saved</code></td><td>Rascunho salvo.</td><td><code>template</code></td></tr>
+                <tr><td><code>template.published</code></td><td>Versão publicada.</td><td><code>template</code></td></tr>
+                <tr><td><code>template.archived</code>, <code>template.unarchived</code></td><td>Arquivado ou desarquivado.</td><td><code>template</code></td></tr>
+                <tr><td><code>resize</code></td><td>A altura do conteúdo mudou.</td><td><code>height</code> (px), para quem prefere ajustar o iframe ao conteúdo.</td></tr>
+                <tr><td><code>session.expired</code></td><td>A sessão venceu, foi encerrada ou o link já tinha sido usado.</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Os avisos da página servem para atualizar a tela na hora. Para manter o seu banco em dia, use também os webhooks <code>template.published</code> e <code>template.archived</code>: eles chegam mesmo que a pessoa feche a aba, e valem para mudanças feitas na tela do Contratos.</p>
+        </section>
+
         <section id="guia-crm" aria-labelledby="guia-crm-t">
           <h2 id="guia-crm-t">Guia: integrar com um CRM</h2>
           <p>Um fluxo comum: quando um negócio é ganho no CRM, o contrato sai sozinho, e o negócio é atualizado quando o cliente assina.</p>
@@ -753,7 +929,8 @@ http_response_code(200);</code></pre>
           <ul>
             <li>Guarde a chave e o segredo do webhook em variáveis de ambiente ou num cofre de segredos, nunca no repositório.</li>
             <li>Chave vazada: revogue em Integrações (vale na hora) e crie outra. A tela mostra o último uso de cada chave.</li>
-            <li>O Contratos guarda só o hash das chaves de API; o segredo do webhook fica cifrado.</li>
+            <li>O Contratos guarda só o hash das chaves de API e dos tokens do embed; o segredo do webhook fica cifrado.</li>
+            <li>Embed: crie a sessão no seu servidor, depois de conferir quem está logado, e dê só as permissões que a pessoa precisa. Cadastre só os seus domínios.</li>
             <li>Os dados dos contratos são pessoais (nome, e-mail, CPF): trate-os no seu sistema conforme a LGPD.</li>
           </ul>
         </section>
@@ -762,6 +939,7 @@ http_response_code(200);</code></pre>
           <h2 id="mudancas-t">Mudanças</h2>
           <p>A versão faz parte do endereço (<code>/v1</code>). Dentro dela, só entram mudanças compatíveis: campos novos nas respostas, novos tipos de evento e novos parâmetros opcionais. Escreva o seu código para ignorar campos que ele não conhece.</p>
           <ul>
+            <li><strong>17/11/2026</strong>: <a href="#embed">embed de templates</a> (<code>POST /embed/sessions</code>) e os eventos <code>template.published</code> e <code>template.archived</code>.</li>
             <li><strong>16/11/2026</strong>: primeira versão: conta, templates, contratos (criar, enviar, cancelar, reenviar, PDFs, linha do tempo) e webhooks.</li>
           </ul>
           <p>A especificação completa está em <a href="/desenvolvedores/openapi.json">openapi.json</a> (OpenAPI 3.1), para importar no Postman ou no Insomnia ou gerar um cliente.</p>

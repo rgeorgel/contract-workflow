@@ -1,5 +1,6 @@
 import { api, ApiError } from '../api.js';
-import { isAdmin, requireUser } from '../auth.js';
+import { requireUser } from '../auth.js';
+import { can, EMBED, href, notify } from '../embed.js';
 import { clear, h } from '../ui/dom.js';
 import { setBusy } from '../ui/form.js';
 import { confirmModal } from '../ui/modal.js';
@@ -12,9 +13,13 @@ const ACTIONS = { Sign: 'Assinar', SignAsWitness: 'Assinar como testemunha', App
 const PLACEHOLDER = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*\}\}/g;
 
 const me = await requireUser();
-const canEdit = isAdmin(me);
+// Na tela, Admin pode tudo; no embed, vale o que a sessão permite (publicar e arquivar exigem editar).
+const canEdit = can(me, 'edit');
+const canPublish = canEdit && can(me, 'publish');
+const canArchive = canEdit && can(me, 'archive');
 const id = new URLSearchParams(location.search).get('id');
-if (!id) location.replace('/templates.html');
+if (!id) location.replace(href('/templates.html'));
+document.querySelector('.back-link').href = href('/templates.html');
 
 const form = document.getElementById('editor-form');
 const alertEl = document.querySelector('[data-alert]');
@@ -157,10 +162,11 @@ function renderStatus() {
 
   if (!canEdit) return;
   const archived = Boolean(template.archivedAt);
+  actions.archive.hidden = !canArchive;
   actions.archive.textContent = archived ? 'Desarquivar' : 'Arquivar';
   actions.discard.hidden = !(template.draft && template.current);
   actions.save.hidden = archived;
-  actions.publish.hidden = archived;
+  actions.publish.hidden = archived || !canPublish;
   actions.publish.textContent = `Publicar v${template.draft?.version ?? (template.current?.version ?? 0) + 1}`;
   actions.publish.disabled = !template.draft && !dirty;
 }
@@ -186,9 +192,19 @@ function apply(detail, newEtag) {
   reloadPreview();
 }
 
-function reloadPreview() {
+async function reloadPreview() {
   frameReady = false;
-  frame.src = `/api/v1/templates/${id}/preview?source=${previewSource}&t=${Date.now()}`;
+  if (!EMBED) {
+    frame.src = `/api/v1/templates/${id}/preview?source=${previewSource}&t=${Date.now()}`;
+    return;
+  }
+  // O iframe não manda o token da sessão: o embed pede um link com ticket curto.
+  try {
+    const link = await api(`/templates/${id}/preview-link?source=${previewSource}`, { method: 'POST' });
+    frame.src = link.url;
+  } catch {
+    previewNote.textContent = 'Não foi possível carregar a pré-visualização agora.';
+  }
 }
 
 // ---------- Pré-visualização ao vivo ----------
@@ -295,8 +311,9 @@ function clearAlert() {
 async function save({ quiet = false } = {}) {
   clearAlert();
   try {
-    const res = await fetchWithEtag('PUT', `/templates/${id}`, payload());
+    const res = await api(`/templates/${id}`, { method: 'PUT', body: payload(), ifMatch: etag, withEtag: true });
     apply(res.body, res.etag);
+    notify('template.saved', { template: summary() });
     if (!quiet) toast('Rascunho salvo.');
     return true;
   } catch (err) {
@@ -309,18 +326,15 @@ async function save({ quiet = false } = {}) {
   }
 }
 
-/** PUT com If-Match e leitura do novo ETag. O api.js não expõe cabeçalhos, então usa fetch direto. */
-async function fetchWithEtag(method, path, body) {
-  const csrf = (await api('/auth/csrf')).token;
-  const res = await fetch(`/api/v1${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf, ...(etag ? { 'If-Match': etag } : {}) },
-    body: JSON.stringify(body),
-  });
-  const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
-  if (!res.ok) throw new ApiError(res.status, data);
-  return { body: data, etag: res.headers.get('ETag') };
+/** O que vai nos avisos ao sistema do cliente (embed). */
+function summary() {
+  return {
+    id: template.id,
+    name: template.name,
+    publishedVersion: template.current?.version ?? null,
+    draftVersion: template.draft?.version ?? null,
+    archived: Boolean(template.archivedAt),
+  };
 }
 
 async function run(button, fn) {
@@ -341,6 +355,7 @@ actions.publish.addEventListener('click', () => run(actions.publish, async () =>
   if (!ok) return;
   try {
     apply(await api(`/templates/${id}/publish`, { method: 'POST' }));
+    notify('template.published', { template: summary() });
     toast(`Versão ${next} publicada.`);
   } catch (err) {
     showErrors(err);
@@ -361,7 +376,8 @@ actions.discard.addEventListener('click', () => run(actions.discard, async () =>
 actions.duplicate.addEventListener('click', () => run(actions.duplicate, async () => {
   try {
     const copy = await api(`/templates/${id}/duplicate`, { method: 'POST' });
-    location.assign(`/template-editor.html?id=${copy.id}`);
+    notify('template.created', { template: { id: copy.id, name: copy.name } });
+    location.assign(href(`/template-editor.html?id=${copy.id}`));
   } catch (err) { showErrors(err); }
 }));
 
@@ -369,6 +385,7 @@ actions.archive.addEventListener('click', () => run(actions.archive, async () =>
   const archived = Boolean(template.archivedAt);
   try {
     apply(await api(`/templates/${id}/${archived ? 'unarchive' : 'archive'}`, { method: 'POST' }));
+    notify(archived ? 'template.unarchived' : 'template.archived', { template: summary() });
     toast(archived ? 'Template desarquivado.' : 'Template arquivado. Ele some da lista de novos contratos.');
   } catch (err) { showErrors(err); }
 }));
@@ -457,11 +474,9 @@ for (const tab of document.querySelectorAll('[data-mode]')) {
 // ---------- Carga ----------
 
 try {
-  const res = await fetch(`/api/v1/templates/${id}`, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-  if (res.status === 401) location.assign(`/login.html?next=${encodeURIComponent(location.pathname + location.search)}`);
-  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
-  etag = res.headers.get('ETag');
-  template = await res.json();
+  const res = await api(`/templates/${id}`, { withEtag: true });
+  etag = res.etag;
+  template = res.body;
 } catch (err) {
   document.querySelector('[data-main]').hidden = false;
   showErrors(err.status === 404 ? new ApiError(404, { title: 'Template não encontrado.' }) : err);
@@ -473,7 +488,9 @@ if (!canEdit) {
   previewSource = 'current';
   template = { ...template, draft: null };
   document.querySelector('[data-actions]').hidden = true;
-  document.querySelector('[data-readonly-note]').hidden = false;
+  const note = document.querySelector('[data-readonly-note]');
+  if (EMBED) note.textContent = 'Você está vendo a versão publicada. Este acesso é só de leitura.';
+  note.hidden = false;
   document.querySelector('[data-preview="draft"]').hidden = true;
   document.querySelector('[data-preview="current"]').setAttribute('aria-selected', 'true');
   previewNote.textContent = 'Versão publicada, com dados de exemplo.';
@@ -492,3 +509,4 @@ if (!canEdit) {
 }
 
 document.querySelector('[data-main]').hidden = false;
+notify('ready', { page: 'template-editor', template: summary() });

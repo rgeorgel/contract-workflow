@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Contratos.Application.Common;
 using Contratos.Domain.Users;
 using Contratos.Infrastructure.Identity;
+using Contratos.Infrastructure.Integrations;
 
 namespace Contratos.Api.Security;
 
@@ -14,6 +15,7 @@ internal sealed class HttpCurrentTenant(IHttpContextAccessor accessor) : ICurren
     public Guid? UserId => Guid.TryParse(User?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     public UserRole? Role => Enum.TryParse<UserRole>(User?.FindFirstValue(AppClaims.Role), out var r) ? r : null;
     public string? ApiKeyName => User?.FindFirstValue(ApiKeyAuthenticationHandler.KeyNameClaim);
+    public string? ExternalUserName => User?.FindFirstValue(EmbedAuthenticationHandler.ExternalUserNameClaim);
 }
 
 internal static class Policies
@@ -22,6 +24,11 @@ internal static class Policies
     public const string CanEditContracts = nameof(CanEditContracts);
     /// <summary>API pública: só a chave de API autentica (o cookie da tela não vale aqui).</summary>
     public const string PublicApi = nameof(PublicApi);
+    /// <summary>API do embed: só o token da sessão (nem cookie, nem chave de API).</summary>
+    public const string Embed = nameof(Embed);
+    public const string EmbedEdit = nameof(EmbedEdit);
+    public const string EmbedPublish = nameof(EmbedPublish);
+    public const string EmbedArchive = nameof(EmbedArchive);
 
     public static void Configure(Microsoft.AspNetCore.Authorization.AuthorizationOptions o)
     {
@@ -30,5 +37,13 @@ internal static class Policies
             .RequireClaim(AppClaims.Role, nameof(UserRole.Admin), nameof(UserRole.Editor)));
         o.AddPolicy(PublicApi, p => p.AddAuthenticationSchemes(ApiKeyAuthenticationHandler.SchemeName)
             .RequireAuthenticatedUser().RequireClaim(ApiKeyAuthenticationHandler.KeyIdClaim));
+        o.AddPolicy(Embed, p => EmbedSession(p));
+        o.AddPolicy(EmbedEdit, p => EmbedSession(p).RequireClaim(EmbedAuthenticationHandler.PermissionClaim, EmbedPermissions.Edit));
+        o.AddPolicy(EmbedPublish, p => EmbedSession(p).RequireClaim(EmbedAuthenticationHandler.PermissionClaim, EmbedPermissions.Publish));
+        o.AddPolicy(EmbedArchive, p => EmbedSession(p).RequireClaim(EmbedAuthenticationHandler.PermissionClaim, EmbedPermissions.Archive));
     }
+
+    private static Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder EmbedSession(Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder p) =>
+        p.AddAuthenticationSchemes(EmbedAuthenticationHandler.SchemeName)
+            .RequireAuthenticatedUser().RequireClaim(EmbedAuthenticationHandler.SessionIdClaim);
 }

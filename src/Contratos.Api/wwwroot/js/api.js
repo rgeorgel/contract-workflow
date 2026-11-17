@@ -1,6 +1,9 @@
 // Wrapper de fetch: JSON, erros ProblemDetails, token antiforgery e 401 → login.
+// No modo embed (iframe no sistema do cliente) fala com /api/embed/v1, com o token da sessão e sem cookie.
 
-const BASE = '/api/v1';
+import { EMBED, embedToken, showEnded } from './embed.js';
+
+const BASE = EMBED ? '/api/embed/v1' : '/api/v1';
 let csrfToken = null;
 
 export class ApiError extends Error {
@@ -39,14 +42,19 @@ async function readProblem(res) {
 
 /**
  * @param {string} path rota sob /api/v1, ex.: '/auth/me'
- * @param {{method?: string, body?: unknown, signal?: AbortSignal, redirectOn401?: boolean, as?: 'json'|'text'}} [options]
+ * @param {{method?: string, body?: unknown, signal?: AbortSignal, redirectOn401?: boolean, as?: 'json'|'text',
+ *   ifMatch?: string|null, withEtag?: boolean}} [options]
  *   `as: 'text'` devolve o corpo como texto (ex.: HTML da pré-visualização).
+ *   `withEtag` devolve `{ body, etag }`; `ifMatch` manda o ETag lido antes (concorrência otimista).
  */
-export async function api(path, { method = 'GET', body, signal, redirectOn401 = true, as = 'json' } = {}, retried = false) {
+export async function api(path, options = {}, retried = false) {
+  const { method = 'GET', body, signal, redirectOn401 = true, as = 'json', ifMatch = null, withEtag = false } = options;
   const headers = { Accept: as === 'text' ? 'text/html, application/json' : 'application/json' };
   const unsafe = !['GET', 'HEAD'].includes(method);
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (unsafe) headers['X-CSRF-TOKEN'] = await getCsrf();
+  if (ifMatch) headers['If-Match'] = ifMatch;
+  if (EMBED) headers.Authorization = `Bearer ${embedToken()}`;
+  else if (unsafe) headers['X-CSRF-TOKEN'] = await getCsrf();
 
   let res;
   try {
@@ -54,7 +62,7 @@ export async function api(path, { method = 'GET', body, signal, redirectOn401 = 
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: 'same-origin',
+      credentials: EMBED ? 'omit' : 'same-origin',
       signal,
     });
   } catch (err) {
@@ -63,10 +71,12 @@ export async function api(path, { method = 'GET', body, signal, redirectOn401 = 
   }
 
   if (res.ok) {
-    if (res.status === 204) return null;
-    if (as === 'text') return res.text();
-    const type = res.headers.get('content-type') || '';
-    return type.includes('json') ? res.json() : null;
+    let data = null;
+    if (res.status !== 204) {
+      const type = res.headers.get('content-type') || '';
+      data = as === 'text' ? await res.text() : type.includes('json') ? await res.json() : null;
+    }
+    return withEtag ? { body: data, etag: res.headers.get('ETag') } : data;
   }
 
   const problem = await readProblem(res);
@@ -74,8 +84,10 @@ export async function api(path, { method = 'GET', body, signal, redirectOn401 = 
   // Token antiforgery velho (ex.: a sessão mudou em outra aba): pega outro e tenta uma vez.
   if (problem?.code === 'csrf_invalid' && !retried) {
     resetCsrf();
-    return api(path, { method, body, signal, redirectOn401, as }, true);
+    return api(path, options, true);
   }
+
+  if (res.status === 401 && EMBED) showEnded();
 
   if (res.status === 401 && redirectOn401) {
     const next = encodeURIComponent(location.pathname + location.search);

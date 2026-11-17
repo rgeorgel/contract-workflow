@@ -31,6 +31,7 @@ internal sealed class TemplateVersionConfiguration : IEntityTypeConfiguration<Te
         b.Property(v => v.BodyHtml).IsRequired();
         b.Property(v => v.Variables).HasJsonConversion();
         b.Property(v => v.DefaultSignerRoles).HasJsonConversion();
+        b.Property(v => v.CreatedByExternal).HasMaxLength(TemplateVersion.ExternalAuthorMaxLength);
         b.HasIndex(v => new { v.TemplateId, v.Version }).IsUnique();
         // No máximo um rascunho por template.
         b.HasIndex(v => v.TemplateId).IsUnique().HasFilter("published_at IS NULL").HasDatabaseName("ux_template_versions_one_draft");

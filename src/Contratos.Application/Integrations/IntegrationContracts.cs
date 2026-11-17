@@ -42,7 +42,7 @@ public sealed record WebhookDeliveryDto(
 public sealed record IntegrationsOverviewDto(
     bool Available, IReadOnlyList<string> PlansWithApi, IReadOnlyList<ApiKeyDto> Keys,
     IReadOnlyList<WebhookEndpointDto> Endpoints, IReadOnlyList<WebhookEventTypeDto> EventTypes,
-    int MaxKeys, int MaxEndpoints);
+    int MaxKeys, int MaxEndpoints, IReadOnlyList<EmbedOriginDto> EmbedOrigins, int MaxEmbedOrigins);
 
 public static class IntegrationErrors
 {
@@ -75,4 +75,9 @@ public interface IIntegrationService
     Task<Result<Paged<WebhookDeliveryDto>>> ListDeliveriesAsync(Guid? endpointId, int page, CancellationToken ct);
     /// <summary>Entrega de novo um evento (nova entrega, com as tentativas do zero).</summary>
     Task<Result> RedeliverAsync(long deliveryId, CancellationToken ct);
+
+    /// <summary>Site que pode mostrar o embed de templates num iframe.</summary>
+    Task<Result<EmbedOriginDto>> AddEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct);
+    /// <summary>Remove o site; as sessões abertas nele param de carregar.</summary>
+    Task<Result> DeleteEmbedOriginAsync(Guid id, CancellationToken ct);
 }

@@ -36,7 +36,7 @@ internal sealed class IntegrationService(
         var org = await db.Organizations.SingleAsync(o => o.Id == orgId, ct);
         return new IntegrationsOverviewDto(
             org.Plan.ApiAccess, PlansWithApi(), await KeysAsync(orgId, ct), await EndpointsAsync(orgId, ct),
-            WebhookEventTypes.All, MaxKeys, MaxEndpoints);
+            WebhookEventTypes.All, MaxKeys, MaxEndpoints, await OriginsAsync(orgId, ct), EmbedOrigins.MaxPerOrganization);
     }
 
     public async Task<PublicAccount> GetAccountAsync(CancellationToken ct)
@@ -272,6 +272,42 @@ internal sealed class IntegrationService(
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
+
+    // ---------- Domínios do embed ----------
+
+    public async Task<Result<EmbedOriginDto>> AddEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct)
+    {
+        if (await GuardAsync(ct) is { } denied)
+            return denied;
+        var orgId = tenant.RequireOrganizationId();
+        var (origin, error) = EmbedOrigins.Normalize(request.Origin);
+        if (error is not null)
+            return Error.Validation("origin", error);
+        if (await db.EmbedOrigins.AnyAsync(o => o.OrganizationId == orgId && o.Origin == origin, ct))
+            return Error.Validation("origin", "Este endereço já está cadastrado.");
+        if (await db.EmbedOrigins.CountAsync(o => o.OrganizationId == orgId, ct) >= EmbedOrigins.MaxPerOrganization)
+            return Error.Conflict($"Sua conta já tem {EmbedOrigins.MaxPerOrganization} domínios. Remova um que não usa mais.", "too_many_origins");
+
+        var entity = new EmbedOrigin { OrganizationId = orgId, Origin = origin!, CreatedBy = tenant.RequireUserId(), CreatedAt = clock.GetUtcNow() };
+        db.EmbedOrigins.Add(entity);
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Domínio do embed {Origin} cadastrado na organização {OrganizationId}", origin, orgId);
+        return (await OriginsAsync(orgId, ct)).Single(o => o.Id == entity.Id);
+    }
+
+    public async Task<Result> DeleteEmbedOriginAsync(Guid id, CancellationToken ct)
+    {
+        if (!tenant.IsAdmin())
+            return AdminOnly;
+        var orgId = tenant.RequireOrganizationId();
+        var rows = await db.EmbedOrigins.Where(o => o.Id == id && o.OrganizationId == orgId).ExecuteDeleteAsync(ct);
+        return rows == 0 ? Error.NotFound("Domínio não encontrado.") : Result.Ok();
+    }
+
+    private async Task<IReadOnlyList<EmbedOriginDto>> OriginsAsync(Guid orgId, CancellationToken ct) =>
+        await db.EmbedOrigins.Where(o => o.OrganizationId == orgId).OrderBy(o => o.CreatedAt)
+            .Select(o => new EmbedOriginDto(o.Id, o.Origin, db.Users.Where(u => u.Id == o.CreatedBy).Select(u => u.Name).FirstOrDefault(), o.CreatedAt))
+            .ToListAsync(ct);
 
     // ---------- Apoio ----------
 

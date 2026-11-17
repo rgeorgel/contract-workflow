@@ -1,4 +1,5 @@
 import { getMe, logout, roleLabel } from '../auth.js';
+import { EMBED } from '../embed.js';
 import { h, icon, ICONS } from '../ui/dom.js';
 
 const LINKS = [
@@ -13,6 +14,8 @@ const LINKS = [
 /** <app-nav active="users">: cabeçalho da área logada, com links conforme o perfil. */
 class AppNav extends HTMLElement {
   async connectedCallback() {
+    // Dentro do sistema do cliente, a navegação é dele.
+    if (EMBED) { this.hidden = true; return; }
     const me = await getMe();
     const active = this.getAttribute('active');
     const links = LINKS.filter((l) => !l.roles || l.roles.includes(me.role));

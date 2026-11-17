@@ -72,7 +72,7 @@ internal sealed class TemplateService(
 
         var userId = tenant.RequireUserId();
         var template = new Template(tenant.RequireOrganizationId(), req.Name!.Trim(), req.Description?.Trim() is { Length: > 0 } d ? d : null, userId);
-        var draft = new TemplateVersion(template.Id, 1, userId);
+        var draft = new TemplateVersion(template.Id, 1, userId, tenant.ExternalUserName);
         if (starter is not null)
             draft.Update(Clean(starter.BodyHtml), starter.Variables, starter.DefaultSignerRoles);
         else
@@ -166,7 +166,7 @@ internal sealed class TemplateService(
             name = name[..Template.NameMaxLength];
 
         var copy = new Template(source.OrganizationId, name, source.Description, userId);
-        var draft = new TemplateVersion(copy.Id, 1, userId);
+        var draft = new TemplateVersion(copy.Id, 1, userId, tenant.ExternalUserName);
         draft.Update(content.BodyHtml, content.Variables, content.DefaultSignerRoles);
         db.TemplateVersions.Add(draft);
         db.Templates.Add(copy);
@@ -253,7 +253,7 @@ internal sealed class TemplateService(
     private async Task<TemplateVersion> NewDraftAsync(Guid templateId, CancellationToken ct)
     {
         var last = await db.TemplateVersions.Where(v => v.TemplateId == templateId).MaxAsync(v => (int?)v.Version, ct) ?? 0;
-        var draft = new TemplateVersion(templateId, last + 1, tenant.RequireUserId());
+        var draft = new TemplateVersion(templateId, last + 1, tenant.RequireUserId(), tenant.ExternalUserName);
         db.TemplateVersions.Add(draft);
         return draft;
     }
@@ -270,7 +270,8 @@ internal sealed class TemplateService(
             t.Id, t.Name, t.Description, t.ArchivedAt, t.UpdatedAt,
             current is null ? null : ToDto(current),
             draft is null ? null : ToDto(draft),
-            versions.Select(v => new TemplateVersionSummary(v.Id, v.Version, v.PublishedAt, names.GetValueOrDefault(v.CreatedBy))).ToList(),
+            versions.Select(v => new TemplateVersionSummary(v.Id, v.Version, v.PublishedAt,
+                v.CreatedByExternal is { } external ? $"{external} (pela integração)" : names.GetValueOrDefault(v.CreatedBy))).ToList(),
             t.RowVersion);
     }
 

@@ -7,28 +7,45 @@ internal static class TemplatesEndpoints
 {
     /// <summary>CSP da pré-visualização: o HTML do template usa estilos inline; nada de script nem rede.</summary>
     public const string PreviewCsp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'";
+    private const string PreviewCspWithoutAncestors = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors ";
+
+    /// <summary>
+    /// Quem pode o quê. A tela usa o perfil (Admin edita); o embed usa as permissões da sessão.
+    /// <paramref name="FrameAncestors"/>: quem pode emoldurar a pré-visualização.
+    /// </summary>
+    internal sealed record Access(
+        string LocationPrefix, string EditPolicy, string PublishPolicy, string ArchivePolicy,
+        Func<HttpContext, Task<string>> FrameAncestors);
+
+    private static readonly Access App = new("/api/v1/templates", Policies.IsAdmin, Policies.IsAdmin, Policies.IsAdmin,
+        _ => Task.FromResult("'self'"));
 
     public static RouteGroupBuilder MapTemplatesEndpoints(this RouteGroupBuilder api)
     {
-        var g = api.MapGroup("/templates").WithTags("Templates").RequireAuthorization();
+        api.MapGroup("/templates").WithTags("Templates").RequireAuthorization().MapTemplateRoutes(App);
+        return api;
+    }
 
+    /// <summary>As rotas de templates, compartilhadas pela tela (<c>/api/v1</c>) e pelo embed (<c>/api/embed/v1</c>).</summary>
+    internal static RouteGroupBuilder MapTemplateRoutes(this RouteGroupBuilder g, Access access)
+    {
         g.MapGet("/", async (bool? archived, ITemplateService templates, CancellationToken ct) =>
                 TypedResults.Ok(await templates.ListAsync(archived ?? false, ct)))
             .WithSummary("Lista os templates (ativos ou arquivados)");
 
         g.MapGet("/starters", () => TypedResults.Ok(TemplateStarters.All
                 .Select(s => new TemplateStarterItem(s.Id, s.Name, s.Description, s.Variables.Count)).ToList()))
-            .RequireAuthorization(Policies.IsAdmin)
+            .RequireAuthorization(access.EditPolicy)
             .WithSummary("Modelos prontos para começar um template");
 
         g.MapPost("/preview", (PreviewTemplateRequest req, ITemplateService templates, HttpContext http) =>
                 templates.PreviewUnsaved(req).ToHttp(html => Html(http, html)))
-            .RequireAuthorization(Policies.IsAdmin)
+            .RequireAuthorization(access.EditPolicy)
             .WithSummary("HTML do conteúdo ainda não salvo do editor, com dados de exemplo");
 
         g.MapPost("/", async (CreateTemplateRequest req, ITemplateService templates, HttpContext http, CancellationToken ct) =>
-                (await templates.CreateAsync(req, ct)).ToHttp(t => WithETag(http, t, TypedResults.Created($"/api/v1/templates/{t.Id}", t))))
-            .RequireAuthorization(Policies.IsAdmin)
+                (await templates.CreateAsync(req, ct)).ToHttp(t => WithETag(http, t, TypedResults.Created($"{access.LocationPrefix}/{t.Id}", t))))
+            .RequireAuthorization(access.EditPolicy)
             .WithSummary("Cria um template em branco ou a partir de um modelo pronto (starterId)");
 
         g.MapGet("/{id:guid}", async (Guid id, ITemplateService templates, HttpContext http, CancellationToken ct) =>
@@ -37,20 +54,20 @@ internal static class TemplatesEndpoints
 
         g.MapPut("/{id:guid}", async (Guid id, SaveTemplateRequest req, ITemplateService templates, HttpContext http, CancellationToken ct) =>
                 (await templates.SaveDraftAsync(id, req, ETags.IfMatch(http), ct)).ToHttp(t => WithETag(http, t, TypedResults.Ok(t))))
-            .RequireAuthorization(Policies.IsAdmin)
+            .RequireAuthorization(access.EditPolicy)
             .WithSummary("Salva o rascunho da próxima versão (If-Match opcional)");
 
         g.MapPost("/{id:guid}/publish", Admin((templates, id, ct) => templates.PublishAsync(id, ct)))
-            .RequireAuthorization(Policies.IsAdmin).WithSummary("Publica o rascunho como nova versão");
+            .RequireAuthorization(access.PublishPolicy).WithSummary("Publica o rascunho como nova versão");
         g.MapDelete("/{id:guid}/draft", Admin((templates, id, ct) => templates.DiscardDraftAsync(id, ct)))
-            .RequireAuthorization(Policies.IsAdmin).WithSummary("Descarta o rascunho");
+            .RequireAuthorization(access.EditPolicy).WithSummary("Descarta o rascunho");
         g.MapPost("/{id:guid}/duplicate", async (Guid id, ITemplateService templates, HttpContext http, CancellationToken ct) =>
-                (await templates.DuplicateAsync(id, ct)).ToHttp(t => WithETag(http, t, TypedResults.Created($"/api/v1/templates/{t.Id}", t))))
-            .RequireAuthorization(Policies.IsAdmin).WithSummary("Duplica o template");
+                (await templates.DuplicateAsync(id, ct)).ToHttp(t => WithETag(http, t, TypedResults.Created($"{access.LocationPrefix}/{t.Id}", t))))
+            .RequireAuthorization(access.EditPolicy).WithSummary("Duplica o template");
         g.MapPost("/{id:guid}/archive", Admin((templates, id, ct) => templates.SetArchivedAsync(id, true, ct)))
-            .RequireAuthorization(Policies.IsAdmin).WithSummary("Arquiva");
+            .RequireAuthorization(access.ArchivePolicy).WithSummary("Arquiva");
         g.MapPost("/{id:guid}/unarchive", Admin((templates, id, ct) => templates.SetArchivedAsync(id, false, ct)))
-            .RequireAuthorization(Policies.IsAdmin).WithSummary("Desarquiva");
+            .RequireAuthorization(access.ArchivePolicy).WithSummary("Desarquiva");
 
         g.MapGet("/{id:guid}/versions/{versionId:guid}", async (Guid id, Guid versionId, ITemplateService templates, CancellationToken ct) =>
                 (await templates.GetVersionAsync(id, versionId, ct)).ToHttp())
@@ -60,18 +77,22 @@ internal static class TemplatesEndpoints
             {
                 var which = string.Equals(source, "current", StringComparison.OrdinalIgnoreCase) ? PreviewSource.Current : PreviewSource.Draft;
                 var result = await templates.PreviewAsync(id, which, ct);
-                return result.ToHttp(html => Html(http, html));
+                if (!result.IsSuccess)
+                    return result.Error!.ToHttp();
+                return Html(http, result.Value!, await access.FrameAncestors(http));
             })
             .WithSummary("HTML com dados de exemplo, para o iframe de pré-visualização");
 
-        return api;
+        return g;
     }
 
     /// <summary>Página HTML gerada (pré-visualização) com CSP própria e permissão de iframe na mesma origem.</summary>
-    public static IResult Html(HttpContext http, string html)
+    /// <param name="frameAncestors">No embed, a página do iframe e o site do cliente acima dela.</param>
+    public static IResult Html(HttpContext http, string html, string frameAncestors = "'self'")
     {
-        http.Response.Headers.ContentSecurityPolicy = PreviewCsp;
-        http.Response.Headers.XFrameOptions = "SAMEORIGIN";
+        http.Response.Headers.ContentSecurityPolicy = PreviewCspWithoutAncestors + frameAncestors;
+        // X-Frame-Options não tem como listar o site do cliente: no embed vale só o frame-ancestors.
+        http.Response.Headers.XFrameOptions = frameAncestors == "'self'" ? "SAMEORIGIN" : "";
         http.Response.Headers.CacheControl = "no-store";
         return TypedResults.Content(html, "text/html; charset=utf-8");
     }
