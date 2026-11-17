@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Contratos.Api.Security;
 using Contratos.Application.Common;
@@ -57,7 +58,7 @@ internal static class PublicApiEndpoints
 
         // ---------- Contratos ----------
 
-        g.MapGet("/contracts", async (HttpRequest http, IContractService contracts, CancellationToken ct) =>
+        g.MapGet("/contracts", async (HttpRequest http, IContractService contracts, AppDbContext db, CancellationToken ct) =>
         {
             var q = http.Query;
             ContractStatus? status = null;
@@ -87,16 +88,46 @@ internal static class PublicApiEndpoints
                     return Invalid("createdTo", "Use o formato AAAA-MM-DD.");
                 to = d;
             }
+            DateTimeOffset? updatedFrom = null;
+            if (q["updatedFrom"].ToString() is { Length: > 0 } rawUpdated)
+            {
+                // Um "+03:00" sem codificar chega como espaço na query string.
+                if (!DateTimeOffset.TryParse(rawUpdated.Trim().Replace(' ', '+'), CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal, out var u) || !rawUpdated.Contains('T'))
+                    return Invalid("updatedFrom", "Use data e hora ISO 8601, ex.: 2026-11-18T10:00:00Z.");
+                updatedFrom = u.ToUniversalTime();
+            }
+            var sort = q["sort"].ToString() switch
+            {
+                "created_asc" => "created_asc",
+                "updated_asc" => "updated_asc",
+                _ => null,
+            };
+            var includeSigners = false;
+            foreach (var part in q["include"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (part != "signers")
+                    return Invalid("include", "Use include=signers.");
+                includeSigners = true;
+            }
             var page = int.TryParse(q["page"], out var p) ? Math.Max(1, p) : 1;
             var pageSize = int.TryParse(q["pageSize"], out var ps) ? Math.Clamp(ps, 1, 100) : 20;
             var reference = q["externalReference"].ToString();
 
             var list = await contracts.ListAsync(new ContractListQuery(
                 q["q"].ToString() is { Length: > 0 } text ? text : null, status, templateId, from, to, page, pageSize,
-                "created_asc".Equals(q["sort"], StringComparison.Ordinal) ? "created_asc" : null, null, null,
-                string.IsNullOrWhiteSpace(reference) ? null : reference), ct);
+                sort, null, null, string.IsNullOrWhiteSpace(reference) ? null : reference, updatedFrom), ct);
+            var items = list.Items.Select(PublicMapper.ListItem).ToList();
+            if (includeSigners && items.Count > 0)
+            {
+                // Uma consulta para a página inteira; o filtro de organização do contexto vale aqui.
+                var ids = items.Select(i => i.Id).ToList();
+                var signers = (await db.Contracts.AsNoTracking().Include(c => c.Signers).Where(c => ids.Contains(c.Id)).ToListAsync(ct))
+                    .ToDictionary(c => c.Id, c => (IReadOnlyList<PublicSigner>)c.SignersInSendOrder().Select(s => PublicMapper.Signer(s, c.Status)).ToList());
+                items = items.Select(i => i with { Signers = signers.GetValueOrDefault(i.Id) ?? [] }).ToList();
+            }
             return Json(new PublicPage<PublicContractListItem>(
-                list.Items.Select(PublicMapper.ListItem).ToList(), list.Page, list.PageSize, list.Total, list.Page * list.PageSize < list.Total));
+                items, list.Page, list.PageSize, list.Total, list.Page * list.PageSize < list.Total));
         });
 
         g.MapPost("/contracts", async (HttpRequest http, IContractService contracts, CancellationToken ct) =>
@@ -152,7 +183,60 @@ internal static class PublicApiEndpoints
         g.MapGet("/contracts/{id:guid}/document", (Guid id, IContractService contracts, CancellationToken ct) => File(contracts, id, false, ct));
         g.MapGet("/contracts/{id:guid}/signed-document", (Guid id, IContractService contracts, CancellationToken ct) => File(contracts, id, true, ct));
 
+        // ---------- Webhooks ----------
+        // Os mesmos da tela de Integrações (mesmas regras e limite); o que a API cadastra fica marcado com a chave.
+
+        g.MapGet("/webhooks", async (IIntegrationService integrations, CancellationToken ct) =>
+        {
+            var result = await integrations.ListEndpointsAsync(ct);
+            return result.IsSuccess ? Json(result.Value!.Select(PublicMapper.Webhook).ToList()) : PublicError(result.Error!);
+        });
+
+        g.MapPost("/webhooks", async (HttpRequest http, IIntegrationService integrations, CancellationToken ct) =>
+        {
+            var (body, invalid) = await ReadAsync<PublicCreateWebhookRequest>(http, ct);
+            if (invalid is not null)
+                return invalid;
+            var created = await integrations.CreateEndpointAsync(new WebhookEndpointRequest(body!.Url, body.Description, body.Events, true), ct);
+            if (!created.IsSuccess)
+                return PublicError(created.Error!);
+            http.HttpContext.Response.Headers.Location = $"{Prefix}/webhooks/{created.Value!.Endpoint.Id}";
+            return Json(new PublicCreatedWebhook(PublicMapper.Webhook(created.Value.Endpoint), created.Value.Secret), StatusCodes.Status201Created);
+        });
+
+        g.MapDelete("/webhooks/{id:guid}", async (Guid id, IIntegrationService integrations, CancellationToken ct) =>
+            NoContent(await integrations.DeleteEndpointAsync(id, ct)));
+
+        g.MapPost("/webhooks/{id:guid}/test", async (Guid id, IIntegrationService integrations, CancellationToken ct) =>
+        {
+            var result = await integrations.SendTestAsync(id, ct);
+            return result.IsSuccess ? TypedResults.Accepted((string?)null) : PublicError(result.Error!);
+        });
+
         // ---------- Embed ----------
+
+        g.MapGet("/embed/origins", async (IIntegrationService integrations, CancellationToken ct) =>
+        {
+            var result = await integrations.ListEmbedOriginsAsync(ct);
+            return result.IsSuccess ? Json(result.Value!.Select(PublicMapper.EmbedOrigin).ToList()) : PublicError(result.Error!);
+        });
+
+        g.MapPost("/embed/origins", async (HttpRequest http, IIntegrationService integrations, CancellationToken ct) =>
+        {
+            var (body, invalid) = await ReadAsync<PublicCreateEmbedOriginRequest>(http, ct);
+            if (invalid is not null)
+                return invalid;
+            // Idempotente: o site já cadastrado volta com 200, não com erro.
+            var result = await integrations.EnsureEmbedOriginAsync(new EmbedOriginRequest(body!.Origin), ct);
+            if (!result.IsSuccess)
+                return PublicError(result.Error!);
+            http.HttpContext.Response.Headers.Location = $"{Prefix}/embed/origins/{result.Value!.Origin.Id}";
+            return Json(PublicMapper.EmbedOrigin(result.Value.Origin), result.Value.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK);
+        });
+
+        // As sessões abertas nesse site param de carregar: o frame-ancestors é lido a cada requisição.
+        g.MapDelete("/embed/origins/{id:guid}", async (Guid id, IIntegrationService integrations, CancellationToken ct) =>
+            NoContent(await integrations.DeleteEmbedOriginAsync(id, ct)));
 
         g.MapPost("/embed/sessions", async (HttpRequest http, EmbedSessions sessions, CancellationToken ct) =>
         {
@@ -196,6 +280,8 @@ internal static class PublicApiEndpoints
 
     private static IResult Json<T>(T value, int status = StatusCodes.Status200OK) =>
         TypedResults.Json(value, PublicJson.Options, statusCode: status);
+
+    private static IResult NoContent(Result result) => result.IsSuccess ? TypedResults.NoContent() : PublicError(result.Error!);
 
     private static IResult Contract(Result<ContractDetail> result, int status = StatusCodes.Status200OK) =>
         result.IsSuccess ? Json(PublicMapper.Contract(result.Value!), status) : PublicError(result.Error!);

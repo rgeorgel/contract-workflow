@@ -17,9 +17,11 @@ public sealed record CreateApiKeyRequest(string? Name);
 // ---------- Webhooks ----------
 
 /// <param name="Events">Tipos assinados; vazio recebe todos.</param>
+/// <param name="CreatedByApiKeyName">Nome da chave, quando o webhook foi cadastrado pela API pública.</param>
 public sealed record WebhookEndpointDto(
     Guid Id, string Url, string? Description, IReadOnlyList<string> Events, bool Enabled,
-    DateTimeOffset CreatedAt, DateTimeOffset? LastSuccessAt, DateTimeOffset? LastFailureAt, int FailureStreak);
+    DateTimeOffset CreatedAt, DateTimeOffset? LastSuccessAt, DateTimeOffset? LastFailureAt, int FailureStreak,
+    string? CreatedByName = null, string? CreatedByApiKeyName = null);
 
 public sealed record CreatedWebhookEndpointDto(WebhookEndpointDto Endpoint, string Secret);
 
@@ -54,7 +56,10 @@ public static class IntegrationErrors
         "api_not_in_plan");
 }
 
-/// <summary>Chaves de API e webhooks da organização. Só Admin.</summary>
+/// <summary>
+/// Chaves de API e webhooks da organização. Só Admin; webhooks e sites do embed também pela API pública
+/// (a chave já dá acesso a todos os contratos, então não abre dados novos).
+/// </summary>
 public interface IIntegrationService
 {
     /// <summary>Conta, plano e uso do ciclo, para a API pública (<c>GET /account</c>). Qualquer chave.</summary>
@@ -64,6 +69,7 @@ public interface IIntegrationService
     Task<Result<CreatedApiKeyDto>> CreateKeyAsync(CreateApiKeyRequest request, CancellationToken ct);
     Task<Result> RevokeKeyAsync(Guid id, CancellationToken ct);
 
+    Task<Result<IReadOnlyList<WebhookEndpointDto>>> ListEndpointsAsync(CancellationToken ct);
     Task<Result<CreatedWebhookEndpointDto>> CreateEndpointAsync(WebhookEndpointRequest request, CancellationToken ct);
     Task<Result<WebhookEndpointDto>> UpdateEndpointAsync(Guid id, WebhookEndpointRequest request, CancellationToken ct);
     Task<Result> DeleteEndpointAsync(Guid id, CancellationToken ct);
@@ -76,8 +82,11 @@ public interface IIntegrationService
     /// <summary>Entrega de novo um evento (nova entrega, com as tentativas do zero).</summary>
     Task<Result> RedeliverAsync(long deliveryId, CancellationToken ct);
 
-    /// <summary>Site que pode mostrar o embed de templates num iframe.</summary>
+    Task<Result<IReadOnlyList<EmbedOriginDto>>> ListEmbedOriginsAsync(CancellationToken ct);
+    /// <summary>Site que pode mostrar o embed de templates num iframe. Já cadastrado: erro de validação.</summary>
     Task<Result<EmbedOriginDto>> AddEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct);
+    /// <summary>Como <see cref="AddEmbedOriginAsync"/>, mas devolve o existente se o site já estiver cadastrado (API pública).</summary>
+    Task<Result<EnsuredEmbedOrigin>> EnsureEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct);
     /// <summary>Remove o site; as sessões abertas nele param de carregar.</summary>
     Task<Result> DeleteEmbedOriginAsync(Guid id, CancellationToken ct);
 }

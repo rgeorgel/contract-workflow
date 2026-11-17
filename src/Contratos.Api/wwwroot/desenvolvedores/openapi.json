@@ -27,6 +27,9 @@
       "name": "Contratos"
     },
     {
+      "name": "Webhooks"
+    },
+    {
       "name": "Embed"
     }
   ],
@@ -255,6 +258,15 @@
             }
           },
           {
+            "name": "updatedFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Só contratos com `updatedAt` maior ou igual (ISO 8601, ex.: `2026-11-18T10:00:00Z`). Com `sort=updated_asc`, serve para conferir o que mudou desde a última consulta."
+          },
+          {
             "name": "q",
             "in": "query",
             "schema": {
@@ -269,9 +281,22 @@
               "type": "string",
               "enum": [
                 "created_desc",
-                "created_asc"
+                "created_asc",
+                "updated_asc"
               ]
-            }
+            },
+            "description": "`updated_asc`: do mais antigo para o mais novo por `updatedAt` (desempate pelo id), para paginar sem perder nada."
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "signers"
+              ]
+            },
+            "description": "`signers`: inclui os signatários em cada item, como em `GET /contracts/{id}`."
           },
           {
             "name": "page",
@@ -1039,6 +1064,472 @@
           },
           "403": {
             "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não encontrado nesta conta (`not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "listWebhooks",
+        "summary": "Webhooks da conta (os da tela de Integrações e os criados pela API)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "createWebhook",
+        "summary": "Cadastra um webhook; o segredo de assinatura só vem nesta resposta",
+        "description": "Mesmas regras da tela de Integrações: https, endereço público, até 10 webhooks por conta. A mesma URL pode ser cadastrada de novo (apague a antiga, porque o segredo dela não pode ser lido de novo). Na tela, o webhook aparece como criado pela API, com o nome da chave. Revogar a chave não apaga o webhook.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedWebhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados inválidos (`validation`): URL que não é https ou aponta para rede interna, evento desconhecido; ou JSON inválido (`invalid_json`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A conta já tem 10 webhooks (`too_many_endpoints`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "deleteWebhook",
+        "summary": "Exclui o webhook (as entregas pendentes vão junto)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Id do webhook."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Excluído"
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não encontrado nesta conta (`not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "testWebhook",
+        "summary": "Envia um evento `webhook.test` só para este webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Id do webhook."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Na fila de entrega"
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não encontrado nesta conta (`not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O webhook está desativado (`endpoint_disabled`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embed/origins": {
+      "get": {
+        "tags": [
+          "Embed"
+        ],
+        "operationId": "listEmbedOrigins",
+        "summary": "Sites que podem mostrar o embed de templates",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmbedOrigin"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Embed"
+        ],
+        "operationId": "createEmbedOrigin",
+        "summary": "Cadastra um site para o embed (idempotente)",
+        "description": "Mesmas regras da tela de Integrações: https (http:// só para localhost), sem caminho, curinga `https://*.dominio`, até 10 sites por conta. Se o site já estiver cadastrado, responde 200 com o existente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmbedOrigin"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Já estava cadastrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedOrigin"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Cadastrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbedOrigin"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Não é uma origem válida (`validation`) ou JSON inválido (`invalid_json`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Plano sem API (`api_not_in_plan`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A conta já tem 10 sites (`too_many_origins`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições (`rate_limited`); veja `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embed/origins/{id}": {
+      "delete": {
+        "tags": [
+          "Embed"
+        ],
+        "operationId": "deleteEmbedOrigin",
+        "summary": "Remove o site; as sessões abertas nele param de carregar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Id do site."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removido"
+          },
+          "401": {
+            "description": "Chave ausente, inválida ou revogada (`unauthorized`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1854,6 +2345,29 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Muda em toda alteração que gera evento: envio, visualização, assinatura, recusa, conclusão, cancelamento, expiração, PDF assinado pronto e falha de envio."
+          },
+          "hasSignedDocument": {
+            "type": "boolean",
+            "description": "O PDF assinado já pode ser baixado em `/contracts/{id}/signed-document`."
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "signers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Signer"
+            },
+            "description": "Só com `include=signers`."
           }
         }
       },
@@ -1980,6 +2494,126 @@
                 "description": "Nos eventos template.*: o template com a versão publicada."
               }
             }
+          }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            },
+            "description": "Vazio: todos os eventos, inclusive os que surgirem depois."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastFailureAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "failureStreak": {
+            "type": "integer",
+            "description": "Entregas seguidas que esgotaram as tentativas."
+          }
+        }
+      },
+      "CreateWebhook": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 500
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            },
+            "description": "Omitido ou vazio: todos."
+          }
+        }
+      },
+      "CreatedWebhook": {
+        "type": "object",
+        "properties": {
+          "webhook": {
+            "$ref": "#/components/schemas/Webhook"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Segredo de assinatura (`whsec_…`). Só vem nesta resposta."
+          }
+        }
+      },
+      "EmbedOrigin": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "origin": {
+            "type": "string",
+            "example": "https://app.exemplo.com"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateEmbedOrigin": {
+        "type": "object",
+        "required": [
+          "origin"
+        ],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "https://app.exemplo.com"
           }
         }
       },

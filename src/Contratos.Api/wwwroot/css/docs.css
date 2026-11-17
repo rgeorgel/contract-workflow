@@ -39,6 +39,7 @@
 .method { display: inline-block; min-width: 54px; text-align: center; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: .78rem; letter-spacing: .03em; }
 .method--get { background: var(--color-success-soft); color: var(--color-success); }
 .method--post { background: var(--color-info-soft); color: var(--color-info); }
+.method--delete { background: var(--color-danger-soft); color: var(--color-danger); }
 .endpoint__path { word-break: break-all; }
 
 .docs-table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: .92rem; }

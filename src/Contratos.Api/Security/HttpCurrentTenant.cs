@@ -15,6 +15,7 @@ internal sealed class HttpCurrentTenant(IHttpContextAccessor accessor) : ICurren
     public Guid? UserId => Guid.TryParse(User?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     public UserRole? Role => Enum.TryParse<UserRole>(User?.FindFirstValue(AppClaims.Role), out var r) ? r : null;
     public string? ApiKeyName => User?.FindFirstValue(ApiKeyAuthenticationHandler.KeyNameClaim);
+    public Guid? ApiKeyId => Guid.TryParse(User?.FindFirstValue(ApiKeyAuthenticationHandler.KeyIdClaim), out var id) ? id : null;
     public string? ExternalUserName => User?.FindFirstValue(EmbedAuthenticationHandler.ExternalUserNameClaim);
 }
 

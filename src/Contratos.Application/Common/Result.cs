@@ -31,6 +31,8 @@ public readonly struct Result<T>
     public T? Value { get; }
     public Error? Error { get; }
     public bool IsSuccess => Error is null;
+    /// <summary>Para quando o valor é de um tipo interface (a conversão implícita não vale para interfaces).</summary>
+    public static Result<T> Ok(T value) => new(value, null);
     public static implicit operator Result<T>(T value) => new(value, null);
     public static implicit operator Result<T>(Error error) => new(default, error);
 }

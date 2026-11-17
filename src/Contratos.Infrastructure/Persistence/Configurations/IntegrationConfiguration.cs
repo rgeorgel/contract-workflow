@@ -38,6 +38,8 @@ internal sealed class WebhookEndpointConfiguration : IEntityTypeConfiguration<We
         b.HasIndex(e => e.OrganizationId);
         b.HasOne<Organization>().WithMany().HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne<AppUser>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+        // As chaves só são revogadas, nunca apagadas (só junto com a organização).
+        b.HasOne<ApiKey>().WithMany().HasForeignKey(e => e.CreatedByApiKeyId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -84,6 +86,7 @@ internal sealed class EmbedOriginConfiguration : IEntityTypeConfiguration<EmbedO
         b.HasIndex(o => new { o.OrganizationId, o.Origin }).IsUnique();
         b.HasOne<Organization>().WithMany().HasForeignKey(o => o.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne<AppUser>().WithMany().HasForeignKey(o => o.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ApiKey>().WithMany().HasForeignKey(o => o.CreatedByApiKeyId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 

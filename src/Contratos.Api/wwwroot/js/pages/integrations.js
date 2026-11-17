@@ -162,7 +162,9 @@ function renderHooks() {
   const rows = hooks.map((w) => h('tr', {},
     h('td', { 'data-label': 'Endereço' },
       h('span', { class: 'cell-main cell-url' }, w.url),
-      w.description ? h('span', { class: 'cell-sub' }, w.description) : null),
+      w.description ? h('span', { class: 'cell-sub' }, w.description) : null,
+      // Cadastrado por outro sistema com a chave (ex.: ao conectar o CRM): o Admin sabe de onde veio.
+      w.createdByApiKeyName ? h('span', { class: 'cell-sub' }, `Criado pela API (chave “${w.createdByApiKeyName}”)`) : null),
     h('td', { 'data-label': 'Eventos' }, h('span', { title: w.events.join(', ') || 'Todos' }, eventsSummary(w.events))),
     h('td', { 'data-label': 'Status' }, hookStatus(w)),
     h('td', { 'data-label': 'Última entrega' }, w.lastSuccessAt ? formatDateTime(w.lastSuccessAt) : h('span', { class: 'muted' }, '—')),
@@ -340,7 +342,9 @@ function renderOrigins() {
       h('td', { 'data-label': 'Site' }, h('code', { class: 'cell-main' }, o.origin)),
       h('td', { 'data-label': 'Cadastrado' },
         h('span', { class: 'cell-main' }, formatDateTime(o.createdAt)),
-        o.createdByName ? h('span', { class: 'cell-sub' }, `por ${o.createdByName}`) : null),
+        o.createdByApiKeyName
+          ? h('span', { class: 'cell-sub' }, `pela API (chave “${o.createdByApiKeyName}”)`)
+          : o.createdByName ? h('span', { class: 'cell-sub' }, `por ${o.createdByName}`) : null),
       h('td', { class: 'cell-actions' }, linkBtn('Remover', () => removeOrigin(o), true)))))));
 }
 

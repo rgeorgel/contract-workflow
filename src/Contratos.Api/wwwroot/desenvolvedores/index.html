@@ -75,6 +75,7 @@
             <li><a href="#eventos">Eventos</a></li>
             <li><a href="#assinatura">Conferir a assinatura</a></li>
             <li><a href="#tentativas">Tentativas e ordem</a></li>
+            <li><a href="#webhooks-api">Cadastrar pela API</a></li>
           </ul>
           <p class="docs-toc__group">Embed de templates</p>
           <ul>
@@ -104,7 +105,7 @@
             <li>mostra a <strong>tela de templates</strong> dentro dele (<a href="#embed">embed</a>), para quem usa o seu sistema criar, editar e publicar os modelos de contrato sem sair dele.</li>
           </ul>
           <div class="callout">
-            <p><strong>Disponível em todos os planos.</strong> Um Admin cria as chaves e cadastra os webhooks em <a href="/integrations.html">Integrações</a>. Cada contrato enviado pela API conta na cota do plano (ou usa um crédito avulso), como os enviados pela tela.</p>
+            <p><strong>Disponível em todos os planos.</strong> Um Admin cria as chaves em <a href="/integrations.html">Integrações</a>. Webhooks e sites do embed podem ser cadastrados lá ou <a href="#webhooks-api">pela própria API</a>, com a chave: quem conecta o seu sistema só cola a chave. Cada contrato enviado pela API conta na cota do plano (ou usa um crédito avulso), como os enviados pela tela.</p>
           </div>
         </section>
 
@@ -279,11 +280,15 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
                 <tr><td>402</td><td><code>payment_overdue</code></td><td>A assinatura da conta está com pagamento pendente: criar e enviar fica bloqueado. Leituras continuam.</td></tr>
                 <tr><td>403</td><td><code>api_not_in_plan</code></td><td>O plano atual da conta não inclui a API.</td></tr>
                 <tr><td>404</td><td><code>not_found</code></td><td>O recurso não existe nesta conta.</td></tr>
+                <tr><td>404</td><td><code>route_not_found</code></td><td>A rota não existe na API pública. Útil para detectar se um recurso novo já está disponível.</td></tr>
                 <tr><td>409</td><td><code>quota_exceeded</code></td><td>Acabaram os contratos do ciclo e os créditos avulsos. O rascunho é criado; envie depois de comprar créditos.</td></tr>
                 <tr><td>409</td><td><code>already_sent</code></td><td>Enviar um contrato que já foi enviado e está em andamento (<code>sent</code>, <code>partially_signed</code>).</td></tr>
                 <tr><td>409</td><td><code>already_final</code></td><td>Enviar ou cancelar um contrato já concluído, recusado, expirado ou cancelado (inclusive um rascunho cancelado, que nunca saiu).</td></tr>
                 <tr><td>409</td><td><code>channel_not_in_plan</code></td><td>Canal (SMS, por exemplo) fora do plano.</td></tr>
                 <tr><td>409</td><td><code>cannot_resend</code></td><td>O signatário já assinou ou recusou, ou o contrato não está mais aberto.</td></tr>
+                <tr><td>409</td><td><code>too_many_endpoints</code></td><td>A conta já tem 10 webhooks.</td></tr>
+                <tr><td>409</td><td><code>endpoint_disabled</code></td><td>Enviar teste para um webhook desativado.</td></tr>
+                <tr><td>409</td><td><code>too_many_origins</code></td><td>A conta já tem 10 sites cadastrados para o embed.</td></tr>
                 <tr><td>409</td><td><code>embed_origin_required</code></td><td>Criar uma sessão de embed sem nenhum site cadastrado em Integrações → Embed de templates.</td></tr>
                 <tr><td>409</td><td><code>pdf_failed</code></td><td>Falha temporária ao gerar o PDF. Tente de novo em instantes com a mesma <code>Idempotency-Key</code>.</td></tr>
                 <tr><td>413</td><td><code>payload_too_large</code></td><td>Corpo da requisição acima de 256 KB.</td></tr>
@@ -432,7 +437,7 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
 
           <h3 id="listar-contratos">Listar</h3>
           <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts</span></div>
-          <p>Do mais recente para o mais antigo (ou <code>sort=created_asc</code>). Filtros, todos opcionais:</p>
+          <p>Do mais recente para o mais antigo (ou <code>sort=created_asc</code>, ou <code>sort=updated_asc</code> pela data da última alteração). Filtros, todos opcionais:</p>
           <div class="table-scroll">
             <table class="docs-table">
               <thead><tr><th>Parâmetro</th><th>Descrição</th></tr></thead>
@@ -441,7 +446,9 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
                 <tr><td><code>status</code></td><td><code>draft</code>, <code>sent</code>, <code>partially_signed</code>, <code>completed</code>, <code>declined</code>, <code>expired</code> ou <code>cancelled</code>.</td></tr>
                 <tr><td><code>templateId</code></td><td>Contratos deste template (qualquer versão).</td></tr>
                 <tr><td><code>createdFrom</code>, <code>createdTo</code></td><td>Criados entre estas datas (AAAA-MM-DD, horário de Brasília).</td></tr>
+                <tr><td><code>updatedFrom</code></td><td>Alterados a partir desta data e hora (ISO 8601, ex.: <code>2026-11-18T10:00:00Z</code>): <code>updatedAt</code> maior ou igual.</td></tr>
                 <tr><td><code>q</code></td><td>Busca por número, título, valores e nome ou e-mail de signatário.</td></tr>
+                <tr><td><code>include</code></td><td><code>signers</code>: traz os signatários em cada item (como em <code>GET /contracts/{id}</code>).</td></tr>
                 <tr><td><code>page</code>, <code>pageSize</code></td><td>Página (a partir de 1) e tamanho (até 100, padrão 20).</td></tr>
               </tbody>
             </table>
@@ -460,11 +467,22 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
       "sendError": false,
       "createdAt": "2026-11-16T14:03:21+00:00",
       "sentAt": "2026-11-16T14:03:22+00:00",
-      "completedAt": null
+      "completedAt": null,
+      "updatedAt": "2026-11-16T15:40:08+00:00",
+      "hasSignedDocument": false,
+      "expiresAt": "2026-11-30T03:00:00+00:00"
     }
   ],
   "page": 1, "pageSize": 20, "total": 1, "hasMore": false
 }</code></pre></div>
+          <p><code>updatedAt</code> muda em toda alteração que gera evento: envio, visualização, assinatura, recusa, conclusão, cancelamento, expiração, PDF assinado pronto e falha de envio. <code>hasSignedDocument</code> diz se o PDF assinado já pode ser baixado.</p>
+          <h3 id="conferencia">Conferir o que mudou</h3>
+          <p>O webhook é o caminho principal. Para uma conferência periódica de reserva (caso alguma entrega se perca), não consulte contrato por contrato: peça só o que mudou desde a última rodada.</p>
+          <ol class="docs-steps">
+            <li><code>GET /contracts?updatedFrom={última conferência − 5 min}&amp;sort=updated_asc&amp;pageSize=100</code>, paginando até <code>hasMore</code> ser <code>false</code>. Na maioria das rodadas é uma chamada só.</li>
+            <li>Para cada contrato que você acompanha e cujo <code>updatedAt</code> é mais novo que o guardado, consulte <code>GET /contracts/{id}</code> (ou use <code>include=signers</code> e pule essa etapa).</li>
+            <li>Guarde o maior <code>updatedAt</code> visto como ponto de partida da próxima rodada.</li>
+          </ol>
 
           <h3 id="detalhe-contrato">Consultar</h3>
           <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/contracts/{id}</span></div>
@@ -747,14 +765,53 @@ http_response_code(200);</code></pre>
           </ul>
         </section>
 
+        <section id="webhooks-api" aria-labelledby="webhooks-api-t">
+          <h2 id="webhooks-api-t">Cadastrar webhooks pela API</h2>
+          <p>Para o seu sistema se conectar sozinho, sem pedir que alguém copie o endereço e o segredo entre as telas. São os mesmos webhooks da tela de Integrações: mesmas regras e o mesmo limite de 10 por conta. Na tela, o que a API cadastrou aparece como “Criado pela API”, com o nome da chave. Revogar a chave <strong>não</strong> apaga os webhooks que ela cadastrou.</p>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/webhooks</span></div>
+          <p>Os webhooks da conta (os da tela e os da API), sem o segredo.</p>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/webhooks</span></div>
+          <p>Corpo: <code>url</code> (obrigatório), <code>description</code> e <code>events</code> (omitido ou vazio: todos, inclusive os que surgirem depois). Responde <code>201</code>, e o segredo de assinatura vem <strong>só nesta resposta</strong>. A mesma URL pode ser cadastrada de novo; como o segredo antigo não pode ser lido outra vez, apague o webhook antigo (<code>DELETE</code>) antes de criar o novo.</p>
+          <div class="code"><div class="code__title">Cadastrar um webhook</div><pre><code>curl {{BASE_URL}}/api/public/v1/webhooks \
+  -H "Authorization: Bearer $CONTRATOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://crm.suaempresa.com.br/webhooks/contratos", "description": "CRM" }'</code></pre></div>
+          <div class="code"><div class="code__title">Resposta 201</div><pre><code>{
+  "webhook": {
+    "id": "0193b0a1-0000-7000-8000-000000000001",
+    "url": "https://crm.suaempresa.com.br/webhooks/contratos",
+    "description": "CRM",
+    "events": [],
+    "enabled": true,
+    "createdAt": "2026-11-18T12:00:00+00:00",
+    "lastSuccessAt": null,
+    "lastFailureAt": null,
+    "failureStreak": 0
+  },
+  "secret": "whsec_…"
+}</code></pre></div>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/webhooks/{id}/test</span></div>
+          <p>Como o botão “Enviar teste” da tela: manda um evento <code>webhook.test</code>, assinado, só para este webhook. Responde <code>202</code>.</p>
+          <div class="endpoint"><span class="method method--delete">DELETE</span><span class="endpoint__path">/webhooks/{id}</span></div>
+          <p>Exclui o webhook. Responde <code>204</code>, ou <code>404 not_found</code> se ele não existe nesta conta.</p>
+          <p>Erros: <code>400 validation</code> (URL que não é https ou aponta para rede interna, evento desconhecido) e <code>409 too_many_endpoints</code>.</p>
+        </section>
+
         <section id="embed" aria-labelledby="embed-t">
           <h2 id="embed-t">Embed de templates: como funciona</h2>
           <p>Com o embed, quem usa o seu sistema monta os modelos de contrato sem sair dele. A tela de templates do Contratos aparece num iframe, com o editor visual, as variáveis, a pré-visualização e o histórico de versões. O que for publicado ali já pode ser usado em <code>POST /contracts</code>.</p>
           <ol class="docs-steps">
-            <li><strong>Cadastre o seu site</strong> em <a href="/integrations.html#embed">Integrações → Embed de templates</a> (ex.: <code>https://crm.suaempresa.com.br</code>). Só esses sites conseguem mostrar o embed: nos outros, o navegador bloqueia o iframe.</li>
+            <li><strong>Cadastre o seu site</strong> em <a href="/integrations.html#embed">Integrações → Embed de templates</a> (ex.: <code>https://crm.suaempresa.com.br</code>). Só esses sites conseguem mostrar o embed: nos outros, o navegador bloqueia o iframe. O seu sistema também pode cadastrar o site sozinho, pela API (abaixo).</li>
             <li><strong>No seu servidor, crie uma sessão</strong> com a chave de API (<code>POST /embed/sessions</code>). A resposta traz a <code>url</code> da tela.</li>
             <li><strong>Coloque a <code>url</code> num iframe.</strong> Cada link abre uma vez: crie uma sessão nova sempre que a tela for aberta.</li>
           </ol>
+          <h3 id="embed-sites">Cadastrar o site pela API</h3>
+          <div class="endpoint"><span class="method method--get">GET</span><span class="endpoint__path">/embed/origins</span></div>
+          <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/embed/origins</span></div>
+          <p>Corpo: <code>{ "origin": "https://crm.suaempresa.com.br" }</code>. Mesmas regras da tela: só o endereço do site, sem caminho; <code>https://</code> (<code>http://</code> só para localhost); curinga <code>https://*.suaempresa.com.br</code>; até 10 sites por conta. <strong>Idempotente:</strong> responde <code>201</code> quando cadastra e <code>200</code>, com o site existente, quando ele já estava na lista. Erros: <code>400 validation</code> e <code>409 too_many_origins</code>.</p>
+          <div class="endpoint"><span class="method method--delete">DELETE</span><span class="endpoint__path">/embed/origins/{id}</span></div>
+          <p>Remove o site (<code>204</code>); as sessões abertas nele param de carregar. Ao desconectar a sua integração, prefira não remover: outra integração da mesma conta pode usar o mesmo site.</p>
+          <p>Um jeito simples: se <code>POST /embed/sessions</code> responder <code>409 embed_origin_required</code>, cadastre o site e tente de novo uma vez.</p>
           <div class="callout"><p><strong>A chave de API nunca vai para o navegador.</strong> O seu servidor cria a sessão e entrega só o link. Dentro do iframe, a página usa um token próprio, que só abre a tela de templates, só tem as permissões que você deu e vence no horário da sessão.</p></div>
         </section>
 
@@ -940,6 +997,7 @@ $url = json_decode(curl_exec($ch), true)['url'];</code></pre>
           <h2 id="mudancas-t">Mudanças</h2>
           <p>A versão faz parte do endereço (<code>/v1</code>). Dentro dela, só entram mudanças compatíveis: campos novos nas respostas, novos tipos de evento e novos parâmetros opcionais. Escreva o seu código para ignorar campos que ele não conhece.</p>
           <ul>
+            <li><strong>17/11/2026</strong>: <a href="#webhooks-api">webhooks pela API</a> (<code>GET</code>, <code>POST</code> e <code>DELETE /webhooks</code>, <code>POST /webhooks/{id}/test</code>) e <a href="#embed-sites">sites do embed pela API</a> (<code>GET</code>, <code>POST</code> e <code>DELETE /embed/origins</code>). Em <code>GET /contracts</code>: filtro <code>updatedFrom</code>, <code>sort=updated_asc</code>, <code>include=signers</code> e os campos <code>updatedAt</code>, <code>hasSignedDocument</code> e <code>expiresAt</code> em cada item (<a href="#conferencia">conferir o que mudou</a>).</li>
             <li><strong>17/11/2026</strong>: correções. <code>deliveryMethod</code> volta como <code>"whatsapp"</code>, como documentado (antes saía <code>"whats_app"</code>, que continua aceito na entrada). Enviar um contrato finalizado ou cancelado responde <code>already_final</code> em vez de <code>already_sent</code>. <code>signLink</code> passa a vir preenchido para quem recebe por e-mail, WhatsApp ou SMS, nos contratos enviados a partir de agora.</li>
             <li><strong>17/11/2026</strong>: <a href="#embed">embed de templates</a> (<code>POST /embed/sessions</code>) e os eventos <code>template.published</code> e <code>template.archived</code>.</li>
             <li><strong>16/11/2026</strong>: primeira versão: conta, templates, contratos (criar, enviar, cancelar, reenviar, PDFs, linha do tempo) e webhooks.</li>

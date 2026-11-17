@@ -10,6 +10,8 @@ public interface ICurrentTenant
     UserRole? Role { get; }
     /// <summary>Nome da chave de API, quando a requisição veio da API pública (aparece na linha do tempo).</summary>
     string? ApiKeyName => null;
+    /// <summary>Id da chave de API, quando a requisição veio da API pública.</summary>
+    Guid? ApiKeyId => null;
     /// <summary>Pessoa do sistema do cliente numa sessão de embed (o usuário daqui é o dono da chave).</summary>
     string? ExternalUserName => null;
 }

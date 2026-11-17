@@ -60,6 +60,8 @@ internal sealed class ContractService(
             var reference = q.ExternalReference.Trim();
             query = query.Where(c => c.ExternalReference == reference);
         }
+        if (q.UpdatedFrom is { } updatedFrom)
+            query = query.Where(c => c.UpdatedAt >= updatedFrom);
 
         var byCompletion = string.Equals(q.DateField, "completed", StringComparison.OrdinalIgnoreCase);
         if (q.From is { } from)
@@ -76,6 +78,8 @@ internal sealed class ContractService(
         query = q.Sort switch
         {
             "created_asc" => query.OrderBy(c => c.CreatedAt),
+            // Id como desempate: com a mesma hora, a paginação não pula nem repete contrato.
+            "updated_asc" => query.OrderBy(c => c.UpdatedAt).ThenBy(c => c.Id),
             "title" => query.OrderBy(c => c.Title).ThenByDescending(c => c.CreatedAt),
             "number" => query.OrderByDescending(c => c.Number),
             "completed_desc" => query.OrderByDescending(c => c.CompletedAt).ThenByDescending(c => c.CreatedAt),
@@ -88,6 +92,7 @@ internal sealed class ContractService(
             .Select(c => new
             {
                 c.Id, c.Number, c.Title, c.Status, c.CreatedAt, c.SentAt, c.CompletedAt, c.SendError, c.ExternalReference,
+                c.UpdatedAt, c.ExpiresAt, HasSigned = c.SignedDocumentKey != null,
                 // Sem IgnoreQueryFilters aqui: no EF ele desliga os filtros da consulta INTEIRA,
                 // inclusive o de organização dos contratos.
                 TemplateName = db.TemplateVersions.Where(v => v.Id == c.TemplateVersionId)
@@ -102,7 +107,7 @@ internal sealed class ContractService(
             r.Id, r.Number, r.Title, r.Status, r.TemplateName ?? "—", r.Total, r.Signed, r.CreatedAt, r.SentAt, r.CompletedAt,
             r.SendError is not null,
             r.Status is ContractStatus.Sent or ContractStatus.PartiallySigned && r.SentAt is { } sent ? (int)(now - sent).TotalDays : null,
-            r.ExternalReference))
+            r.ExternalReference, r.UpdatedAt, r.HasSigned, r.ExpiresAt))
             .ToList();
         return new Paged<ContractListItem>(items, page, pageSize, total);
     }

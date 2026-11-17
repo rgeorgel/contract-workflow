@@ -10,6 +10,8 @@ public sealed class EmbedOrigin
     /// <summary>Normalizada: <c>https://crm.exemplo.com.br</c>, <c>https://*.exemplo.com.br</c> ou <c>http://localhost:3000</c>.</summary>
     public string Origin { get; set; } = null!;
     public Guid CreatedBy { get; set; }
+    /// <summary>Chave da API pública que cadastrou (nulo: cadastrado pela tela).</summary>
+    public Guid? CreatedByApiKeyId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

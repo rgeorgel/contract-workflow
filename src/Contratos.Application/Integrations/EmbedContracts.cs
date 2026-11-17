@@ -2,7 +2,11 @@ namespace Contratos.Application.Integrations;
 
 // ---------- Domínios do embed (tela de Integrações) ----------
 
-public sealed record EmbedOriginDto(Guid Id, string Origin, string? CreatedByName, DateTimeOffset CreatedAt);
+/// <param name="CreatedByApiKeyName">Nome da chave, quando o site foi cadastrado pela API pública.</param>
+public sealed record EmbedOriginDto(Guid Id, string Origin, string? CreatedByName, DateTimeOffset CreatedAt, string? CreatedByApiKeyName = null);
+
+/// <param name="Created">Falso quando o site já estava cadastrado.</param>
+public sealed record EnsuredEmbedOrigin(EmbedOriginDto Origin, bool Created);
 
 public sealed record EmbedOriginRequest(string? Origin);
 

@@ -193,6 +193,9 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_contracts_organization_id_number");
 
+                    b.HasIndex("OrganizationId", "UpdatedAt")
+                        .HasDatabaseName("ix_contracts_organization_id_updated_at");
+
                     b.HasIndex("OrganizationId", "Status", "CreatedAt")
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_contracts_organization_id_status_created_at");
@@ -860,6 +863,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<Guid?>("CreatedByApiKeyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_api_key_id");
+
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid")
                         .HasColumnName("organization_id");
@@ -875,6 +882,9 @@ namespace Contratos.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedBy")
                         .HasDatabaseName("ix_embed_origins_created_by");
+
+                    b.HasIndex("CreatedByApiKeyId")
+                        .HasDatabaseName("ix_embed_origins_created_by_api_key_id");
 
                     b.HasIndex("OrganizationId", "Origin")
                         .IsUnique()
@@ -1064,6 +1074,10 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<Guid?>("CreatedByApiKeyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_api_key_id");
+
                     b.Property<string>("Description")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
@@ -1114,6 +1128,9 @@ namespace Contratos.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedBy")
                         .HasDatabaseName("ix_webhook_endpoints_created_by");
+
+                    b.HasIndex("CreatedByApiKeyId")
+                        .HasDatabaseName("ix_webhook_endpoints_created_by_api_key_id");
 
                     b.HasIndex("OrganizationId")
                         .HasDatabaseName("ix_webhook_endpoints_organization_id");
@@ -1561,6 +1578,12 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_embed_origins_users_created_by");
 
+                    b.HasOne("Contratos.Infrastructure.Integrations.ApiKey", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByApiKeyId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_embed_origins_api_keys_created_by_api_key_id");
+
                     b.HasOne("Contratos.Domain.Organizations.Organization", null)
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -1611,6 +1634,12 @@ namespace Contratos.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_webhook_endpoints_users_created_by");
+
+                    b.HasOne("Contratos.Infrastructure.Integrations.ApiKey", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByApiKeyId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_webhook_endpoints_api_keys_created_by_api_key_id");
 
                     b.HasOne("Contratos.Domain.Organizations.Organization", null)
                         .WithMany()

@@ -35,6 +35,8 @@ public sealed class WebhookEndpoint
     public string SecretProtected { get; set; } = null!;
     public bool Enabled { get; set; } = true;
     public Guid CreatedBy { get; set; }
+    /// <summary>Chave da API pública que cadastrou (nulo: cadastrado pela tela). Revogar a chave não apaga o webhook.</summary>
+    public Guid? CreatedByApiKeyId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastSuccessAt { get; set; }

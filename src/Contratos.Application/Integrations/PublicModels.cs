@@ -94,9 +94,13 @@ public sealed record PublicContract(
     string? SendError, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
     DateTimeOffset? SentAt, DateTimeOffset? CompletedAt, DateTimeOffset? CancelledAt);
 
+/// <param name="UpdatedAt">Muda em toda alteração que gera evento (envio, visualização, assinatura, recusa, PDF pronto...).</param>
+/// <param name="Signers">Só com <c>include=signers</c>; fora disso, o campo não vem.</param>
 public sealed record PublicContractListItem(
     Guid Id, int Number, string Title, ContractStatus Status, string? ExternalReference, string TemplateName,
-    int SignersTotal, int SignersSigned, bool SendError, DateTimeOffset CreatedAt, DateTimeOffset? SentAt, DateTimeOffset? CompletedAt);
+    int SignersTotal, int SignersSigned, bool SendError, DateTimeOffset CreatedAt, DateTimeOffset? SentAt, DateTimeOffset? CompletedAt,
+    DateTimeOffset UpdatedAt, bool HasSignedDocument, DateTimeOffset? ExpiresAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<PublicSigner>? Signers = null);
 
 public sealed record PublicPage<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total, bool HasMore);
 
@@ -130,6 +134,23 @@ public sealed record PublicSignerInput(
 public sealed record PublicCreateContractRequest(
     Guid? TemplateId, string? Title, Dictionary<string, string>? Variables, List<PublicSignerInput>? Signers,
     SigningMode? SigningMode, DateOnly? ExpiresAt, string? Message, string? ExternalReference, bool Send);
+
+// ---------- Cadastro de webhooks e sites do embed pela API ----------
+
+/// <param name="Events">Tipos assinados; vazio recebe todos, inclusive os que surgirem depois.</param>
+public sealed record PublicWebhook(
+    Guid Id, string Url, string? Description, IReadOnlyList<string> Events, bool Enabled, DateTimeOffset CreatedAt,
+    DateTimeOffset? LastSuccessAt, DateTimeOffset? LastFailureAt, int FailureStreak);
+
+/// <param name="Secret">Segredo de assinatura (<c>whsec_…</c>). Só vem nesta resposta.</param>
+public sealed record PublicCreatedWebhook(PublicWebhook Webhook, string Secret);
+
+/// <param name="Events">Omitido ou vazio: todos os eventos.</param>
+public sealed record PublicCreateWebhookRequest(string? Url, string? Description, List<string>? Events);
+
+public sealed record PublicEmbedOrigin(Guid Id, string Origin, DateTimeOffset CreatedAt);
+
+public sealed record PublicCreateEmbedOriginRequest(string? Origin);
 
 // ---------- Webhooks ----------
 
@@ -179,7 +200,12 @@ public static class PublicMapper
 
     public static PublicContractListItem ListItem(ContractListItem c) => new(
         c.Id, c.Number, c.Title, c.Status, c.ExternalReference, c.TemplateName, c.SignersTotal, c.SignersSigned,
-        c.SendError, c.CreatedAt, c.SentAt, c.CompletedAt);
+        c.SendError, c.CreatedAt, c.SentAt, c.CompletedAt, c.UpdatedAt, c.HasSignedDocument, c.ExpiresAt);
+
+    public static PublicWebhook Webhook(WebhookEndpointDto w) => new(
+        w.Id, w.Url, w.Description, w.Events, w.Enabled, w.CreatedAt, w.LastSuccessAt, w.LastFailureAt, w.FailureStreak);
+
+    public static PublicEmbedOrigin EmbedOrigin(EmbedOriginDto o) => new(o.Id, o.Origin, o.CreatedAt);
 }
 
 /// <summary>Eventos de webhook: nome público e de qual evento da linha do tempo cada um nasce.</summary>

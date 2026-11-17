@@ -448,6 +448,192 @@ public sealed class PublicApiTests(ApiFactory factory)
     public void Private_addresses_are_blocked_at_connect_time(string ip, bool blocked) =>
         Assert.Equal(blocked, WebhookUrls.IsPrivate(IPAddress.Parse(ip)));
 
+    // ---------- Webhooks e sites do embed pela API ----------
+
+    [Fact]
+    public async Task Webhooks_can_be_connected_with_the_key_alone()
+    {
+        var (admin, api, _) = await SetupAsync(factory, this);
+        var url = Url();
+
+        var res = await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url, description = "Causify (assinatura eletrônica)" });
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+        var created = await res.JsonAsync();
+        var secret = created.GetProperty("secret").GetString()!;
+        Assert.StartsWith("whsec_", secret);
+        var webhook = created.GetProperty("webhook");
+        var id = webhook.GetProperty("id").GetGuid();
+        Assert.Equal(url, webhook.GetProperty("url").GetString());
+        Assert.Empty(webhook.GetProperty("events").EnumerateArray());
+        Assert.True(webhook.GetProperty("enabled").GetBoolean());
+        Assert.Equal($"/api/public/v1/webhooks/{id}", res.Headers.Location?.ToString());
+
+        var listed = Assert.Single((await (await api.GetAsync("/api/public/v1/webhooks")).JsonAsync()).EnumerateArray());
+        Assert.Equal(id, listed.GetProperty("id").GetGuid());
+        Assert.Equal(0, listed.GetProperty("failureStreak").GetInt32());
+        Assert.False(listed.TryGetProperty("secret", out _));
+
+        // A tela mostra de onde veio.
+        var shown = (await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync()).GetProperty("endpoints")[0];
+        Assert.Equal("CRM", shown.GetProperty("createdByApiKeyName").GetString());
+
+        Assert.Equal(HttpStatusCode.Accepted, (await api.PostAsync($"/api/public/v1/webhooks/{id}/test", null)).StatusCode);
+        await factory.ProcessBackgroundAsync();
+        var test = Assert.Single(factory.Webhooks.To(url));
+        Assert.Equal("webhook.test", test.Header("X-Contratos-Event"));
+        var header = test.Header(WebhookSignature.Header);
+        var t = long.Parse(header.Split(',')[0][2..], System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(WebhookSignature.Compute(secret, t, test.Body), header);
+
+        // Outra conta não vê nem apaga.
+        var (_, other, _) = await SetupAsync(factory, this);
+        Assert.Empty((await (await other.GetAsync("/api/public/v1/webhooks")).JsonAsync()).EnumerateArray());
+        var foreign = await other.DeleteAsync($"/api/public/v1/webhooks/{id}");
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        Assert.Equal("not_found", (await foreign.JsonAsync()).GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/api/public/v1/webhooks/{id}/test", null)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await api.DeleteAsync($"/api/public/v1/webhooks/{id}")).StatusCode);
+        Assert.Empty((await (await api.GetAsync("/api/public/v1/webhooks")).JsonAsync()).EnumerateArray());
+        var gone = await api.DeleteAsync($"/api/public/v1/webhooks/{id}");
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Equal("not_found", (await gone.JsonAsync()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Webhooks_created_through_the_api_follow_the_screen_rules_and_survive_the_key()
+    {
+        var admin = await TestAccounts.CreateAdminAsync(factory);
+        var token = await CreateKeyAsync(admin, "Causify");
+        var api = Public(token);
+
+        var invalid = await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url = "http://crm.exemplo.com.br/hook" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var problem = await invalid.JsonAsync();
+        Assert.Equal("validation", problem.GetProperty("code").GetString());
+        Assert.True(problem.GetProperty("errors").TryGetProperty("url", out _));
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url = Url(), events = new[] { "contract.exploded" } })).StatusCode);
+
+        // Só os eventos pedidos; a mesma URL de novo é aceita (o cliente apaga a antiga).
+        var url = Url();
+        var some = await (await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url, events = new[] { "signer.signed" } })).JsonAsync();
+        Assert.Equal(["signer.signed"], some.GetProperty("webhook").GetProperty("events").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(HttpStatusCode.Created, (await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url })).StatusCode);
+        for (var i = 2; i < IntegrationService.MaxEndpoints; i++)
+            Assert.Equal(HttpStatusCode.Created, (await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url = Url() })).StatusCode);
+        var full = await api.PostAsJsonAsync("/api/public/v1/webhooks", new { url = Url() });
+        Assert.Equal(HttpStatusCode.Conflict, full.StatusCode);
+        Assert.Equal("too_many_endpoints", (await full.JsonAsync()).GetProperty("code").GetString());
+
+        // Revogar a chave não apaga o que ela cadastrou.
+        var overview = await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync();
+        var keyId = overview.GetProperty("keys")[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.Client.DeleteAsync($"/api/v1/integrations/keys/{keyId}")).StatusCode);
+        overview = await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync();
+        Assert.Equal(IntegrationService.MaxEndpoints, overview.GetProperty("endpoints").GetArrayLength());
+        Assert.All(overview.GetProperty("endpoints").EnumerateArray(), e => Assert.Equal("Causify", e.GetProperty("createdByApiKeyName").GetString()));
+    }
+
+    [Fact]
+    public async Task Embed_origins_can_be_registered_through_the_api_idempotently()
+    {
+        var (admin, api, _) = await SetupAsync(factory, this);
+        const string site = "https://app.exemplo.com";
+
+        var first = await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = site });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var origin = await first.JsonAsync();
+        var id = origin.GetProperty("id").GetGuid();
+        Assert.Equal(site, origin.GetProperty("origin").GetString());
+
+        var again = await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = site + "/" });
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(id, (await again.JsonAsync()).GetProperty("id").GetGuid());
+        Assert.Equal(id, Assert.Single((await (await api.GetAsync("/api/public/v1/embed/origins")).JsonAsync()).EnumerateArray()).GetProperty("id").GetGuid());
+
+        var shown = (await (await admin.Client.GetAsync("/api/v1/integrations")).JsonAsync()).GetProperty("embedOrigins")[0];
+        Assert.Equal("CRM", shown.GetProperty("createdByApiKeyName").GetString());
+
+        Assert.Equal(HttpStatusCode.Created, (await api.PostAsJsonAsync("/api/public/v1/embed/sessions", new { parentOrigin = site })).StatusCode);
+
+        foreach (var bad in new[] { "http://app.exemplo.com", "https://app.exemplo.com/editor", "app" })
+        {
+            var res = await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = bad });
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            Assert.Equal("validation", (await res.JsonAsync()).GetProperty("code").GetString());
+        }
+
+        for (var i = 1; i < EmbedOrigins.MaxPerOrganization; i++)
+            Assert.Equal(HttpStatusCode.Created, (await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = $"https://app{i}.exemplo.com" })).StatusCode);
+        var full = await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = "https://mais.exemplo.com" });
+        Assert.Equal(HttpStatusCode.Conflict, full.StatusCode);
+        Assert.Equal("too_many_origins", (await full.JsonAsync()).GetProperty("code").GetString());
+        // Com a lista cheia, repetir um já cadastrado continua dando certo.
+        Assert.Equal(HttpStatusCode.OK, (await api.PostAsJsonAsync("/api/public/v1/embed/origins", new { origin = site })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await api.DeleteAsync($"/api/public/v1/embed/origins/{id}")).StatusCode);
+        // Os outros sites continuam: este deixa de ser aceito como parentOrigin.
+        var refused = await api.PostAsJsonAsync("/api/public/v1/embed/sessions", new { parentOrigin = site });
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.True((await refused.JsonAsync()).GetProperty("errors").TryGetProperty("parentOrigin", out _));
+        var gone = await api.DeleteAsync($"/api/public/v1/embed/origins/{id}");
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Equal("not_found", (await gone.JsonAsync()).GetProperty("code").GetString());
+    }
+
+    // ---------- Conferência por data de alteração ----------
+
+    [Fact]
+    public async Task Contracts_can_be_listed_by_the_time_they_last_changed()
+    {
+        var (admin, api, templateId) = await SetupAsync(factory, this);
+        var untouched = (await (await api.PostAsJsonAsync("/api/public/v1/contracts", NewContract(templateId))).JsonAsync()).GetProperty("id").GetGuid();
+        await Task.Delay(20);
+        var before = DateTimeOffset.UtcNow;
+        await Task.Delay(20);
+
+        var contract = await (await api.PostAsJsonAsync("/api/public/v1/contracts", NewContract(templateId, send: true))).JsonAsync();
+        var id = contract.GetProperty("id").GetGuid();
+        var signerId = contract.GetProperty("signers")[0].GetProperty("id").GetGuid();
+        await factory.ProcessBackgroundAsync();
+        await SimulateAsync(admin, id, signerId, "sign");
+        await factory.ProcessBackgroundAsync(); // guarda o PDF assinado
+        var signedAt = (await (await api.GetAsync($"/api/public/v1/contracts/{id}")).JsonAsync()).GetProperty("signers")[0].GetProperty("signedAt").GetDateTimeOffset();
+
+        var from = Uri.EscapeDataString(before.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        var page = await (await api.GetAsync($"/api/public/v1/contracts?updatedFrom={from}&sort=updated_asc&pageSize=100")).JsonAsync();
+        var item = Assert.Single(page.GetProperty("items").EnumerateArray());
+        Assert.Equal(id, item.GetProperty("id").GetGuid());
+        Assert.NotEqual(untouched, item.GetProperty("id").GetGuid());
+        Assert.True(item.GetProperty("updatedAt").GetDateTimeOffset() >= signedAt);
+        Assert.True(item.GetProperty("hasSignedDocument").GetBoolean());
+        Assert.Equal("completed", item.GetProperty("status").GetString());
+        Assert.True(item.TryGetProperty("expiresAt", out _));
+        Assert.False(item.TryGetProperty("signers", out _));
+        Assert.False(page.GetProperty("hasMore").GetBoolean());
+
+        // Do mais antigo para o mais novo; com include=signers, sem abrir cada contrato.
+        var all = await (await api.GetAsync("/api/public/v1/contracts?sort=updated_asc&include=signers")).JsonAsync();
+        var items = all.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal([untouched, id], items.Select(i => i.GetProperty("id").GetGuid()));
+        var signer = Assert.Single(items[1].GetProperty("signers").EnumerateArray());
+        Assert.Equal("signed", signer.GetProperty("status").GetString());
+        Assert.Equal(signerId, signer.GetProperty("id").GetGuid());
+
+        var later = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddSeconds(1).ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Empty((await (await api.GetAsync($"/api/public/v1/contracts?updatedFrom={later}&sort=updated_asc")).JsonAsync()).GetProperty("items").EnumerateArray());
+        // "+03:00" sem codificar chega como espaço e ainda vale.
+        var offset = before.ToOffset(TimeSpan.FromHours(3)).ToString("yyyy-MM-ddTHH:mm:ss.fffffffzzz", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Single((await (await api.GetAsync($"/api/public/v1/contracts?updatedFrom={offset}")).JsonAsync()).GetProperty("items").EnumerateArray());
+
+        foreach (var bad in new[] { "updatedFrom=ontem", "updatedFrom=2026-11-18", "include=everything" })
+        {
+            var res = await api.GetAsync($"/api/public/v1/contracts?{bad}");
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        }
+    }
+
     [Fact]
     public async Task Unknown_event_types_are_refused()
     {

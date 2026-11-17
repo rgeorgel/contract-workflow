@@ -8,12 +8,13 @@ namespace Contratos.Application.Contracts;
 public sealed record ContractListQuery(
     string? Q, ContractStatus? Status, Guid? TemplateId, DateOnly? From, DateOnly? To,
     int Page = 1, int PageSize = 20, string? Sort = null, string? DateField = null, Guid? CreatedBy = null,
-    string? ExternalReference = null);
+    string? ExternalReference = null, DateTimeOffset? UpdatedFrom = null);
 
 public sealed record ContractListItem(
     Guid Id, int Number, string Title, ContractStatus Status, string TemplateName,
     int SignersTotal, int SignersSigned, DateTimeOffset CreatedAt, DateTimeOffset? SentAt,
-    DateTimeOffset? CompletedAt, bool SendError, int? PendingDays, string? ExternalReference = null);
+    DateTimeOffset? CompletedAt, bool SendError, int? PendingDays, string? ExternalReference = null,
+    DateTimeOffset UpdatedAt = default, bool HasSignedDocument = false, DateTimeOffset? ExpiresAt = null);
 
 public sealed record SignerDto(
     Guid Id, string Name, string? Email, string? Phone, string? Cpf, DeliveryMethod DeliveryMethod,

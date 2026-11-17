@@ -100,9 +100,16 @@ internal sealed class IntegrationService(
 
     // ---------- Webhooks ----------
 
+    public async Task<Result<IReadOnlyList<WebhookEndpointDto>>> ListEndpointsAsync(CancellationToken ct)
+    {
+        if (!CanManageHooks)
+            return AdminOnly;
+        return Result<IReadOnlyList<WebhookEndpointDto>>.Ok(await EndpointsAsync(tenant.RequireOrganizationId(), ct));
+    }
+
     public async Task<Result<CreatedWebhookEndpointDto>> CreateEndpointAsync(WebhookEndpointRequest request, CancellationToken ct)
     {
-        if (await GuardAsync(ct) is { } denied)
+        if (await GuardAsync(ct, allowApiKey: true) is { } denied)
             return denied;
         var orgId = tenant.RequireOrganizationId();
         var errors = Validate(request);
@@ -121,12 +128,15 @@ internal sealed class IntegrationService(
             Enabled = request.Enabled ?? true,
             SecretProtected = secrets.Protect(secret),
             CreatedBy = tenant.RequireUserId(),
+            CreatedByApiKeyId = tenant.ApiKeyId,
             CreatedAt = clock.GetUtcNow(),
             UpdatedAt = clock.GetUtcNow(),
         };
         db.WebhookEndpoints.Add(endpoint);
         await db.SaveChangesAsync(ct);
-        return new CreatedWebhookEndpointDto(ToDto(endpoint), secret);
+        if (tenant.ApiKeyId is { } keyId)
+            logger.LogInformation("Webhook {EndpointId} cadastrado pela API (chave {KeyId}) na organização {OrganizationId}", endpoint.Id, keyId, orgId);
+        return new CreatedWebhookEndpointDto((await EndpointsAsync(orgId, ct)).Single(e => e.Id == endpoint.Id), secret);
     }
 
     public async Task<Result<WebhookEndpointDto>> UpdateEndpointAsync(Guid id, WebhookEndpointRequest request, CancellationToken ct)
@@ -154,18 +164,20 @@ internal sealed class IntegrationService(
         }
         endpoint.UpdatedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
-        return ToDto(endpoint);
+        return (await EndpointsAsync(endpoint.OrganizationId, ct)).Single(e => e.Id == endpoint.Id);
     }
 
     public async Task<Result> DeleteEndpointAsync(Guid id, CancellationToken ct)
     {
-        if (!tenant.IsAdmin())
+        if (!CanManageHooks)
             return AdminOnly;
         var endpoint = await FindEndpointAsync(id, ct);
         if (endpoint is null)
             return EndpointNotFound;
         db.WebhookEndpoints.Remove(endpoint); // entregas vão junto
         await db.SaveChangesAsync(ct);
+        if (tenant.ApiKeyId is { } keyId)
+            logger.LogInformation("Webhook {EndpointId} excluído pela API (chave {KeyId})", endpoint.Id, keyId);
         return Result.Ok();
     }
 
@@ -202,7 +214,7 @@ internal sealed class IntegrationService(
 
     public async Task<Result> SendTestAsync(Guid id, CancellationToken ct)
     {
-        if (await GuardAsync(ct) is { } denied)
+        if (await GuardAsync(ct, allowApiKey: true) is { } denied)
             return denied;
         var endpoint = await FindEndpointAsync(id, ct);
         if (endpoint is null)
@@ -213,7 +225,9 @@ internal sealed class IntegrationService(
         var now = clock.GetUtcNow();
         var ev = new WebhookEvent { OrganizationId = endpoint.OrganizationId, Type = WebhookEventTypes.Test, CreatedAt = now };
         ev.Payload = PublicJson.Serialize(new WebhookPayload(ev.Id, ev.Type, now,
-            new WebhookData(null, null, null, "Evento de teste enviado pela tela de Integrações. Se chegou com a assinatura certa, está tudo pronto.")));
+            new WebhookData(null, null, null, tenant.ApiKeyName is { } keyName
+                ? $"Evento de teste enviado pela API (chave “{keyName}”). Se chegou com a assinatura certa, está tudo pronto."
+                : "Evento de teste enviado pela tela de Integrações. Se chegou com a assinatura certa, está tudo pronto.")));
         db.WebhookEvents.Add(ev);
         db.WebhookDeliveries.Add(new WebhookDelivery { OrganizationId = endpoint.OrganizationId, EventId = ev.Id, EndpointId = endpoint.Id, NextAttemptAt = now });
         await db.SaveChangesAsync(ct);
@@ -275,29 +289,64 @@ internal sealed class IntegrationService(
 
     // ---------- Domínios do embed ----------
 
+    public async Task<Result<IReadOnlyList<EmbedOriginDto>>> ListEmbedOriginsAsync(CancellationToken ct)
+    {
+        if (!CanManageHooks)
+            return AdminOnly;
+        return Result<IReadOnlyList<EmbedOriginDto>>.Ok(await OriginsAsync(tenant.RequireOrganizationId(), ct));
+    }
+
     public async Task<Result<EmbedOriginDto>> AddEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct)
     {
-        if (await GuardAsync(ct) is { } denied)
+        var result = await AddOriginAsync(request, idempotent: false, ct);
+        return result.IsSuccess ? result.Value!.Origin : result.Error!;
+    }
+
+    public Task<Result<EnsuredEmbedOrigin>> EnsureEmbedOriginAsync(EmbedOriginRequest request, CancellationToken ct) =>
+        AddOriginAsync(request, idempotent: true, ct);
+
+    private async Task<Result<EnsuredEmbedOrigin>> AddOriginAsync(EmbedOriginRequest request, bool idempotent, CancellationToken ct)
+    {
+        if (await GuardAsync(ct, allowApiKey: true) is { } denied)
             return denied;
         var orgId = tenant.RequireOrganizationId();
         var (origin, error) = EmbedOrigins.Normalize(request.Origin);
         if (error is not null)
             return Error.Validation("origin", error);
-        if (await db.EmbedOrigins.AnyAsync(o => o.OrganizationId == orgId && o.Origin == origin, ct))
-            return Error.Validation("origin", "Este endereço já está cadastrado.");
+        // Antes do limite: repetir o cadastro com a lista cheia não é erro na API.
+        if (await db.EmbedOrigins.Where(o => o.OrganizationId == orgId && o.Origin == origin).Select(o => (Guid?)o.Id).FirstOrDefaultAsync(ct) is { } existing)
+            return idempotent
+                ? new EnsuredEmbedOrigin((await OriginsAsync(orgId, ct)).Single(o => o.Id == existing), false)
+                : Error.Validation("origin", "Este endereço já está cadastrado.");
         if (await db.EmbedOrigins.CountAsync(o => o.OrganizationId == orgId, ct) >= EmbedOrigins.MaxPerOrganization)
             return Error.Conflict($"Sua conta já tem {EmbedOrigins.MaxPerOrganization} domínios. Remova um que não usa mais.", "too_many_origins");
 
-        var entity = new EmbedOrigin { OrganizationId = orgId, Origin = origin!, CreatedBy = tenant.RequireUserId(), CreatedAt = clock.GetUtcNow() };
+        var entity = new EmbedOrigin
+        {
+            OrganizationId = orgId, Origin = origin!, CreatedBy = tenant.RequireUserId(), CreatedByApiKeyId = tenant.ApiKeyId,
+            CreatedAt = clock.GetUtcNow(),
+        };
         db.EmbedOrigins.Add(entity);
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Domínio do embed {Origin} cadastrado na organização {OrganizationId}", origin, orgId);
-        return (await OriginsAsync(orgId, ct)).Single(o => o.Id == entity.Id);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (idempotent)
+        {
+            // Duas chamadas ao mesmo tempo: o índice único segura a segunda, que devolve a primeira.
+            db.ChangeTracker.Clear();
+            var winner = (await OriginsAsync(orgId, ct)).FirstOrDefault(o => o.Origin == origin);
+            if (winner is null)
+                throw;
+            return new EnsuredEmbedOrigin(winner, false);
+        }
+        logger.LogInformation("Domínio do embed {Origin} cadastrado na organização {OrganizationId} (chave {KeyId})", origin, orgId, tenant.ApiKeyId);
+        return new EnsuredEmbedOrigin((await OriginsAsync(orgId, ct)).Single(o => o.Id == entity.Id), true);
     }
 
     public async Task<Result> DeleteEmbedOriginAsync(Guid id, CancellationToken ct)
     {
-        if (!tenant.IsAdmin())
+        if (!CanManageHooks)
             return AdminOnly;
         var orgId = tenant.RequireOrganizationId();
         var rows = await db.EmbedOrigins.Where(o => o.Id == id && o.OrganizationId == orgId).ExecuteDeleteAsync(ct);
@@ -306,15 +355,22 @@ internal sealed class IntegrationService(
 
     private async Task<IReadOnlyList<EmbedOriginDto>> OriginsAsync(Guid orgId, CancellationToken ct) =>
         await db.EmbedOrigins.Where(o => o.OrganizationId == orgId).OrderBy(o => o.CreatedAt)
-            .Select(o => new EmbedOriginDto(o.Id, o.Origin, db.Users.Where(u => u.Id == o.CreatedBy).Select(u => u.Name).FirstOrDefault(), o.CreatedAt))
+            .Select(o => new EmbedOriginDto(o.Id, o.Origin, db.Users.Where(u => u.Id == o.CreatedBy).Select(u => u.Name).FirstOrDefault(), o.CreatedAt,
+                db.ApiKeys.Where(k => k.Id == o.CreatedByApiKeyId).Select(k => k.Name).FirstOrDefault()))
             .ToListAsync(ct);
 
     // ---------- Apoio ----------
 
-    /// <summary>Admin e plano com API. Ver, revogar, desativar e excluir continuam liberados fora do plano.</summary>
-    private async Task<Error?> GuardAsync(CancellationToken ct)
+    /// <summary>
+    /// Webhooks e sites do embed: Admin na tela ou a API pública (chave). As chaves em si, só Admin.
+    /// O papel da chave é Editor; o que a libera é o claim da chave, que só existe nas rotas da API pública.
+    /// </summary>
+    private bool CanManageHooks => tenant.IsAdmin() || tenant.ApiKeyId is not null;
+
+    /// <summary>Admin (ou a chave, com <paramref name="allowApiKey"/>) e plano com API. Ver, revogar, desativar e excluir continuam liberados fora do plano.</summary>
+    private async Task<Error?> GuardAsync(CancellationToken ct, bool allowApiKey = false)
     {
-        if (!tenant.IsAdmin())
+        if (!(allowApiKey ? CanManageHooks : tenant.IsAdmin()))
             return AdminOnly;
         var orgId = tenant.RequireOrganizationId();
         var planId = await db.Organizations.Where(o => o.Id == orgId).Select(o => o.PlanId).SingleAsync(ct);
@@ -327,9 +383,18 @@ internal sealed class IntegrationService(
         return db.WebhookEndpoints.SingleOrDefaultAsync(e => e.Id == id && e.OrganizationId == orgId, ct);
     }
 
-    private async Task<IReadOnlyList<WebhookEndpointDto>> EndpointsAsync(Guid orgId, CancellationToken ct) =>
-        (await db.WebhookEndpoints.Where(e => e.OrganizationId == orgId).OrderBy(e => e.CreatedAt).ToListAsync(ct))
-        .Select(ToDto).ToList();
+    private async Task<IReadOnlyList<WebhookEndpointDto>> EndpointsAsync(Guid orgId, CancellationToken ct)
+    {
+        var rows = await db.WebhookEndpoints.AsNoTracking().Where(e => e.OrganizationId == orgId).OrderBy(e => e.CreatedAt)
+            .Select(e => new
+            {
+                e,
+                UserName = db.Users.Where(u => u.Id == e.CreatedBy).Select(u => u.Name).FirstOrDefault(),
+                KeyName = db.ApiKeys.Where(k => k.Id == e.CreatedByApiKeyId).Select(k => k.Name).FirstOrDefault(),
+            })
+            .ToListAsync(ct);
+        return rows.Select(r => ToDto(r.e) with { CreatedByName = r.UserName, CreatedByApiKeyName = r.KeyName }).ToList();
+    }
 
     private ValidationErrors Validate(WebhookEndpointRequest request)
     {

@@ -33,6 +33,8 @@ internal sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
 
         b.HasIndex(c => new { c.OrganizationId, c.Status, c.CreatedAt }).IsDescending(false, false, true);
         b.HasIndex(c => new { c.OrganizationId, c.Number }).IsUnique();
+        // Conferência periódica da API pública: GET /contracts?updatedFrom=…&sort=updated_asc.
+        b.HasIndex(c => new { c.OrganizationId, c.UpdatedAt });
         // É por ele que o webhook encontra o contrato (e a organização).
         b.HasIndex(c => c.AutentiqueDocumentId).IsUnique();
         b.HasIndex(c => new { c.OrganizationId, c.ExternalReference }).HasFilter("external_reference IS NOT NULL");
