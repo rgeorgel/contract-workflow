@@ -40,7 +40,8 @@ var secureCookies = builder.Environment.IsDevelopment() ? CookieSecurePolicy.Sam
 
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null)
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, EmbedAuthenticationHandler>(EmbedAuthenticationHandler.SchemeName, null);
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, EmbedAuthenticationHandler>(EmbedAuthenticationHandler.SchemeName, null)
+    .AddPlatformAdminCookie(secureCookies);
 builder.Services.AddAuthentication().AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(o =>
 {
@@ -70,6 +71,7 @@ builder.Services.Configure<SecurityStampValidatorOptions>(o =>
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentTenant, HttpCurrentTenant>();
+builder.Services.AddScoped<Contratos.Application.Platform.ICurrentPlatformAdmin, HttpCurrentPlatformAdmin>();
 
 builder.Services.AddAntiforgery(o =>
 {
@@ -110,7 +112,7 @@ builder.Services.AddRateLimiter(o =>
             : RateLimitPartition.GetNoLimiter("not-public"));
     var perCaller = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
     {
-        if (!ctx.Request.Path.StartsWithSegments("/api"))
+        if (!ctx.Request.Path.StartsWithSegments("/api") && !ctx.Request.Path.StartsWithSegments(SuperAdminEndpoints.ApiPrefix))
             return RateLimitPartition.GetNoLimiter("static");
         // API pública e do embed: por chave ou sessão (o cabeçalho, com hash), antes de saber se é válida.
         if (ctx.Request.Path.StartsWithSegments(EmbedEndpoints.ApiPrefix))
@@ -168,6 +170,13 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
 }
 
+// Contas do portal super admin: dotnet Contratos.Api.dll superadmin ... (roda e sai, sem subir o servidor).
+if (args is ["superadmin", .. var cliArgs])
+{
+    Environment.ExitCode = await Contratos.Api.PlatformAdminCli.RunAsync(app.Services, cliArgs);
+    return;
+}
+
 if (app.Configuration.GetValue<bool>("ForwardedHeaders:Enabled"))
     app.UseForwardedHeaders();
 app.UseExceptionHandler();
@@ -220,11 +229,11 @@ api.MapTemplatesEndpoints();
 api.MapContractsEndpoints();
 api.MapDashboardEndpoints();
 api.MapIntegrationsEndpoints();
-api.MapSuperAdminEndpoints();
 if (string.Equals(app.Configuration["Signature:Provider"] ?? "Fake", "Fake", StringComparison.OrdinalIgnoreCase))
     api.MapFakeProviderEndpoints();
 app.MapWebhookEndpoints();
 app.MapPlatformEndpoints();
+app.MapSuperAdminPortal();
 app.MapPublicApiEndpoints();
 app.MapEmbedEndpoints();
 

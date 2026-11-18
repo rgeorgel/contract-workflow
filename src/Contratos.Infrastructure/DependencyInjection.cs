@@ -94,6 +94,7 @@ public static class DependencyInjection
         services.AddScoped<IPlatformBillingService, PlatformBillingService>();
         services.AddScoped<Platform.PlatformAuditWriter>();
         services.AddScoped<Platform.ImpersonationService>();
+        services.AddScoped<Platform.PlatformAdminService>();
         services.AddScoped<Application.Platform.ISuperAdminService, Platform.SuperAdminService>();
         AddStripe(services, config);
         services.AddScoped<IContractService, ContractService>();

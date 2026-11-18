@@ -41,6 +41,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<EmbedOrigin> EmbedOrigins => Set<EmbedOrigin>();
     public DbSet<EmbedSession> EmbedSessions => Set<EmbedSession>();
     public DbSet<PlatformAuditEntry> PlatformAudit => Set<PlatformAuditEntry>();
+    public DbSet<PlatformAdmin> PlatformAdmins => Set<PlatformAdmin>();
 
     /// <summary>
     /// Antes de gravar: eventos novos da linha do tempo viram eventos de webhook (na mesma transação),

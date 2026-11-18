@@ -51,9 +51,9 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Detalhes em [docs/operacao.md](docs/operacao.md#api-pública-e-webhooks)
 
 **Portal super admin**
-- Em `/superadmin/`, para a equipe da plataforma (e-mails em `PLATFORM_ADMIN_EMAILS`): painel com cadastros, MRR e contratos; lista de organizações com plano, uso, atividade e último acesso; detalhe com linha do tempo
+- Em `/superadmin/`, separado do app (contas, login e cookie próprios; contas criadas pela linha de comando): painel com cadastros, MRR e contratos; lista de organizações com plano, uso, atividade e último acesso; detalhe com linha do tempo
 - Trocar plano, conceder créditos, suspender e reativar a conta, com registro de quem fez
-- "Entrar como" um usuário do cliente (1 hora, acesso total), com cada alteração registrada na auditoria
+- "Entrar como" um usuário do cliente (abre o app em outra aba, 1 hora, acesso total), com cada alteração registrada na auditoria
 - Detalhes em [docs/operacao.md](docs/operacao.md#portal-super-admin)
 
 ## Rodando

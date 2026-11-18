@@ -22,24 +22,24 @@ public sealed class ImpersonationRefreshTests(EagerStampApiFactory factory) : IC
     [Fact]
     public async Task A_revalidacao_do_cookie_mantem_a_marca_do_entrar_como()
     {
-        var sa = await TestAccounts.CreateAdminAsync(factory, "Equipe", ApiFactory.PlatformAdminEmails[0]);
+        var (sa, _) = await factory.CreatePlatformAdminAsync("Equipe Teste");
         var customer = await TestAccounts.CreateAdminAsync(factory);
         var me = await (await customer.Client.GetAsync("/api/v1/auth/me")).JsonAsync();
         var orgId = me.GetProperty("organization").GetProperty("id").GetGuid();
         var userId = me.GetProperty("id").GetGuid();
 
-        Assert.Equal(HttpStatusCode.OK, (await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/users/{userId}/impersonate")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await sa.PostAsync($"/superadmin/api/v1/tenants/{orgId}/users/{userId}/impersonate")).StatusCode);
         for (var i = 0; i < 3; i++)
         {
-            var now = await (await sa.Client.GetAsync("/api/v1/auth/me")).JsonAsync();
+            var now = await (await sa.GetAsync("/api/v1/auth/me")).JsonAsync();
             Assert.Equal(userId, now.GetProperty("id").GetGuid());
-            Assert.Equal("Admin Teste", now.GetProperty("impersonation").GetProperty("impersonatorName").GetString());
+            Assert.Equal("Equipe Teste", now.GetProperty("impersonation").GetProperty("impersonatorName").GetString());
         }
 
         // A escrita depois da revalidação continua auditada em nome da equipe.
-        Assert.Equal(HttpStatusCode.Created, (await sa.Client.PostAsync("/api/v1/templates", new { name = "Depois da revalidação" })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await sa.Client.PostAsync("/api/v1/auth/stop-impersonation")).StatusCode);
-        var detail = await (await sa.Client.GetAsync($"/api/v1/superadmin/tenants/{orgId}")).JsonAsync();
+        Assert.Equal(HttpStatusCode.Created, (await sa.PostAsync("/api/v1/templates", new { name = "Depois da revalidação" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await sa.PostAsync("/api/v1/auth/stop-impersonation")).StatusCode);
+        var detail = await (await sa.GetAsync($"/superadmin/api/v1/tenants/{orgId}")).JsonAsync();
         Assert.Contains(detail.GetProperty("audit").EnumerateArray(), a => a.GetProperty("action").GetString() == "ImpersonatedWrite");
     }
 }

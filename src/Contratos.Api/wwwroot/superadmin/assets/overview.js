@@ -1,9 +1,7 @@
-import { api } from '../api.js';
-import { requirePlatformAdmin } from '../superadmin/shell.js';
-import { accessLine, barChart, PLAN_NAMES, planBadge, plural, STATUS, statusBadge, tenantHref } from '../superadmin/common.js';
-import { clear, h } from '../ui/dom.js';
-import { formatMoney, pct } from '../utils/billing.js';
-import { formatDate } from '../superadmin/common.js';
+import { api } from './api.js';
+import { accessLine, barChart, formatDate, formatMoney, PLAN_NAMES, pct, planBadge, plural, STATUS, statusBadge, tenantHref } from './common.js';
+import { h, clear } from './lib/dom.js';
+import { requirePlatformAdmin } from './shell.js';
 
 await requirePlatformAdmin();
 
@@ -60,7 +58,7 @@ function render(o) {
 }
 
 try {
-  render(await api('/superadmin/overview'));
+  render(await api('/overview'));
 } catch (err) {
   clear(content).append(h('div', { class: 'alert alert--error' }, err.message));
 }

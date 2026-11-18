@@ -1,15 +1,14 @@
-import { api, ApiError, resetCsrf } from '../api.js';
-import { roleLabel } from '../auth.js';
-import { requirePlatformAdmin } from '../superadmin/shell.js';
-import { accessLine, chip, cycleLabel, formatDate, formatDateTime, meterRow, planBadge, plural, SA_ICONS, statusBadge } from '../superadmin/common.js';
-import { clear, h, icon } from '../ui/dom.js';
-import { applyErrors, clearErrors, setBusy, showAlert } from '../ui/form.js';
-import { confirmModal, openModal } from '../ui/modal.js';
-import { toast } from '../ui/toast.js';
-import { formatMoney } from '../utils/billing.js';
-import { formatRelative } from '../utils/format.js';
+import { api, ApiError } from './api.js';
+import {
+  accessLine, chip, cycleLabel, formatDate, formatDateTime, formatMoney, formatRelative, meterRow, planBadge, plural, ROLE_LABELS, SA_ICONS, statusBadge,
+} from './common.js';
+import { clear, h, icon } from './lib/dom.js';
+import { applyErrors, clearErrors, setBusy, showAlert } from './lib/form.js';
+import { confirmModal, openModal } from './lib/modal.js';
+import { toast } from './lib/toast.js';
+import { requirePlatformAdmin } from './shell.js';
 
-const me = await requirePlatformAdmin();
+await requirePlatformAdmin();
 
 const content = document.querySelector('[data-content]');
 const id = encodeURIComponent(new URLSearchParams(location.search).get('id') ?? '');
@@ -120,8 +119,7 @@ function header(d) {
         action('Conceder créditos', openCredits),
         suspended
           ? action('Reativar conta', reactivate, 'btn--primary')
-          : action('Suspender', openSuspend, 'btn--danger', t.id === me.organization.id
-            ? { disabled: true, title: 'É a organização da sua própria conta.' } : {}))),
+          : action('Suspender', openSuspend, 'btn--danger'))),
     suspended ? h('div', { class: 'alert alert--error suspended-banner', role: 'status' },
       h('div', { class: 'alert__body' },
         h('strong', {}, `Conta suspensa desde ${formatDateTime(t.suspendedAt)}.`),
@@ -157,7 +155,7 @@ function sideColumn(d) {
       h('div', { class: 'user-list__top' },
         h('strong', {}, u.name || '—'),
         h('span', { class: 'chips' },
-          chip(roleLabel(u.role), u.role === 'Admin' ? 'success' : null),
+          chip(ROLE_LABELS[u.role] ?? u.role, u.role === 'Admin' ? 'success' : null),
           u.status !== 'Ativo' ? chip(u.status, u.status === 'Desativado' ? null : 'warning') : null)),
       h('span', { class: 'user-list__email' }, u.email),
       h('span', { class: 'user-list__seen' }, u.lastSeenAt
@@ -195,7 +193,7 @@ async function loadTimeline() {
   const q = new URLSearchParams({ days: String(days) });
   if (category) q.set('category', category);
   try {
-    const groups = await api(`/superadmin/tenants/${id}/timeline?${q}`);
+    const groups = await api(`/tenants/${id}/timeline?${q}`);
     if (!groups.length) {
       clear(timelineEl).append(h('div', { class: 'panel' }, h('div', { class: 'dash-empty' }, 'Nenhum evento neste período.')));
       return;
@@ -321,7 +319,7 @@ function openPlan() {
     submitLabel: 'Trocar plano',
     submit: async (form) => {
       const toIso = (v) => (v ? new Date(`${v}T03:00:00Z`).toISOString() : null); // meia-noite de Brasília
-      const res = await api(`/superadmin/tenants/${id}/plan`, {
+      const res = await api(`/tenants/${id}/plan`, {
         method: 'PUT',
         body: { plan: form.elements.plan.value, periodStart: toIso(start.value), periodEnd: toIso(end.value) },
       });
@@ -344,7 +342,7 @@ function openCredits() {
     field('Nota (opcional)', note, 'note', 'Aparece para o cliente em Configurações.')],
     submitLabel: 'Conceder',
     submit: async () => {
-      const res = await api(`/superadmin/tenants/${id}/credits`, {
+      const res = await api(`/tenants/${id}/credits`, {
         method: 'POST',
         body: { quantity: Number(qty.value), validityMonths: Number(months.value), note: note.value.trim() || null },
       });
@@ -364,7 +362,7 @@ function openSuspend() {
     submitLabel: 'Suspender conta',
     danger: true,
     submit: async () => {
-      const res = await api(`/superadmin/tenants/${id}/suspend`, { method: 'POST', body: { reason: reason.value.trim() || null } });
+      const res = await api(`/tenants/${id}/suspend`, { method: 'POST', body: { reason: reason.value.trim() || null } });
       toast('Conta suspensa.');
       return res;
     },
@@ -374,23 +372,27 @@ function openSuspend() {
 async function impersonate(user) {
   const ok = await confirmModal({
     title: `Entrar como ${user.name}?`,
-    description: `Você passa a usar a conta de ${user.name} (${user.email}) em ${detail.summary.name}, com o mesmo acesso dela, por até 1 hora. `
-      + 'Cada alteração fica registrada na auditoria com o seu nome. Para voltar, use "Voltar ao super admin" na faixa do topo.',
+    description: `Abre o app numa nova aba com a conta de ${user.name} (${user.email}) em ${detail.summary.name}, com o mesmo acesso dela, `
+      + 'por até 1 hora. Cada alteração fica registrada na auditoria com o seu nome. Este portal continua aberto nesta aba.',
     confirmLabel: 'Entrar como',
   });
   if (!ok) return;
+  // A aba abre já no clique (senão o navegador bloqueia o pop-up) e recebe o endereço quando a sessão estiver pronta.
+  const tab = window.open('about:blank', '_blank');
   try {
-    const res = await api(`/superadmin/tenants/${id}/users/${encodeURIComponent(user.id)}/impersonate`, { method: 'POST' });
-    resetCsrf(); // o token antiforgery é da sessão, que agora é do cliente
-    location.assign(res.redirect);
+    const res = await api(`/tenants/${id}/users/${encodeURIComponent(user.id)}/impersonate`, { method: 'POST' });
+    if (tab) { tab.opener = null; tab.location.replace(res.redirect); } else location.assign(res.redirect);
+    toast(`Sessão como ${user.name} aberta em outra aba.`);
+    load();
   } catch (err) {
+    tab?.close();
     toast(err.message, 'error');
   }
 }
 
 async function reactivate() {
   try {
-    detail = await api(`/superadmin/tenants/${id}/reactivate`, { method: 'POST' });
+    detail = await api(`/tenants/${id}/reactivate`, { method: 'POST' });
     toast('Conta reativada.');
     render();
   } catch (err) {
@@ -415,7 +417,7 @@ async function load() {
     return;
   }
   try {
-    detail = await api(`/superadmin/tenants/${id}`);
+    detail = await api(`/tenants/${id}`);
     render();
   } catch (err) {
     clear(content).append(h('div', { class: 'alert alert--error' }, err.status === 404 ? 'Organização não encontrada.' : err.message));

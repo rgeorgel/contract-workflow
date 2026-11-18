@@ -13,13 +13,12 @@ namespace Contratos.Infrastructure.Platform;
 
 /// <summary>
 /// Portal super admin. Enxerga todas as organizações: toda consulta a contratos e templates usa
-/// <c>IgnoreQueryFilters()</c> com o filtro de organização explícito (a requisição tem o tenant de quem
-/// está logado, que não é o da conta consultada). Só é chamado por rotas com a política PlatformAdmin.
+/// <c>IgnoreQueryFilters()</c> com o filtro de organização explícito (a requisição do portal não tem tenant).
+/// Só é chamado pelas rotas do portal (<c>/superadmin/api</c>), com o cookie das contas super admin.
 /// </summary>
 internal sealed class SuperAdminService(
     AppDbContext db, UsageMeter meter, BillingReader reader, IPlatformBillingService billing,
-    PlatformAuditWriter audit, ICurrentTenant tenant, TimeProvider clock,
-    Microsoft.Extensions.Options.IOptionsMonitor<PlatformOptions> platform) : ISuperAdminService
+    PlatformAuditWriter audit, TimeProvider clock) : ISuperAdminService
 {
     private static readonly TimeSpan Brt = TimeSpan.FromHours(-3);
     private const string LegacyFreeId = "gratis";
@@ -215,7 +214,6 @@ internal sealed class SuperAdminService(
         var org = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == id, ct);
         if (org is null)
             return Error.NotFound("Organização não encontrada.");
-        var options = platform.CurrentValue;
 
         var summary = (await BuildItemsAsync([org], ct))[0];
         var users = await db.Users.AsNoTracking().Where(u => u.OrganizationId == id)
@@ -243,7 +241,7 @@ internal sealed class SuperAdminService(
             users.Select(u => new TenantUserDto(u.Id, u.Name, u.Email!, u.Role.ToString(),
                 u.DeactivatedAt is not null ? "Desativado" : u.IsPendingInvite ? "Convidado" : !u.EmailConfirmed ? "Não confirmado" : "Ativo",
                 u.EmailConfirmed, u.CreatedAt, u.LastSeenAt,
-                ImpersonationService.RefusalReason(u, org, tenant.UserId, options))).ToList(),
+                ImpersonationService.RefusalReason(u, org))).ToList(),
             templates, auditEntries);
     }
 
@@ -414,8 +412,6 @@ internal sealed class SuperAdminService(
         var org = await db.Organizations.SingleOrDefaultAsync(o => o.Id == id, ct);
         if (org is null)
             return Error.NotFound("Organização não encontrada.");
-        if (id == tenant.OrganizationId)
-            return Error.Conflict("Você não pode suspender a organização da sua própria conta.", "own_organization");
         if ((request.Reason?.Trim().Length ?? 0) > Organization.SuspensionReasonMaxLength)
             return Error.Validation("reason", $"Use no máximo {Organization.SuspensionReasonMaxLength} caracteres.");
         if (org.IsSuspended)

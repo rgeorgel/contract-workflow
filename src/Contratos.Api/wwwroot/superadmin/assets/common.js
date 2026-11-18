@@ -1,7 +1,26 @@
 // Rótulos, badges e medidores compartilhados pelas páginas do portal super admin.
-import { h } from '../ui/dom.js';
-import { pct } from '../utils/billing.js';
-import { formatRelative } from '../utils/format.js';
+import { h } from './lib/dom.js';
+
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+export const formatMoney = (value) => money.format(value);
+/** 0–100 inteiro, para o data-pct das barras (sem style inline por causa da CSP). */
+export const pct = (used, limit) => (limit ? Math.min(100, Math.round((used / limit) * 100)) : 0);
+
+const rtf = new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' });
+/** "há 5 minutos", "ontem", ou a data se for antigo. */
+export function formatRelative(iso) {
+  if (!iso) return '—';
+  const diffMs = new Date(iso).getTime() - Date.now();
+  const abs = Math.abs(diffMs);
+  const min = 60_000, hour = 60 * min, day = 24 * hour;
+  if (abs < min) return 'agora';
+  if (abs < hour) return rtf.format(Math.round(diffMs / min), 'minute');
+  if (abs < day) return rtf.format(Math.round(diffMs / hour), 'hour');
+  if (abs < 7 * day) return rtf.format(Math.round(diffMs / day), 'day');
+  return formatDate(iso);
+}
+
+export const ROLE_LABELS = { Admin: 'Admin', Editor: 'Editor', Leitor: 'Leitor' };
 
 // Datas no horário de Brasília (o mesmo dos ciclos e da linha do tempo), seja qual for o fuso do navegador.
 const TZ = 'America/Sao_Paulo';

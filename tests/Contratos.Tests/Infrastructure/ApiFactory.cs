@@ -21,9 +21,6 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public const string PlatformKey = "test-platform-key-0123456789abcdef0123456789";
 
-    /// <summary>Equipe da plataforma (portal super admin): um e-mail por teste, porque o e-mail é único.</summary>
-    public static readonly string[] PlatformAdminEmails = Enumerable.Range(1, 8).Select(i => $"equipe{i}@plataforma.test").ToArray();
-
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
     public FakeStripe Stripe { get; } = new();
@@ -48,7 +45,6 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // Os testes gerais não esbarram em cota; os de planos trocam o plano pela API da plataforma.
         builder.UseSetting("Billing:DefaultPlan", "empresa");
         builder.UseSetting("Platform:ApiKey", PlatformKey);
-        builder.UseSetting("Platform:AdminEmails", string.Join(", ", PlatformAdminEmails));
         builder.UseSetting("Stripe:SecretKey", FakeStripe.SecretKey);
         builder.UseSetting("Stripe:WebhookSecret", FakeStripe.WebhookSecret);
         builder.UseSetting("Stripe:ApiBase", "https://api.stripe.test");
@@ -74,6 +70,24 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Cliente com cookies; HTTPS porque fora de Development os cookies são Secure.</summary>
     public ApiClient CreateApiClient() =>
         new(CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") }));
+
+    public const string AdminPassword = "senha-da-equipe-bem-longa";
+
+    /// <summary>Conta nova do portal super admin (criada como pela linha de comando), já logada no portal.</summary>
+    public async Task<(ApiClient Client, string Email)> CreatePlatformAdminAsync(string name = "Equipe Teste")
+    {
+        var email = $"equipe-{Guid.NewGuid():N}@plataforma.test";
+        using (var scope = Services.CreateScope())
+        {
+            var created = await scope.ServiceProvider.GetRequiredService<Contratos.Infrastructure.Platform.PlatformAdminService>()
+                .CreateAsync(email, name, AdminPassword, CancellationToken.None);
+            if (!created.IsSuccess) throw new InvalidOperationException(created.Error!.Title);
+        }
+        var client = CreateApiClient();
+        var login = await client.PostAsync("/superadmin/api/v1/auth/login", new { email, password = AdminPassword });
+        if (login.StatusCode != System.Net.HttpStatusCode.NoContent) throw new InvalidOperationException($"login: {login.StatusCode}");
+        return (client, email);
+    }
 
     public Task InitializeAsync() => _db.StartAsync();
 

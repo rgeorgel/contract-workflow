@@ -1,10 +1,10 @@
-import { api } from '../api.js';
-import { requirePlatformAdmin } from '../superadmin/shell.js';
+import { api } from './api.js';
+import { requirePlatformAdmin } from './shell.js';
 import {
   accessLine, chip, contractChips, cycleLabel, meterRow, PLAN_NAMES, planBadge, plural, SA_ICONS, sinceLabel, STATUS, statusBadge, tenantHref,
-} from '../superadmin/common.js';
-import { clear, h, icon } from '../ui/dom.js';
-import { formatDate } from '../superadmin/common.js';
+} from './common.js';
+import { formatDate } from './common.js';
+import { clear, h, icon } from './lib/dom.js';
 
 await requirePlatformAdmin();
 
@@ -140,7 +140,7 @@ async function load() {
   controller?.abort();
   controller = new AbortController();
   try {
-    render(await api(`/superadmin/tenants?${query}`, { signal: controller.signal }));
+    render(await api(`/tenants?${query}`, { signal: controller.signal }));
   } catch (err) {
     if (err.name === 'AbortError') return;
     clear(listEl).append(h('div', { class: 'alert alert--error' }, err.message));

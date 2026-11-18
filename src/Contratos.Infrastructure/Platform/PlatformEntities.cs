@@ -10,17 +10,45 @@ public sealed class PlatformOptions
 
     /// <summary>Chave da API de operação (<c>/api/platform</c>); vazia, as rotas nem existem.</summary>
     public string? ApiKey { get; set; }
+}
 
-    /// <summary>
-    /// E-mails com acesso ao portal super admin, separados por vírgula ou ponto e vírgula.
-    /// A pessoa entra pelo login normal (com o e-mail confirmado); tirar o e-mail daqui corta o acesso em até 1 minuto.
-    /// </summary>
-    public string? AdminEmails { get; set; }
+/// <summary>
+/// Conta do portal super admin. Separada dos usuários dos clientes (<c>users</c>): outra tabela, outro login,
+/// outro cookie. Não há cadastro pela tela; as contas são criadas pela linha de comando (<c>superadmin create</c>).
+/// </summary>
+public sealed class PlatformAdmin
+{
+    public const int PasswordMinLength = 12;
 
-    public bool IsAdminEmail(string? email) =>
-        !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(AdminEmails)
-        && AdminEmails.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(e => string.Equals(e, email.Trim(), StringComparison.OrdinalIgnoreCase));
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    /// <summary>Sempre em minúsculas, sem espaços (é a chave do login).</summary>
+    public string Email { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public string PasswordHash { get; set; } = null!;
+    /// <summary>Muda ao trocar a senha ou desativar: as sessões abertas caem.</summary>
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+    public int FailedLoginCount { get; set; }
+    public DateTimeOffset? LockoutEnd { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastLoginAt { get; set; }
+    public DateTimeOffset? DeactivatedAt { get; set; }
+
+    public static string Normalize(string email) => email.Trim().ToLowerInvariant();
+}
+
+internal sealed class PlatformAdminConfiguration : IEntityTypeConfiguration<PlatformAdmin>
+{
+    public void Configure(EntityTypeBuilder<PlatformAdmin> b)
+    {
+        b.ToTable("platform_admins");
+        b.HasKey(a => a.Id);
+        b.Property(a => a.Id).ValueGeneratedNever();
+        b.Property(a => a.Email).HasMaxLength(256).IsRequired();
+        b.HasIndex(a => a.Email).IsUnique();
+        b.Property(a => a.Name).HasMaxLength(100).IsRequired();
+        b.Property(a => a.PasswordHash).IsRequired();
+        b.Property(a => a.SecurityStamp).HasMaxLength(64).IsRequired();
+    }
 }
 
 /// <summary>Ação da equipe da plataforma numa organização (plano, créditos, suspensão), para auditoria.</summary>
@@ -28,8 +56,8 @@ public sealed class PlatformAuditEntry
 {
     public long Id { get; set; }
     public Guid OrganizationId { get; set; }
-    /// <summary>Quem fez: usuário do portal; null quando veio da API de operação (chave).</summary>
-    public Guid? ActorUserId { get; set; }
+    /// <summary>Quem fez: conta do portal (<see cref="PlatformAdmin"/>); null quando veio da API de operação (chave).</summary>
+    public Guid? ActorAdminId { get; set; }
     public string ActorName { get; set; } = null!;
     public string Action { get; set; } = null!;
     public string? Details { get; set; }

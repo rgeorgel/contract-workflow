@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar · Super admin</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="/superadmin/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/superadmin/assets/css/base.css">
+  <link rel="stylesheet" href="/superadmin/assets/css/components.css">
+  <link rel="stylesheet" href="/superadmin/assets/css/portal.css">
+  <script type="module" src="/superadmin/assets/login.js"></script>
+</head>
+<body class="sa-login">
+  <main class="sa-login__card">
+    <div class="sa-login__brand">
+      <span class="sa-top__tag">Super admin</span>
+      <h1>Acesso da equipe</h1>
+      <p>Área restrita à equipe da plataforma.</p>
+    </div>
+    <form class="form" id="login-form" novalidate>
+      <div class="alert alert--error" role="alert" data-form-alert hidden></div>
+      <div class="field">
+        <label class="field__label" for="email">E-mail</label>
+        <input class="input" id="email" name="email" type="email" autocomplete="username" required>
+        <p class="field__error" data-error-for="email"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="password">Senha</label>
+        <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+        <p class="field__error" data-error-for="password"></p>
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Entrar</button>
+    </form>
+  </main>
+</body>
+</html>

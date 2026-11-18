@@ -32,8 +32,12 @@ internal static class SecurityHeaders
                 if (!h.ContainsKey("Cross-Origin-Resource-Policy"))
                     h["Cross-Origin-Resource-Policy"] = "same-origin";
                 // Respostas da API têm dados da organização: nada de cache compartilhado.
-                if (ctx.Request.Path.StartsWithSegments("/api") && !h.ContainsKey("Cache-Control"))
+                if ((ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/superadmin/api"))
+                    && !h.ContainsKey("Cache-Control"))
                     h.CacheControl = "no-store";
+                // Portal super admin: fora de buscadores.
+                if (ctx.Request.Path.StartsWithSegments("/superadmin"))
+                    h["X-Robots-Tag"] = "noindex, nofollow";
                 return Task.CompletedTask;
             });
             await next();

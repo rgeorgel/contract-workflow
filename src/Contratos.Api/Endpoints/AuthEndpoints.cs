@@ -21,9 +21,8 @@ public sealed record AcceptedResponse(string Message);
 public sealed record OrganizationSummary(Guid Id, string Name, string Slug, bool PaymentOverdue);
 /// <summary>Sessão de "Entrar como": quem da equipe está usando a conta e até quando.</summary>
 public sealed record ImpersonationInfo(string ImpersonatorName, DateTimeOffset? ExpiresAt);
-/// <param name="PlatformAdmin">Equipe da plataforma: vê o link do portal super admin.</param>
 /// <param name="Impersonation">Preenchido quando alguém da equipe está usando esta conta ("Entrar como").</param>
-public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization, bool PlatformAdmin,
+public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization,
     ImpersonationInfo? Impersonation = null);
 
 internal static class AuthEndpoints
@@ -75,7 +74,7 @@ internal static class AuthEndpoints
         auth.MapPost("/stop-impersonation", async (ClaimsPrincipal principal, Contratos.Infrastructure.Platform.ImpersonationService svc, CancellationToken ct) =>
                 (await svc.StopAsync(principal, ct)).ToHttp())
             .RequireAuthorization()
-            .WithSummary("Encerra o \"Entrar como\" e volta para a conta da equipe");
+            .WithSummary("Encerra a sessão de suporte (\"Entrar como\") no app");
 
         auth.MapPost("/forgot-password", ForgotPassword).RequireRateLimiting(RateLimitPolicy)
             .WithSummary("Envia o link de nova senha");
@@ -155,12 +154,10 @@ internal static class AuthEndpoints
             return TypedResults.Unauthorized();
 
         // Conta suspensa: a tela volta ao login, que explica o motivo (o cookie cai em até 1 minuto).
-        var platformAdmin = principal.HasClaim(AppClaims.PlatformAdmin, "true");
         var me = await db.Users
             .Where(u => u.Id == userId && u.DeactivatedAt == null)
             .Join(db.Organizations.Where(o => o.SuspendedAt == null), u => u.OrganizationId, o => o.Id, (u, o) => new MeResponse(
-                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug, o.SubscriptionStatus == "past_due"),
-                platformAdmin))
+                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug, o.SubscriptionStatus == "past_due")))
             .SingleOrDefaultAsync(ct);
         if (me is null)
             return TypedResults.Unauthorized();

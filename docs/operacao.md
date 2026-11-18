@@ -112,18 +112,36 @@ curl -s -X POST -H "Authorization: Bearer $PLATFORM_API_KEY" -H "Content-Type: a
 
 ## Portal super admin
 
-Em `/superadmin/` a equipe da plataforma acompanha e gerencia todas as organizações:
+Em `/superadmin/` a equipe da plataforma acompanha e gerencia todas as organizações. O portal é separado do app dos clientes: não há link de um para o outro, e cada um tem as próprias contas, o próprio login e o próprio cookie.
 
 - **Painel**: total de organizações, cadastros e contratos enviados por dia (30 dias), ativas em 7 dias, MRR estimado pelos preços de tabela, distribuição por plano e por situação, contas que pedem atenção (pagamento pendente, suspensas, cancelamento agendado)
 - **Tenants**: cartões ou lista com plano, situação, uso do ciclo (contratos, usuários, templates, créditos), contratos por status, integrações e último acesso. Busca por nome, slug ou e-mail de qualquer usuário; filtros por situação, plano e atividade; ordenação por último acesso, cadastro, nome ou contratos em 30 dias
 - **Detalhe**: linha do tempo agrupada por dia e tipo (conta, contratos, assinaturas, templates, plano, integrações e ações da equipe), usuários com último acesso, templates mais usados, créditos e assinatura
-- **Ações**: trocar plano (só sem assinatura ativa no Stripe), conceder créditos, suspender e reativar. Toda ação fica registrada (`platform_audit_log`) com quem fez; as feitas pela API da plataforma aparecem como "API da plataforma"
+- **Ações**: trocar plano (só sem assinatura ativa no Stripe), conceder créditos, suspender e reativar. Toda ação fica registrada (`platform_audit_log`) com a conta que fez; as feitas pela API da plataforma aparecem como "API da plataforma"
 
-Quem entra: usuários cujo e-mail está em `PLATFORM_ADMIN_EMAILS` (separados por vírgula), pelo login normal e com o e-mail confirmado. A pessoa continua sendo de uma organização (a da equipe, por exemplo); o link "Super admin" aparece no menu dela. Tirar o e-mail da lista corta o acesso em até 1 minuto (quando o cookie é revalidado).
+### Contas e login
 
-Suspender uma organização: ninguém dela entra (login recusado com `account_suspended`, sessões abertas caem em até 1 minuto), as chaves de API e as sessões de embed param de valer. Contratos já enviados seguem com os signatários e os webhooks continuam saindo. A equipe não consegue suspender a própria organização.
+As contas ficam em `platform_admins`, separadas dos usuários dos clientes. O login é `/superadmin/login.html` (não há cadastro nem "esqueci a senha"); a API do portal fica em `/superadmin/api/v1` e o cookie (`contratos.admin`, HttpOnly, SameSite=Strict) só é enviado para `/superadmin`. O cookie dos clientes não abre o portal e o do portal não abre o app. Cinco senhas erradas bloqueiam a conta por 15 minutos; o login também tem o limite por IP das rotas de autenticação. A sessão expira depois de 4 horas sem uso; trocar a senha ou desativar a conta derruba as sessões abertas na hora.
 
-**Entrar como**: no detalhe do tenant, cada usuário ativo tem o botão "Entrar como". A pessoa da equipe passa a usar a conta dele com acesso total, por até 1 hora (a sessão não renova), com uma faixa no topo de todas as páginas e o botão "Voltar ao super admin". Fica na auditoria: a entrada (com quem e como quem), a saída e cada escrita feita no meio (`POST /api/v1/templates → 201`, por exemplo; sem corpo nem query string). Nos logs, essas requisições levam `ImpersonatorId`. Não dá para entrar como alguém da equipe, como a própria conta, como usuário desativado, convidado sem senha ou de e-mail não confirmado, nem numa organização suspensa. O "Entrar como" não altera o último acesso do cliente.
+As contas são criadas e mantidas pela linha de comando, dentro do container da app. A senha (mínimo de 12 caracteres) é pedida no terminal, sem eco, ou vem de `SUPERADMIN_PASSWORD`:
+
+```bash
+docker compose exec -it app dotnet Contratos.Api.dll superadmin create voce@suaempresa.com.br "Seu Nome"
+docker compose exec -it app dotnet Contratos.Api.dll superadmin list
+docker compose exec -it app dotnet Contratos.Api.dll superadmin password voce@suaempresa.com.br
+docker compose exec -it app dotnet Contratos.Api.dll superadmin deactivate fulano@suaempresa.com.br
+docker compose exec -it app dotnet Contratos.Api.dll superadmin activate fulano@suaempresa.com.br
+```
+
+Com `dotnet run`, o mesmo: `dotnet run --project src/Contratos.Api -- superadmin list`.
+
+### Entrar como
+
+No detalhe do tenant, cada usuário ativo tem o botão "Entrar como". Ele abre o app numa nova aba com a conta do usuário, com acesso total, por até 1 hora (a sessão não renova); o portal continua aberto na aba dele. É a única ponte entre os dois: o servidor cria uma sessão do app para o usuário, marcada com a conta do portal que está por trás. No app aparece uma faixa "Sessão de suporte" em todas as páginas, com "Encerrar sessão de suporte", que sai do app (o login do portal não muda). Fica na auditoria: a entrada (com quem e como quem), a saída e cada escrita feita no meio (`POST /api/v1/templates → 201`, por exemplo; sem corpo nem query string). Nos logs, essas requisições levam `ImpersonatorId`. Não dá para entrar como usuário desativado, convidado sem senha ou de e-mail não confirmado, nem numa organização suspensa. O "Entrar como" não altera o último acesso do cliente. Se o navegador já tinha uma sessão do app aberta, ela é substituída pela de suporte.
+
+### Suspensão e último acesso
+
+Suspender uma organização: ninguém dela entra (login recusado com `account_suspended`, sessões abertas caem em até 1 minuto), as chaves de API e as sessões de embed param de valer. Contratos já enviados seguem com os signatários e os webhooks continuam saindo.
 
 "Último acesso" é gravado no login e quando a pessoa abre uma página (no máximo a cada 5 minutos); contas de antes desta versão aparecem como "Nunca acessou" até o próximo acesso.
 

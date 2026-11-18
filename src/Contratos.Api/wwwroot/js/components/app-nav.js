@@ -20,8 +20,6 @@ class AppNav extends HTMLElement {
     const me = await getMe();
     const active = this.getAttribute('active');
     const links = LINKS.filter((l) => !l.roles || l.roles.includes(me.role));
-    // Equipe da plataforma: atalho para o portal super admin.
-    if (me.platformAdmin) links.push({ key: 'superadmin', href: '/superadmin/', label: 'Super admin' });
     const linkEl = (l) => h('a', { href: l.href, 'aria-current': l.key === active ? 'page' : null }, l.label);
 
     const drawer = h('nav', { class: 'app-nav__drawer', id: 'app-nav-drawer', 'aria-label': 'Menu', hidden: true },
@@ -52,7 +50,7 @@ class AppNav extends HTMLElement {
 
 const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-/** "Entrar como": a equipe da plataforma está usando esta conta. Sempre visível, com o caminho de volta. */
+/** Sessão de suporte ("Entrar como"): alguém da equipe está usando esta conta. Sempre visível, com o botão de encerrar. */
 function impersonationBanner(me) {
   if (!me.impersonation) return null;
   const back = h('button', {
@@ -67,13 +65,13 @@ function impersonationBanner(me) {
         location.assign('/login.html');
       }
     },
-  }, 'Voltar ao super admin');
+  }, 'Encerrar sessão de suporte');
   const until = me.impersonation.expiresAt ? ` Sessão até ${timeFmt.format(new Date(me.impersonation.expiresAt))}.` : '';
   return h('div', { class: 'impersonation-banner', role: 'status' },
     h('div', { class: 'container impersonation-banner__inner' },
       h('span', {},
-        h('strong', {}, `${me.impersonation.impersonatorName}, você está como ${me.name}`),
-        ` (${me.organization.name}). Acesso total: cada alteração fica registrada.${until}`),
+        h('strong', {}, `Sessão de suporte: ${me.impersonation.impersonatorName} está usando a conta de ${me.name}`),
+        ` (${me.organization.name}). Cada alteração fica registrada.${until}`),
       back));
 }
 

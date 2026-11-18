@@ -1,4 +1,4 @@
-/* Portal super admin (/superadmin/). Usa os tokens de base.css e os componentes de app.css. */
+/* Portal super admin (/superadmin/). Autocontido: base, components, app e progress são cópias próprias do portal. */
 body.sa {
   background: var(--color-surface); min-height: 100vh;
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr;
@@ -202,3 +202,11 @@ a.tenant-card:hover { color: var(--color-text); box-shadow: var(--shadow); borde
 .audit-list li { padding: 12px 20px; font-size: .875rem; display: grid; gap: 2px; }
 .audit-list li + li { border-top: 1px solid var(--color-border); }
 .audit-list small { color: var(--color-muted); }
+
+/* Login do portal */
+body.sa-login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--color-text); }
+.sa-login__card { width: min(400px, 100%); background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 28px; display: grid; gap: 20px; }
+.sa-login__brand { display: grid; gap: 8px; justify-items: start; }
+.sa-login__brand .sa-top__tag { background: var(--color-text); color: #fff; }
+.sa-login__brand h1 { font-size: 1.5rem; }
+.sa-login__brand p { color: var(--color-muted); font-size: .9rem; }

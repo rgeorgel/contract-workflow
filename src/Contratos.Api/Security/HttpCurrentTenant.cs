@@ -30,12 +30,13 @@ internal static class Policies
     public const string EmbedEdit = nameof(EmbedEdit);
     public const string EmbedPublish = nameof(EmbedPublish);
     public const string EmbedArchive = nameof(EmbedArchive);
-    /// <summary>Portal super admin: equipe da plataforma, pelo cookie da tela.</summary>
+    /// <summary>Portal super admin: só o cookie das contas do portal (o dos clientes não vale).</summary>
     public const string PlatformAdmin = nameof(PlatformAdmin);
 
     public static void Configure(Microsoft.AspNetCore.Authorization.AuthorizationOptions o)
     {
-        o.AddPolicy(PlatformAdmin, p => p.RequireAuthenticatedUser().RequireClaim(AppClaims.PlatformAdmin, "true"));
+        o.AddPolicy(PlatformAdmin, p => p.AddAuthenticationSchemes(PlatformAdminAuth.Scheme)
+            .RequireAuthenticatedUser().RequireClaim(PlatformAdminAuth.IdClaim));
         o.AddPolicy(IsAdmin, p => p.RequireAuthenticatedUser().RequireClaim(AppClaims.Role, nameof(UserRole.Admin)));
         o.AddPolicy(CanEditContracts, p => p.RequireAuthenticatedUser()
             .RequireClaim(AppClaims.Role, nameof(UserRole.Admin), nameof(UserRole.Editor)));
