@@ -30,20 +30,83 @@ public sealed class TemplateStartersTests(ApiFactory factory)
         Assert.Contains("<h1>", clean);
     }
 
+    [Theory]
+    [MemberData(nameof(StarterIds))]
+    public void Each_starter_reads_well_with_and_without_the_optional_variables(string id)
+    {
+        var starter = TemplateStarters.Find(id)!;
+        var renderer = new DocumentRenderer(new TemplateHtmlSanitizer());
+        var required = starter.Variables.Where(v => v.Required)
+            .ToDictionary(v => v.Key, VariableValues.Sample, StringComparer.Ordinal);
+
+        // Variável opcional fora de um {{#se}} apareceria como [rótulo] pendente no contrato.
+        var minimal = renderer.Render(starter.Name, starter.BodyHtml, starter.Variables, required);
+        Assert.DoesNotContain("class=\"missing\"", minimal);
+        Assert.DoesNotContain("{{", minimal);
+
+        var full = renderer.RenderSample(starter.Name, starter.BodyHtml, starter.Variables);
+        Assert.DoesNotContain("class=\"missing\"", full);
+    }
+
     [Fact]
-    public async Task Admin_lists_the_starters()
+    public void Every_sector_has_at_least_three_starters_and_ids_are_unique()
+    {
+        Assert.Equal(TemplateStarters.All.Count, TemplateStarters.All.Select(s => s.Id).Distinct().Count());
+        var categories = TemplateStarters.Categories.Select(c => c.Id).ToHashSet();
+        Assert.All(TemplateStarters.All, s =>
+        {
+            Assert.Contains(s.Category, categories);
+            Assert.NotEmpty(s.DefaultSignerRoles);
+        });
+        Assert.All(TemplateStarters.Categories, c =>
+            Assert.True(TemplateStarters.All.Count(s => s.Category == c.Id) >= 3, $"O setor {c.Id} tem menos de 3 modelos."));
+    }
+
+    [Fact]
+    public async Task Admin_lists_the_starters_grouped_by_sector()
     {
         var admin = await TestAccounts.CreateAdminAsync(factory);
 
-        var list = await (await admin.Client.GetAsync("/api/v1/templates/starters")).JsonAsync();
+        var catalog = await (await admin.Client.GetAsync("/api/v1/templates/starters")).JsonAsync();
 
+        var categories = catalog.GetProperty("categories").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
+        Assert.Contains("advocacia", categories);
+        Assert.Contains("contabilidade", categories);
+        Assert.Contains("imobiliario", categories);
+        Assert.Contains("rh", categories);
+        var list = catalog.GetProperty("starters");
         Assert.Equal(TemplateStarters.All.Count, list.GetArrayLength());
         Assert.Contains(list.EnumerateArray(), s => s.GetProperty("id").GetString() == "honorarios-advocaticios");
         Assert.All(list.EnumerateArray(), s =>
         {
             Assert.False(string.IsNullOrWhiteSpace(s.GetProperty("name").GetString()));
+            Assert.Contains(s.GetProperty("category").GetString(), categories);
             Assert.True(s.GetProperty("variableCount").GetInt32() > 0);
+            Assert.True(s.GetProperty("signers").GetArrayLength() > 0);
         });
+        var lease = list.EnumerateArray().Single(s => s.GetProperty("id").GetString() == "locacao-residencial");
+        Assert.Equal(["Locador", "Locatário"], lease.GetProperty("signers").EnumerateArray().Select(r => r.GetString()));
+    }
+
+    [Fact]
+    public async Task Starter_detail_shows_the_text_with_every_variable_highlighted()
+    {
+        var admin = await TestAccounts.CreateAdminAsync(factory);
+
+        var res = await admin.Client.GetAsync("/api/v1/templates/starters/honorarios-advocaticios");
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var detail = await res.JsonAsync();
+        Assert.Equal("advocacia", detail.GetProperty("category").GetString());
+        Assert.Equal(TemplateStarters.Find("honorarios-advocaticios")!.Variables.Count, detail.GetProperty("variables").GetArrayLength());
+        Assert.Equal(4, detail.GetProperty("defaultSignerRoles").GetArrayLength());
+        var html = detail.GetProperty("previewHtml").GetString()!;
+        Assert.Contains("<h1>Contrato de Prestação de Serviços Advocatícios</h1>", html);
+        Assert.Contains("<span class=\"var\">Nome do contratante</span>", html);
+        Assert.Contains("Processo relacionado", html); // trechos opcionais aparecem na pré-visualização
+        Assert.DoesNotContain("{{", html);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.Client.GetAsync("/api/v1/templates/starters/nao-existe")).StatusCode);
     }
 
     [Fact]
@@ -179,6 +242,7 @@ public sealed class TemplateStartersTests(ApiFactory factory)
         var editor = await TestAccounts.InviteAndAcceptAsync(factory, admin, "Editor");
 
         Assert.Equal(HttpStatusCode.Forbidden, (await editor.Client.GetAsync("/api/v1/templates/starters")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.Client.GetAsync("/api/v1/templates/starters/confidencialidade")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await editor.Client.PostAsync("/api/v1/templates/preview", new { bodyHtml = "<p>x</p>" })).StatusCode);
     }

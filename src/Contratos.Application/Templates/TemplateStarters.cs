@@ -3,28 +3,65 @@ using Contratos.Domain.Templates;
 namespace Contratos.Application.Templates;
 
 /// <summary>Modelo pronto para começar um template sem a página em branco.</summary>
+/// <param name="Category">Id de uma das <see cref="TemplateStarters.Categories"/>.</param>
 public sealed record TemplateStarter(
-    string Id, string Name, string Description, string BodyHtml,
+    string Id, string Category, string Name, string Description, string BodyHtml,
     IReadOnlyList<TemplateVariable> Variables, IReadOnlyList<SignerRoleSuggestion> DefaultSignerRoles);
 
-public sealed record TemplateStarterItem(string Id, string Name, string Description, int VariableCount);
+/// <summary>Setor que agrupa os modelos na galeria do "Novo template".</summary>
+public sealed record TemplateStarterCategory(string Id, string Name, string Description);
+
+/// <summary>Cartão da galeria: o suficiente para escolher, sem o texto.</summary>
+/// <param name="Signers">Papéis sugeridos, na ordem de assinatura (ex.: Locador, Locatário).</param>
+public sealed record TemplateStarterItem(
+    string Id, string Category, string Name, string Description, int VariableCount, IReadOnlyList<string> Signers);
+
+public sealed record TemplateStarterCatalog(
+    IReadOnlyList<TemplateStarterCategory> Categories, IReadOnlyList<TemplateStarterItem> Starters);
+
+/// <summary>Um modelo aberto na galeria, com o texto já montado para a pré-visualização.</summary>
+/// <param name="PreviewHtml">Corpo sanitizado, com cada variável trocada pelo rótulo em destaque e os trechos opcionais visíveis.</param>
+public sealed record TemplateStarterDetail(
+    string Id, string Category, string Name, string Description,
+    IReadOnlyList<TemplateVariable> Variables, IReadOnlyList<SignerRoleSuggestion> DefaultSignerRoles, string PreviewHtml);
 
 /// <summary>
-/// Os modelos de partida oferecidos ao criar um template. São textos de referência:
-/// o cliente revisa e adapta antes de publicar.
+/// Os modelos de partida oferecidos ao criar um template, agrupados por setor. São textos de referência:
+/// o cliente revisa e adapta antes de publicar. Cada setor fica num arquivo em <c>Templates/Starters</c>.
 /// </summary>
-public static class TemplateStarters
+public static partial class TemplateStarters
 {
+    public static IReadOnlyList<TemplateStarterCategory> Categories { get; } =
+    [
+        new("geral", "Geral", "Contratos e termos que servem a qualquer negócio."),
+        new("advocacia", "Advocacia", "Honorários, procurações e documentos do escritório."),
+        new("imobiliario", "Imobiliário", "Locação, administração e venda de imóveis."),
+        new("contabilidade", "Contabilidade", "Serviços contábeis, BPO e documentos com o cliente."),
+        new("rh", "Recursos humanos", "Admissão, estágio, teletrabalho e termos com colaboradores."),
+        new("comercial", "Comercial", "Vendas, fornecimento e representação."),
+        new("saude", "Saúde", "Consentimento, tratamento e uso de imagem em clínicas e consultórios."),
+        new("educacao", "Educação", "Matrícula, cursos e autorizações de escolas e professores."),
+    ];
+
     public static IReadOnlyList<TemplateStarter> All { get; } =
     [
-        PrestacaoDeServicos(),
-        Confidencialidade(),
-        LocacaoResidencial(),
-        HonorariosAdvocaticios(),
+        .. Geral(),
+        .. Advocacia(),
+        .. Imobiliario(),
+        .. Contabilidade(),
+        .. RecursosHumanos(),
+        .. Comercial(),
+        .. Saude(),
+        .. Educacao(),
     ];
 
     public static TemplateStarter? Find(string? id) =>
         All.FirstOrDefault(s => string.Equals(s.Id, id?.Trim(), StringComparison.Ordinal));
+
+    public static TemplateStarterCatalog Catalog() => new(Categories, All
+        .Select(s => new TemplateStarterItem(s.Id, s.Category, s.Name, s.Description, s.Variables.Count,
+            [.. s.DefaultSignerRoles.OrderBy(r => r.Order).Select(r => r.Role)]))
+        .ToList());
 
     private static TemplateVariable Text(string key, string label, bool required = true) => new(key, label, VariableType.Text, required);
     private static TemplateVariable Doc(string key, string label, bool required = true) => new(key, label, VariableType.CpfCnpj, required);
@@ -32,269 +69,16 @@ public static class TemplateStarters
     private static TemplateVariable Date(string key, string label, bool required = true) => new(key, label, VariableType.Date, required);
     private static TemplateVariable Number(string key, string label, bool required = true) => new(key, label, VariableType.Number, required);
 
-    private static TemplateStarter PrestacaoDeServicos() => new(
-        "prestacao-servicos",
-        "Prestação de serviços",
-        "Contratação de um serviço com escopo, valor, prazo e forma de pagamento.",
-        """
-        <h1>Contrato de Prestação de Serviços</h1>
-        <p><strong>CONTRATANTE:</strong> {{contratante.nome}}, inscrito(a) no CPF/CNPJ sob o nº {{contratante.documento}}, com endereço em {{contratante.endereco}}.</p>
-        <p><strong>CONTRATADO(A):</strong> {{contratado.nome}}, inscrito(a) no CPF/CNPJ sob o nº {{contratado.documento}}, com endereço em {{contratado.endereco}}.</p>
-        <p>As partes acima identificadas têm entre si justo e acertado o presente Contrato de Prestação de Serviços, que se regerá pelas cláusulas a seguir.</p>
+    private static SignerRoleSuggestion Signs(string role, int order) => new(role, SignerAction.Sign, order);
+    private static SignerRoleSuggestion Witness(int order) => new("Testemunha", SignerAction.SignAsWitness, order);
 
-        <h2>Cláusula 1ª – Do objeto</h2>
-        <p>O presente contrato tem por objeto a prestação, pelo(a) CONTRATADO(A), dos seguintes serviços: {{servico.descricao}}.</p>
+    /// <summary>Cidade e data da assinatura, no fecho de quase todo modelo.</summary>
+    private static TemplateVariable[] Closing() =>
+    [
+        Text("assinatura.cidade", "Cidade da assinatura"),
+        Date("assinatura.data", "Data da assinatura"),
+    ];
 
-        <h2>Cláusula 2ª – Do prazo</h2>
-        <p>Os serviços serão prestados de {{prazo.inicio}} a {{prazo.fim}}, podendo o prazo ser prorrogado por acordo escrito entre as partes.</p>
-
-        <h2>Cláusula 3ª – Do preço e do pagamento</h2>
-        <p>Pelos serviços, o CONTRATANTE pagará ao(à) CONTRATADO(A) o valor total de {{valor.total}}, nas seguintes condições: {{pagamento.condicoes}}.</p>
-        <p>O atraso no pagamento sujeitará o CONTRATANTE a multa de 2% (dois por cento) sobre o valor devido, acrescida de juros de 1% (um por cento) ao mês.</p>
-
-        <h2>Cláusula 4ª – Das obrigações do(a) CONTRATADO(A)</h2>
-        <p>O(A) CONTRATADO(A) se obriga a executar os serviços com zelo e qualidade, dentro do prazo combinado, e a manter o CONTRATANTE informado sobre o andamento dos trabalhos.</p>
-
-        <h2>Cláusula 5ª – Das obrigações do CONTRATANTE</h2>
-        <p>O CONTRATANTE se obriga a fornecer as informações e os materiais necessários à execução dos serviços e a efetuar os pagamentos nas datas acordadas.</p>
-
-        <h2>Cláusula 6ª – Da ausência de vínculo</h2>
-        <p>Este contrato não gera vínculo empregatício entre as partes, cabendo a cada uma o cumprimento das próprias obrigações trabalhistas, previdenciárias e fiscais.</p>
-
-        <h2>Cláusula 7ª – Da rescisão</h2>
-        <p>Qualquer das partes poderá rescindir este contrato mediante aviso por escrito com 30 (trinta) dias de antecedência, sendo devidos os valores dos serviços já prestados até a data da rescisão.</p>
-
-        <h2>Cláusula 8ª – Do foro</h2>
-        <p>Fica eleito o foro da comarca de {{foro.cidade}} para dirimir quaisquer dúvidas oriundas deste contrato.</p>
-
-        <p>E, por estarem assim justas e contratadas, as partes assinam o presente instrumento eletronicamente.</p>
-        <p>{{assinatura.cidade}}, {{assinatura.data}}.</p>
-        """,
-        [
-            Text("contratante.nome", "Nome do contratante"),
-            Doc("contratante.documento", "CPF/CNPJ do contratante"),
-            Text("contratante.endereco", "Endereço do contratante"),
-            Text("contratado.nome", "Nome do contratado"),
-            Doc("contratado.documento", "CPF/CNPJ do contratado"),
-            Text("contratado.endereco", "Endereço do contratado"),
-            Text("servico.descricao", "Descrição dos serviços"),
-            Date("prazo.inicio", "Início dos serviços"),
-            Date("prazo.fim", "Fim dos serviços"),
-            Money("valor.total", "Valor total"),
-            Text("pagamento.condicoes", "Condições de pagamento"),
-            Text("foro.cidade", "Cidade do foro"),
-            Text("assinatura.cidade", "Cidade da assinatura"),
-            Date("assinatura.data", "Data da assinatura"),
-        ],
-        [
-            new("Contratante", SignerAction.Sign, 1),
-            new("Contratado", SignerAction.Sign, 2),
-        ]);
-
-    private static TemplateStarter Confidencialidade() => new(
-        "confidencialidade",
-        "Acordo de confidencialidade (NDA)",
-        "Sigilo mútuo sobre informações trocadas entre duas partes, com prazo e multa.",
-        """
-        <h1>Acordo de Confidencialidade</h1>
-        <p><strong>PRIMEIRA PARTE:</strong> {{parte1.nome}}, inscrita no CPF/CNPJ sob o nº {{parte1.documento}}, com endereço em {{parte1.endereco}}.</p>
-        <p><strong>SEGUNDA PARTE:</strong> {{parte2.nome}}, inscrita no CPF/CNPJ sob o nº {{parte2.documento}}, com endereço em {{parte2.endereco}}.</p>
-        <p>As partes, doravante denominadas em conjunto “Partes”, celebram o presente Acordo de Confidencialidade, nos termos a seguir.</p>
-
-        <h2>Cláusula 1ª – Da finalidade</h2>
-        <p>As Partes pretendem trocar informações com a seguinte finalidade: {{finalidade}} (“Finalidade”). As informações recebidas só poderão ser usadas para essa Finalidade.</p>
-
-        <h2>Cláusula 2ª – Das informações confidenciais</h2>
-        <p>Consideram-se confidenciais todas as informações técnicas, comerciais, financeiras, estratégicas, dados pessoais e quaisquer outras informações reveladas por uma Parte à outra, por qualquer meio, que não sejam de conhecimento público.</p>
-        <p>Não são confidenciais as informações que: (a) já eram de conhecimento público ou passaram a ser sem culpa da Parte receptora; (b) já estavam legitimamente em poder da Parte receptora antes da revelação; ou (c) devam ser reveladas por ordem judicial ou exigência legal, hipótese em que a Parte receptora avisará a outra antes de revelá-las, sempre que permitido.</p>
-
-        <h2>Cláusula 3ª – Das obrigações</h2>
-        <p>A Parte receptora se obriga a manter sigilo sobre as informações confidenciais, a restringir o acesso a elas apenas às pessoas que precisem conhecê-las para a Finalidade e que estejam sujeitas a dever de sigilo equivalente, e a devolvê-las ou destruí-las quando solicitado.</p>
-
-        <h2>Cláusula 4ª – Da vigência</h2>
-        <p>As obrigações deste acordo vigoram durante o relacionamento entre as Partes e por {{vigencia.anos}} anos após o seu encerramento.</p>
-
-        <h2>Cláusula 5ª – Da penalidade</h2>
-        <p>O descumprimento deste acordo sujeitará a Parte infratora ao pagamento de multa de {{multa.valor}}, sem prejuízo da indenização por perdas e danos que excederem esse valor.</p>
-
-        <h2>Cláusula 6ª – Do foro</h2>
-        <p>Fica eleito o foro da comarca de {{foro.cidade}} para dirimir quaisquer dúvidas oriundas deste acordo.</p>
-
-        <p>E, por estarem de acordo, as Partes assinam o presente instrumento eletronicamente.</p>
-        <p>{{assinatura.cidade}}, {{assinatura.data}}.</p>
-        """,
-        [
-            Text("parte1.nome", "Nome da primeira parte"),
-            Doc("parte1.documento", "CPF/CNPJ da primeira parte"),
-            Text("parte1.endereco", "Endereço da primeira parte"),
-            Text("parte2.nome", "Nome da segunda parte"),
-            Doc("parte2.documento", "CPF/CNPJ da segunda parte"),
-            Text("parte2.endereco", "Endereço da segunda parte"),
-            Text("finalidade", "Finalidade da troca de informações"),
-            Number("vigencia.anos", "Anos de sigilo após o encerramento"),
-            Money("multa.valor", "Valor da multa"),
-            Text("foro.cidade", "Cidade do foro"),
-            Text("assinatura.cidade", "Cidade da assinatura"),
-            Date("assinatura.data", "Data da assinatura"),
-        ],
-        [
-            new("Primeira parte", SignerAction.Sign, 1),
-            new("Segunda parte", SignerAction.Sign, 2),
-        ]);
-
-    private static TemplateStarter LocacaoResidencial() => new(
-        "locacao-residencial",
-        "Locação residencial",
-        "Aluguel de imóvel para moradia, com valor, vencimento, prazo, reajuste e garantia.",
-        """
-        <h1>Contrato de Locação Residencial</h1>
-        <p><strong>LOCADOR(A):</strong> {{locador.nome}}, inscrito(a) no CPF/CNPJ sob o nº {{locador.documento}}, com endereço em {{locador.endereco}}.</p>
-        <p><strong>LOCATÁRIO(A):</strong> {{locatario.nome}}, inscrito(a) no CPF/CNPJ sob o nº {{locatario.documento}}, com endereço em {{locatario.endereco}}.</p>
-        <p>As partes celebram o presente Contrato de Locação Residencial, regido pela Lei nº 8.245/1991 e pelas cláusulas a seguir.</p>
-
-        <h2>Cláusula 1ª – Do imóvel</h2>
-        <p>O objeto deste contrato é a locação do imóvel situado em {{imovel.endereco}}, destinado exclusivamente à moradia do(a) LOCATÁRIO(A) e de sua família.</p>
-
-        <h2>Cláusula 2ª – Do prazo</h2>
-        <p>A locação terá prazo de {{prazo.meses}} meses, com início em {{prazo.inicio}}. Findo o prazo, a locação poderá ser renovada ou prorrogada nos termos da lei.</p>
-
-        <h2>Cláusula 3ª – Do aluguel</h2>
-        <p>O aluguel mensal é de {{aluguel.valor}}, a ser pago até o dia {{aluguel.vencimento}} de cada mês. O atraso sujeitará o(a) LOCATÁRIO(A) a multa de 10% (dez por cento) sobre o valor devido, acrescida de juros de 1% (um por cento) ao mês.</p>
-        <p>O aluguel será reajustado a cada 12 (doze) meses pela variação do índice {{reajuste.indice}}.</p>
-
-        <h2>Cláusula 4ª – Dos encargos</h2>
-        <p>Além do aluguel, cabe ao(à) LOCATÁRIO(A) o pagamento das contas de consumo (água, energia, gás), das despesas ordinárias de condomínio e do IPTU, salvo acordo escrito em contrário.</p>
-
-        <h2>Cláusula 5ª – Da garantia</h2>
-        <p>Em garantia das obrigações deste contrato, fica estabelecida a seguinte modalidade: {{garantia.descricao}}.</p>
-
-        <h2>Cláusula 6ª – Da conservação e das benfeitorias</h2>
-        <p>O(A) LOCATÁRIO(A) declara receber o imóvel em bom estado de conservação e se obriga a devolvê-lo no mesmo estado, ressalvado o desgaste natural pelo uso. Benfeitorias dependem de autorização prévia e por escrito do(a) LOCADOR(A).</p>
-
-        <h2>Cláusula 7ª – Da rescisão</h2>
-        <p>Se o(a) LOCATÁRIO(A) devolver o imóvel antes do fim do prazo, pagará multa equivalente a 3 (três) aluguéis, proporcional ao tempo restante do contrato, nos termos do art. 4º da Lei nº 8.245/1991.</p>
-
-        <h2>Cláusula 8ª – Do foro</h2>
-        <p>Fica eleito o foro da comarca de {{foro.cidade}} para dirimir quaisquer dúvidas oriundas deste contrato.</p>
-
-        <p>E, por estarem assim justas e contratadas, as partes assinam o presente instrumento eletronicamente.</p>
-        <p>{{assinatura.cidade}}, {{assinatura.data}}.</p>
-        """,
-        [
-            Text("locador.nome", "Nome do locador"),
-            Doc("locador.documento", "CPF/CNPJ do locador"),
-            Text("locador.endereco", "Endereço do locador"),
-            Text("locatario.nome", "Nome do locatário"),
-            Doc("locatario.documento", "CPF/CNPJ do locatário"),
-            Text("locatario.endereco", "Endereço atual do locatário"),
-            Text("imovel.endereco", "Endereço do imóvel alugado"),
-            Number("prazo.meses", "Prazo em meses"),
-            Date("prazo.inicio", "Início da locação"),
-            Money("aluguel.valor", "Valor do aluguel"),
-            Number("aluguel.vencimento", "Dia do vencimento"),
-            Text("reajuste.indice", "Índice de reajuste (ex.: IPCA)"),
-            Text("garantia.descricao", "Garantia (ex.: caução de 3 aluguéis)"),
-            Text("foro.cidade", "Cidade do foro"),
-            Text("assinatura.cidade", "Cidade da assinatura"),
-            Date("assinatura.data", "Data da assinatura"),
-        ],
-        [
-            new("Locador", SignerAction.Sign, 1),
-            new("Locatário", SignerAction.Sign, 2),
-        ]);
-
-    /// <summary>
-    /// Honorários advocatícios. Chaves e rótulos pensados para o Causify preencher sozinho:
-    /// <c>contratante.*</c> é o cliente, <c>contratada.*</c> e <c>advogado.*</c> são o escritório.
-    /// Evite "comarca" e "valor de cada parcela" nos rótulos: confundem a sugestão de fonte de lá.
-    /// As variáveis opcionais ficam em trechos <c>{{#se}}</c>: sem valor, a frase some do documento.
-    /// </summary>
-    private static TemplateStarter HonorariosAdvocaticios() => new(
-        "honorarios-advocaticios",
-        "Prestação de serviços advocatícios (honorários)",
-        "Contrato de honorários com objeto, valor, forma de pagamento, multa, juros, êxito, sucumbência, LGPD e testemunhas.",
-        """
-        <h1>Contrato de Prestação de Serviços Advocatícios</h1>
-        <p><strong>CONTRATANTE:</strong> {{contratante.nome}}{{#se contratante.qualificacao}}, {{contratante.qualificacao}}{{/se}}, inscrito(a) no CPF/CNPJ sob o nº {{contratante.documento}}, com endereço em {{contratante.endereco}}{{#se contratante.email}}, e-mail {{contratante.email}}{{/se}}.</p>
-        <p><strong>CONTRATADA:</strong> {{contratada.nome}}{{#se contratada.cnpj}}, inscrita no CNPJ sob o nº {{contratada.cnpj}}{{/se}}, com sede em {{contratada.endereco}}, neste ato representada por {{advogado.nome}}, inscrito(a) na OAB sob o nº {{advogado.oab}}.</p>
-        <p>As partes acima identificadas celebram o presente contrato, que se rege pelas cláusulas seguintes.</p>
-
-        <h2>Cláusula 1ª – Do objeto</h2>
-        <p>1.1. A CONTRATADA prestará ao CONTRATANTE os seguintes serviços jurídicos: {{objeto}}.</p>
-        <p>1.2. Os serviços terão início em {{contrato.inicio}} e abrangem a atuação até a decisão final na instância em que a causa estiver, salvo disposição diversa no objeto. Recursos a tribunais superiores, ações autônomas, execuções e incidentes não previstos no objeto dependem de ajuste à parte.</p>
-        {{#se processo.numero}}<p>1.3. Processo relacionado: {{processo.numero}}.</p>{{/se}}
-
-        <h2>Cláusula 2ª – Dos honorários contratuais</h2>
-        <p>2.1. Pelos serviços, o CONTRATANTE pagará à CONTRATADA honorários de {{valor.total}}.</p>
-        <p>2.2. Forma de pagamento: {{pagamento.forma}}.{{#se valor.entrada}} Entrada de {{valor.entrada}}.{{/se}}{{#se parcelas.quantidade}} Pagamento em {{parcelas.quantidade}} parcela(s){{#se pagamento.primeiro_vencimento}}, com o primeiro vencimento em {{pagamento.primeiro_vencimento}} e as demais nos meses subsequentes, no mesmo dia{{/se}}.{{/se}}</p>
-        <p>2.3. Em caso de atraso, incidirão multa de {{multa.percentual}}% sobre o valor em atraso e juros de mora de {{juros.percentual}}% ao mês, calculados pro rata die, além de correção monetária.</p>
-        {{#se exito.percentual}}<p>2.4. Honorários de êxito: {{exito.percentual}}% sobre o proveito econômico obtido pelo CONTRATANTE, devidos no recebimento.</p>{{/se}}
-
-        <h2>Cláusula 3ª – Dos honorários de sucumbência</h2>
-        <p>3.1. Os honorários de sucumbência pertencem exclusivamente à CONTRATADA (art. 23 da Lei nº 8.906/1994) e não se compensam com os honorários contratuais.</p>
-
-        <h2>Cláusula 4ª – Das despesas</h2>
-        <p>4.1. Custas, emolumentos, perícias, diligências, cópias e deslocamentos fora da comarca correm por conta do CONTRATANTE, mediante prévia comunicação e comprovação.</p>
-
-        <h2>Cláusula 5ª – Das obrigações das partes</h2>
-        <p>5.1. A CONTRATADA atuará com zelo e diligência, mantendo o CONTRATANTE informado do andamento, sem garantia de resultado, por se tratar de obrigação de meio.</p>
-        <p>5.2. O CONTRATANTE fornecerá documentos e informações verdadeiros e completos, no prazo solicitado, e manterá seus dados de contato atualizados.</p>
-
-        <h2>Cláusula 6ª – Da rescisão e da revogação do mandato</h2>
-        <p>6.1. Qualquer das partes poderá encerrar este contrato mediante comunicação por escrito.</p>
-        <p>6.2. Na revogação do mandato ou rescisão sem culpa da CONTRATADA, serão devidos os honorários vencidos e os proporcionais aos serviços já prestados{{#se exito.percentual}}, além dos de êxito, se o proveito vier a ser obtido em razão do trabalho realizado{{/se}}.</p>
-
-        <h2>Cláusula 7ª – Da proteção de dados</h2>
-        <p>7.1. A CONTRATADA tratará os dados pessoais do CONTRATANTE exclusivamente para a execução deste contrato e o cumprimento de obrigações legais, nos termos da Lei nº 13.709/2018 (LGPD), com sigilo profissional.</p>
-
-        <h2>Cláusula 8ª – Da assinatura eletrônica</h2>
-        <p>8.1. As partes reconhecem a validade da assinatura eletrônica deste instrumento, nos termos do art. 10, § 2º, da MP nº 2.200-2/2001 e da Lei nº 14.063/2020, e do registro de evidências (data, hora, IP e autenticação) emitido pela plataforma de assinatura.</p>
-
-        <h2>Cláusula 9ª – Do foro</h2>
-        <p>9.1. Fica eleito o foro da comarca de {{foro.cidade}} para dirimir quaisquer questões oriundas deste contrato.</p>
-
-        <p>{{assinatura.cidade}}, {{assinatura.data}}.</p>
-
-        <p>_________________________________________<br>CONTRATANTE: {{contratante.nome}}</p>
-        <p>_________________________________________<br>CONTRATADA: {{contratada.nome}}<br>{{advogado.nome}} – OAB {{advogado.oab}}</p>
-        <p><strong>TESTEMUNHAS:</strong></p>
-        <p>1. _______________________________________</p>
-        <p>2. _______________________________________</p>
-        """,
-        [
-            // Partes
-            Text("contratante.nome", "Nome do contratante"),
-            Doc("contratante.documento", "CPF ou CNPJ do contratante"),
-            Text("contratante.qualificacao", "Qualificação do contratante (nacionalidade, estado civil, profissão)", required: false),
-            Text("contratante.endereco", "Endereço completo do contratante"),
-            Text("contratante.email", "E-mail do contratante", required: false),
-            Text("contratada.nome", "Nome do escritório (contratada)"),
-            Doc("contratada.cnpj", "CNPJ do escritório (contratada)", required: false),
-            Text("contratada.endereco", "Endereço do escritório"),
-            Text("advogado.nome", "Nome do advogado responsável"),
-            Text("advogado.oab", "Inscrição na OAB do advogado (nº/UF)"),
-            // Objeto
-            Text("objeto", "Serviço contratado (objeto)"),
-            Text("processo.numero", "Número do processo, se já houver", required: false),
-            Date("contrato.inicio", "Início da prestação dos serviços"),
-            // Honorários e pagamento
-            Money("valor.total", "Valor total dos honorários"),
-            Text("pagamento.forma", "Forma de pagamento"),
-            Money("valor.entrada", "Valor da entrada", required: false),
-            Number("parcelas.quantidade", "Quantidade de parcelas", required: false),
-            Date("pagamento.primeiro_vencimento", "Vencimento da 1ª parcela", required: false),
-            Number("multa.percentual", "Multa por atraso (%)"),
-            Number("juros.percentual", "Juros de mora ao mês (%)"),
-            Number("exito.percentual", "Honorários de êxito (% do proveito econômico)", required: false),
-            // Fechamento
-            Text("foro.cidade", "Cidade do foro"),
-            Text("assinatura.cidade", "Cidade da assinatura"),
-            Date("assinatura.data", "Data da assinatura"),
-        ],
-        [
-            new("Contratante", SignerAction.Sign, 1),
-            new("Contratada", SignerAction.Sign, 2),
-            new("Testemunha", SignerAction.SignAsWitness, 3),
-            new("Testemunha", SignerAction.SignAsWitness, 4),
-        ]);
+    /// <summary>Foro, cidade e data da assinatura.</summary>
+    private static TemplateVariable[] Forum() => [Text("foro.cidade", "Cidade do foro"), .. Closing()];
 }

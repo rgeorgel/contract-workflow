@@ -1,4 +1,5 @@
 using Contratos.Api.Security;
+using Contratos.Application.Common;
 using Contratos.Application.Templates;
 
 namespace Contratos.Api.Endpoints;
@@ -33,10 +34,17 @@ internal static class TemplatesEndpoints
                 TypedResults.Ok(await templates.ListAsync(archived ?? false, ct)))
             .WithSummary("Lista os templates (ativos ou arquivados)");
 
-        g.MapGet("/starters", () => TypedResults.Ok(TemplateStarters.All
-                .Select(s => new TemplateStarterItem(s.Id, s.Name, s.Description, s.Variables.Count)).ToList()))
+        g.MapGet("/starters", () => TypedResults.Ok(TemplateStarters.Catalog()))
             .RequireAuthorization(access.EditPolicy)
-            .WithSummary("Modelos prontos para começar um template");
+            .WithSummary("Modelos prontos para começar um template, com os setores que os agrupam");
+
+        g.MapGet("/starters/{starterId}", (string starterId, DocumentRenderer renderer) =>
+                TemplateStarters.Find(starterId) is { } s
+                    ? (IResult)TypedResults.Ok(new TemplateStarterDetail(s.Id, s.Category, s.Name, s.Description, s.Variables,
+                        s.DefaultSignerRoles, renderer.RenderOutline(s.BodyHtml, s.Variables)))
+                    : Error.NotFound("Modelo pronto não encontrado.").ToHttp())
+            .RequireAuthorization(access.EditPolicy)
+            .WithSummary("Um modelo pronto: variáveis, signatários e o texto para pré-visualizar");
 
         g.MapPost("/preview", (PreviewTemplateRequest req, ITemplateService templates, HttpContext http) =>
                 templates.PreviewUnsaved(req).ToHttp(html => Html(http, html)))

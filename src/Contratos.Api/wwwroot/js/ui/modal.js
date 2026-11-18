@@ -2,10 +2,10 @@ import { h } from './dom.js';
 
 /**
  * Abre um <dialog> modal. `body` é um nó; `actions` define os botões do rodapé.
- * Retorna { dialog, close }. Esc e o botão Cancelar fecham.
+ * Retorna { dialog, close }. Esc e o botão Cancelar fecham. `className` muda o tamanho (ex.: 'modal--wide').
  */
-export function openModal({ title, description, body, actions = [], onClose }) {
-  const dialog = h('dialog', { class: 'modal', 'aria-labelledby': 'modal-title' },
+export function openModal({ title, description, body, actions = [], onClose, className }) {
+  const dialog = h('dialog', { class: className ? `modal ${className}` : 'modal', 'aria-labelledby': 'modal-title' },
     h('div', { class: 'modal__header' },
       h('h2', { id: 'modal-title' }, title),
       description ? h('p', {}, description) : null),

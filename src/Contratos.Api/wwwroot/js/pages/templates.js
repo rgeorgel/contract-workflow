@@ -1,9 +1,8 @@
-import { api, ApiError } from '../api.js';
+import { api } from '../api.js';
 import { requireUser } from '../auth.js';
 import { can, EMBED, href, notify } from '../embed.js';
+import { openNewTemplate as openNew } from './template-new.js';
 import { clear, h, icon, ICONS } from '../ui/dom.js';
-import { applyErrors, clearErrors, setBusy, setFieldError, showAlert } from '../ui/form.js';
-import { openModal } from '../ui/modal.js';
 import { formatRelative } from '../utils/format.js';
 
 const me = await requireUser();
@@ -59,84 +58,6 @@ async function load() {
   } catch (err) {
     clear(listEl).append(h('div', { class: 'panel__body' }, h('div', { class: 'alert alert--error' }, err.message)));
   }
-}
-
-let starters = null;
-
-/** Modelos prontos; se a lista não vier, o modal oferece só o "em branco". */
-async function loadStarters() {
-  if (starters) return starters;
-  try { starters = await api('/templates/starters'); } catch { return []; }
-  return starters;
-}
-
-function startCard(value, title, description, checked) {
-  return h('label', { class: 'radio-card' },
-    h('input', { type: 'radio', name: 'starter', value, checked }),
-    h('div', {}, h('strong', {}, title), h('span', {}, description)));
-}
-
-async function openNew() {
-  const options = await loadStarters();
-  const alertEl = h('div', { class: 'alert alert--error', role: 'alert', hidden: true });
-  const form = h('form', { class: 'form', id: 'new-template', novalidate: true },
-    alertEl,
-    h('fieldset', { class: 'fieldset field' },
-      h('legend', { class: 'field__label' }, 'Começar com'),
-      h('div', { class: 'radio-cards', 'data-starters': true },
-        startCard('', 'Em branco', 'Escreva ou cole o seu próprio texto.', true),
-        options.map((s) => startCard(s.id, s.name, `${s.description} ${s.variableCount} variáveis já cadastradas.`, false))),
-      options.length ? h('p', { class: 'field__hint' }, 'Os modelos são um ponto de partida: revise o texto com o seu jurídico antes de publicar.') : null,
-      h('p', { class: 'field__error', 'data-error-for': 'starterId' })),
-    h('div', { class: 'field' },
-      h('label', { class: 'field__label', for: 't-name' }, 'Nome'),
-      h('input', { class: 'input', id: 't-name', name: 'name', maxlength: 120, required: true, placeholder: 'Ex.: Prestação de serviços' }),
-      h('p', { class: 'field__error', 'data-error-for': 'name' })),
-    h('div', { class: 'field' },
-      h('label', { class: 'field__label', for: 't-desc' }, 'Descrição ', h('span', { class: 'muted' }, '(opcional)')),
-      h('input', { class: 'input', id: 't-desc', name: 'description', maxlength: 500 }),
-      h('p', { class: 'field__error', 'data-error-for': 'description' })));
-  const submit = h('button', { type: 'submit', class: 'btn btn--primary', form: 'new-template' }, 'Criar e editar');
-  const { close } = openModal({
-    title: 'Novo template',
-    description: options.length ? 'Comece de um modelo pronto ou do zero.' : null,
-    body: form,
-    actions: [h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => close() }, 'Cancelar'), submit],
-  });
-  form.elements.name.focus();
-
-  // Escolher um modelo sugere o nome dele, sem apagar o que a pessoa já digitou.
-  let suggestedName = '';
-  form.querySelector('[data-starters]').addEventListener('change', (e) => {
-    const nameEl = form.elements.name;
-    const starter = options.find((s) => s.id === e.target.value);
-    const next = starter?.name ?? '';
-    if (!nameEl.value.trim() || nameEl.value.trim() === suggestedName) nameEl.value = next;
-    suggestedName = next;
-  });
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    clearErrors(form);
-    const name = form.elements.name.value.trim();
-    if (name.length < 2) { setFieldError(form, 'name', 'Informe o nome do template.'); form.elements.name.focus(); return; }
-    setBusy(submit, true);
-    try {
-      const t = await api('/templates', {
-        method: 'POST',
-        body: {
-          name,
-          description: form.elements.description.value.trim() || null,
-          starterId: form.elements.starter.value || null,
-        },
-      });
-      notify('template.created', { template: { id: t.id, name: t.name } });
-      location.assign(href(`/template-editor.html?id=${t.id}`));
-    } catch (err) {
-      setBusy(submit, false);
-      if (!(err instanceof ApiError && applyErrors(form, err.errors))) showAlert(alertEl, err.message);
-    }
-  });
 }
 
 for (const tab of document.querySelectorAll('[data-filter]')) {

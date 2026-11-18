@@ -4,14 +4,27 @@ import { signUp } from './helpers.js';
 test('template a partir de modelo pronto, com pré-visualização ao vivo antes de salvar', async ({ page, request }) => {
   await signUp(page, request);
 
-  // 1. Modal: os modelos prontos aparecem ao lado do "Em branco", e escolher um sugere o nome.
+  // 1. Modal: galeria por setor. Filtrar, buscar, escolher e conferir o modelo antes de criar.
   await page.goto('/templates.html');
   await page.getByRole('button', { name: 'Novo template' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('radio', { name: /Em branco/ })).toBeChecked();
-  await expect(dialog.getByRole('radio')).toHaveCount(5);
-  await expect(dialog.getByRole('radio', { name: /Prestação de serviços advocatícios/ })).toBeVisible();
-  await dialog.getByRole('radio', { name: /Prestação de serviços(?! advocatícios)/ }).check();
+  await expect(dialog.getByRole('radio', { name: 'Em branco' })).toBeChecked();
+  await dialog.getByRole('button', { name: /Advocacia/ }).click();
+  await expect(dialog.getByRole('radio', { name: 'Prestação de serviços advocatícios (honorários)' })).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: 'Locação residencial' })).toBeHidden();
+  await dialog.getByRole('searchbox', { name: 'Buscar modelo' }).fill('locacao');
+  await expect(dialog.getByRole('radio', { name: 'Locação residencial' })).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: 'Locação comercial' })).toBeVisible();
+  await dialog.getByRole('searchbox', { name: 'Buscar modelo' }).fill('');
+  await dialog.getByRole('button', { name: /Geral/ }).click();
+  await dialog.getByText('Prestação de serviços', { exact: true }).click();
+  await expect(dialog.getByRole('radio', { name: 'Prestação de serviços', exact: true })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Continuar' }).click();
+
+  // Conferência: o texto com os campos em destaque, quem assina e o nome sugerido.
+  await expect(dialog.getByRole('article').getByRole('heading', { name: 'Contrato de Prestação de Serviços' })).toBeVisible();
+  await expect(dialog.getByRole('article').getByText('Nome do contratante').first()).toBeVisible();
+  await expect(dialog.getByRole('list').getByText('Contratante')).toBeVisible();
   await expect(dialog.getByLabel('Nome', { exact: true })).toHaveValue('Prestação de serviços');
   await dialog.getByRole('button', { name: 'Criar e editar' }).click();
 
@@ -43,6 +56,7 @@ test('editor visual: formatação, variável digitada vira etiqueta e o HTML sai
   await signUp(page, request);
   await page.goto('/templates.html');
   await page.getByRole('button', { name: 'Novo template' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('dialog').getByLabel('Nome', { exact: true }).fill('Do zero');
   await page.getByRole('dialog').getByRole('button', { name: 'Criar e editar' }).click();
   await expect(page).toHaveURL(/template-editor\.html/);
@@ -93,6 +107,7 @@ test('trecho condicional {{#se}}: a chave é cadastrada e a publicação recusa 
   await signUp(page, request);
   await page.goto('/templates.html');
   await page.getByRole('button', { name: 'Novo template' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('dialog').getByLabel('Nome', { exact: true }).fill('Com condicional');
   await page.getByRole('dialog').getByRole('button', { name: 'Criar e editar' }).click();
   await expect(page).toHaveURL(/template-editor\.html/);

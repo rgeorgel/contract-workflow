@@ -34,6 +34,19 @@ public sealed class DocumentRenderer(IHtmlSanitizer sanitizer)
     public string RenderSample(string title, string bodyHtml, IReadOnlyList<TemplateVariable> variables) =>
         Render(title, bodyHtml, variables, variables.ToDictionary(v => v.Key, VariableValues.Sample, StringComparer.Ordinal));
 
+    /// <summary>
+    /// Só o corpo, para mostrar um modelo antes de existir: cada variável vira o rótulo em destaque
+    /// (<c>&lt;span class="var"&gt;</c>) e os trechos opcionais aparecem todos.
+    /// </summary>
+    public string RenderOutline(string bodyHtml, IReadOnlyList<TemplateVariable> variables)
+    {
+        var labels = variables.ToDictionary(v => v.Key, v => v.Label, StringComparer.Ordinal);
+        var all = Placeholders.ApplyConditionals(bodyHtml, _ => true);
+        var marked = Placeholders.Replace(all, key =>
+            $"<span class=\"var\">{WebUtility.HtmlEncode(labels.GetValueOrDefault(key, key))}</span>");
+        return sanitizer.Sanitize(marked);
+    }
+
     private static string Page(string title, string body) => $$"""
         <!doctype html>
         <html lang="pt-BR">

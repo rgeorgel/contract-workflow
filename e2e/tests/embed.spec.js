@@ -65,6 +65,7 @@ test('embed: o cliente cria e publica um template dentro do próprio sistema', a
   await expect.poll(() => messageTypes(crm)).toContain('ready');
 
   await frame.getByRole('button', { name: 'Novo template' }).click();
+  await frame.getByRole('dialog').getByRole('button', { name: 'Continuar' }).click();
   await frame.getByRole('dialog').getByLabel('Nome').fill('Locação residencial');
   await frame.getByRole('button', { name: 'Criar e editar' }).click();
   await expect(frame.getByRole('heading', { name: 'Locação residencial', level: 1 })).toBeVisible();

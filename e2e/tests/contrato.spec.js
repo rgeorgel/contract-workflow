@@ -14,6 +14,7 @@ test('do template ao contrato assinado, e encontrado pela busca', async ({ page,
   // 1. Template: escreve, cadastra as variáveis do texto, publica.
   await page.goto('/templates.html');
   await page.getByRole('button', { name: 'Novo template' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Continuar' }).click();
   await page.getByLabel('Nome', { exact: true }).fill('Locação residencial');
   await page.getByRole('button', { name: 'Criar e editar' }).click();
   await expect(page).toHaveURL(/template-editor\.html/);
