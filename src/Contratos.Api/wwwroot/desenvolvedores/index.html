@@ -286,6 +286,7 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
                 <tr><td>409</td><td><code>already_final</code></td><td>Enviar ou cancelar um contrato já concluído, recusado, expirado ou cancelado (inclusive um rascunho cancelado, que nunca saiu).</td></tr>
                 <tr><td>409</td><td><code>channel_not_in_plan</code></td><td>Canal (SMS, por exemplo) fora do plano.</td></tr>
                 <tr><td>409</td><td><code>cannot_resend</code></td><td>O signatário já assinou ou recusou, ou o contrato não está mais aberto.</td></tr>
+                <tr><td>409</td><td><code>resend_too_soon</code></td><td>O link saiu há pouco e a Autentique ainda não permite reenviar. Nada foi enviado; o link anterior continua valendo. Tente mais tarde.</td></tr>
                 <tr><td>409</td><td><code>too_many_endpoints</code></td><td>A conta já tem 10 webhooks.</td></tr>
                 <tr><td>409</td><td><code>endpoint_disabled</code></td><td>Enviar teste para um webhook desativado.</td></tr>
                 <tr><td>409</td><td><code>too_many_origins</code></td><td>A conta já tem 10 sites cadastrados para o embed.</td></tr>
@@ -498,7 +499,7 @@ $contract = json_decode(curl_exec($ch), true);</code></pre>
 
           <h3 id="reenviar-link">Reenviar o link a um signatário</h3>
           <div class="endpoint"><span class="method method--post">POST</span><span class="endpoint__path">/contracts/{id}/signers/{signerId}/resend</span></div>
-          <p>Manda o link de novo, pelo mesmo canal, a quem ainda não assinou.</p>
+          <p>Manda o link de novo, pelo mesmo canal, a quem ainda não assinou. O envio acontece durante a chamada: se a Autentique recusar porque o link saiu há pouco, a resposta é 409 <code>resend_too_soon</code> e nada é registrado na linha do tempo.</p>
         </section>
 
         <section id="objeto-contrato" aria-labelledby="objeto-contrato-t">

@@ -45,7 +45,7 @@ public sealed class FakeSignatureProvider(IFileStorage storage, IOptions<FakeSig
 
     public Task DeleteDocumentAsync(string documentId, CancellationToken ct) => storage.DeletePrefixAsync(Key(documentId), ct);
 
-    public Task ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct) => Task.CompletedTask;
+    public Task<bool> ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct) => Task.FromResult(true);
 
     public Task<DocumentStatus> GetDocumentAsync(string documentId, CancellationToken ct) =>
         Task.FromResult(new DocumentStatus(documentId, false, []));

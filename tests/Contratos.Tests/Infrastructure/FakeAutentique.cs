@@ -39,6 +39,9 @@ public sealed class FakeAutentique : HttpMessageHandler
     /// <summary>Enquanto definido, todo createDocument responde com isto.</summary>
     public Func<HttpResponseMessage>? FailCreateDocument { get; set; }
 
+    /// <summary>Enquanto verdadeiro, resendSignatures responde too_many_resent_emails (link enviado há pouco).</summary>
+    public bool RefuseResend { get; set; }
+
     /// <summary>Enquanto verdadeiro, createLinkToSignature responde com erro.</summary>
     public bool FailSignLink { get; set; }
 
@@ -102,7 +105,9 @@ public sealed class FakeAutentique : HttpMessageHandler
         if (query.Contains("deleteDocument", StringComparison.Ordinal))
             return Json("""{"data":{"deleteDocument":true}}""");
         if (query.Contains("resendSignatures", StringComparison.Ordinal))
-            return Json("""{"data":{"resendSignatures":true}}""");
+            return RefuseResend
+                ? Json("""{"errors":[{"message":"too_many_resent_emails"}],"data":null}""")
+                : Json("""{"data":{"resendSignatures":true}}""");
         if (query.Contains("files", StringComparison.Ordinal))
             return Json(new JsonObject { ["data"] = new JsonObject { ["document"] = new JsonObject { ["files"] = new JsonObject { ["original"] = "https://storage.googleapis.test/o.pdf", ["signed"] = SignedPdfUrl } } } }.ToJsonString());
         if (query.Contains("document(", StringComparison.Ordinal))

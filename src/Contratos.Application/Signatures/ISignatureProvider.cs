@@ -47,7 +47,11 @@ public interface ISignatureProvider
     string Name { get; }
     Task<CreatedDocument> CreateDocumentAsync(DocumentRequest req, Stream pdf, CancellationToken ct);
     Task DeleteDocumentAsync(string documentId, CancellationToken ct);
-    Task ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct);
+    /// <summary>
+    /// Reenvia o link. Falso quando o provedor não reenviou porque o link saiu há pouco
+    /// (a Autentique recusa com <c>too_many_resent_emails</c> e não diz o intervalo).
+    /// </summary>
+    Task<bool> ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct);
     Task<DocumentStatus> GetDocumentAsync(string documentId, CancellationToken ct);
     Task<Stream> DownloadSignedPdfAsync(string documentId, CancellationToken ct);
     /// <summary>Saldo da conta; null quando o provedor não tem saldo (fake).</summary>

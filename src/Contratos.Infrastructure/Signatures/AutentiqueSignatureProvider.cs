@@ -186,17 +186,19 @@ internal sealed class AutentiqueSignatureProvider(
         }
     }
 
-    public async Task ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct)
+    public async Task<bool> ResendAsync(IReadOnlyList<string> signaturePublicIds, CancellationToken ct)
     {
         try
         {
             var ids = string.Join(", ", signaturePublicIds.Select(Literal));
             await QueryAsync($"mutation {{ resendSignatures(public_ids: [{ids}]) }}", [], ct);
+            return true;
         }
         catch (AutentiqueException e) when (e.Code == "too_many_resent_emails")
         {
-            // A Autentique limita reenvios em sequência; o link enviado há pouco continua valendo.
-            logger.LogInformation("Reenvio ignorado pela Autentique (enviado há pouco)");
+            // A Autentique limita reenvios em sequência (todos os ids saíram há pouco); nada foi enviado.
+            logger.LogInformation("Reenvio recusado pela Autentique (enviado há pouco)");
+            return false;
         }
     }
 

@@ -849,7 +849,7 @@
             }
           },
           "409": {
-            "description": "Conflito de estado: `already_sent`, `already_final`, `quota_exceeded`, `channel_not_in_plan`, `cannot_resend`, `pdf_failed`.",
+            "description": "Conflito de estado: `already_sent`, `already_final`, `quota_exceeded`, `channel_not_in_plan`, `cannot_resend`, `resend_too_soon`, `pdf_failed`.",
             "content": {
               "application/problem+json": {
                 "schema": {

@@ -625,9 +625,29 @@ internal sealed class ContractService(
         if (!contract.IsOpen || !signer.CanResend)
             return Error.Conflict("Não dá para reenviar o link para este signatário agora.", "cannot_resend");
 
+        // Na hora, e não pela outbox: quem clicou precisa saber se a mensagem saiu. A Autentique recusa
+        // reenviar um link que acabou de sair, e "Link reenviado" sem e-mail nenhum engana.
+        try
+        {
+            if (!await provider.ResendAsync([signer.AutentiquePublicId!], ct))
+                return Error.Conflict(
+                    $"O link foi enviado há pouco para {signer.Name}, e a Autentique ainda não permite reenviar. O link enviado continua valendo; tente de novo mais tarde.",
+                    "resend_too_soon");
+        }
+        catch (SignatureProviderException e) when (e.Permanent)
+        {
+            return Error.Conflict($"A Autentique recusou o reenvio: {e.Message}", "cannot_resend");
+        }
+        catch (Exception e) when (e is SignatureProviderException or HttpRequestException
+            || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            // Autentique fora do ar ou no limite de requisições: a outbox tenta de novo.
+            logger.LogWarning(e, "Reenvio do contrato {ContractId} adiado para a outbox", contract.Id);
+            db.Enqueue(OutboxTypes.ResendSignature, new ResendMessage(contract.Id, signer.Id));
+        }
+
         db.ContractEvents.Add(new ContractEvent(contract.Id, ContractEventTypes.LinkResent, signer.Id, tenant.UserId,
             new() { ["channel"] = signer.DeliveryMethod.ToString() }));
-        db.Enqueue(OutboxTypes.ResendSignature, new ResendMessage(contract.Id, signer.Id));
         return await SaveAndDetailAsync(contract, ct);
     }
 

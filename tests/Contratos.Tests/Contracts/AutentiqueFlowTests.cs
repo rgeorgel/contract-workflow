@@ -221,6 +221,38 @@ public sealed class AutentiqueFlowTests(AutentiqueApiFactory factory)
     }
 
     [Fact]
+    public async Task Resend_goes_out_at_once_and_a_refusal_for_being_too_soon_is_shown_not_hidden()
+    {
+        var (admin, id) = await SentAsync();
+        var signer = (await LoadAsync(id)).Signers.Single(s => s.Email == "marina@cliente.com.br");
+        var url = $"/api/v1/contracts/{id}/signers/{signer.Id}/resend";
+
+        // Sem esperar a outbox: a mutation sai durante a requisição.
+        var before = Autentique.Mutations("resendSignatures").Count();
+        Assert.Equal(HttpStatusCode.OK, (await admin.Client.SendAsync(HttpMethod.Post, url, null)).StatusCode);
+        var sent = Autentique.Mutations("resendSignatures").ToList();
+        Assert.Equal(before + 1, sent.Count);
+        Assert.Contains(signer.AutentiquePublicId!, sent.Last().Query!, StringComparison.Ordinal);
+        Assert.Equal(1, await EventCountAsync(id, ContractEventTypes.LinkResent));
+
+        Autentique.RefuseResend = true;
+        try
+        {
+            var refused = await admin.Client.SendAsync(HttpMethod.Post, url, null);
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            var problem = await refused.JsonAsync();
+            Assert.Equal("resend_too_soon", problem.GetProperty("code").GetString());
+            Assert.Contains("Marina Costa", problem.GetProperty("title").GetString(), StringComparison.Ordinal);
+            // A linha do tempo não diz "Link reenviado" quando nada saiu.
+            Assert.Equal(1, await EventCountAsync(id, ContractEventTypes.LinkResent));
+        }
+        finally
+        {
+            Autentique.RefuseResend = false;
+        }
+    }
+
+    [Fact]
     public async Task Reconciliation_applies_what_the_webhooks_missed()
     {
         var (admin, id) = await SentAsync();

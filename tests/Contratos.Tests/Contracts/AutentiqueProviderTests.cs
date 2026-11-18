@@ -244,10 +244,10 @@ public sealed class AutentiqueProviderTests
     }
 
     [Fact]
-    public async Task Resend_too_soon_is_not_an_error()
+    public async Task Resend_too_soon_is_reported_as_not_sent()
     {
         var handler = new Respond(_ => Json("""{"errors":[{"message":"too_many_resent_emails"}],"data":null}"""));
-        await Provider(handler).ResendAsync(["s"], CancellationToken.None);
+        Assert.False(await Provider(handler).ResendAsync(["s"], CancellationToken.None));
     }
 
     [Fact]
