@@ -1,3 +1,4 @@
+import { api, resetCsrf } from '../api.js';
 import { getMe, logout, roleLabel } from '../auth.js';
 import { EMBED } from '../embed.js';
 import { h, icon, ICONS } from '../ui/dom.js';
@@ -44,8 +45,36 @@ class AppNav extends HTMLElement {
           h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: logout }, 'Sair'),
           toggle)),
       drawer),
+    impersonationBanner(me),
     overdueBanner(me)].filter(Boolean));
   }
+}
+
+const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+/** "Entrar como": a equipe da plataforma está usando esta conta. Sempre visível, com o caminho de volta. */
+function impersonationBanner(me) {
+  if (!me.impersonation) return null;
+  const back = h('button', {
+    type: 'button', class: 'btn btn--sm impersonation-banner__btn',
+    onclick: async () => {
+      back.disabled = true;
+      try {
+        const res = await api('/auth/stop-impersonation', { method: 'POST' });
+        resetCsrf();
+        location.assign(res.redirect);
+      } catch {
+        location.assign('/login.html');
+      }
+    },
+  }, 'Voltar ao super admin');
+  const until = me.impersonation.expiresAt ? ` Sessão até ${timeFmt.format(new Date(me.impersonation.expiresAt))}.` : '';
+  return h('div', { class: 'impersonation-banner', role: 'status' },
+    h('div', { class: 'container impersonation-banner__inner' },
+      h('span', {},
+        h('strong', {}, `${me.impersonation.impersonatorName}, você está como ${me.name}`),
+        ` (${me.organization.name}). Acesso total: cada alteração fica registrada.${until}`),
+      back));
 }
 
 /** Pagamento da assinatura recusado: aviso em todas as páginas, com o que está bloqueado e como regularizar. */

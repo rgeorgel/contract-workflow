@@ -269,3 +269,10 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .origin-form__row { display: flex; flex-wrap: wrap; gap: 8px; }
 .origin-form__row .input { flex: 1 1 260px; }
 .panel__footnote { border-top: 1px solid var(--color-border); }
+
+/* "Entrar como" da equipe da plataforma (app-nav) */
+.impersonation-banner { background: #2b1d5c; color: #fff; font-size: .9rem; }
+.impersonation-banner__inner { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
+.impersonation-banner__inner > span { flex: 1 1 420px; }
+.impersonation-banner__btn { background: #fff; color: #2b1d5c; flex: none; }
+.impersonation-banner__btn:hover { background: #ece8fb; color: #2b1d5c; }

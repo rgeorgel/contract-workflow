@@ -93,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IPlatformBillingService, PlatformBillingService>();
         services.AddScoped<Platform.PlatformAuditWriter>();
+        services.AddScoped<Platform.ImpersonationService>();
         services.AddScoped<Application.Platform.ISuperAdminService, Platform.SuperAdminService>();
         AddStripe(services, config);
         services.AddScoped<IContractService, ContractService>();

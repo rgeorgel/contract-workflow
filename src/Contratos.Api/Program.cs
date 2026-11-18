@@ -56,7 +56,18 @@ builder.Services.ConfigureApplicationCookie(o =>
 });
 builder.Services.AddAuthorization(Policies.Configure);
 // Perfil trocado ou usuário desativado: a sessão antiga cai em até 1 minuto.
-builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
+builder.Services.Configure<SecurityStampValidatorOptions>(o =>
+{
+    o.ValidationInterval = TimeSpan.FromMinutes(1);
+    // A revalidação refaz os claims a partir do usuário: os do "Entrar como" vêm da sessão e precisam passar adiante.
+    o.OnRefreshingPrincipal = ctx =>
+    {
+        if (ctx.NewPrincipal?.Identity is System.Security.Claims.ClaimsIdentity identity && ctx.CurrentPrincipal is { } current)
+            foreach (var claim in current.Claims.Where(c => Contratos.Infrastructure.Identity.AppClaims.Impersonation.Contains(c.Type)))
+                identity.AddClaim(new System.Security.Claims.Claim(claim.Type, claim.Value));
+        return Task.CompletedTask;
+    };
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentTenant, HttpCurrentTenant>();
 
@@ -173,6 +184,8 @@ app.UseSerilogRequestLogging(o =>
             diag.Set("UserId", userId);
         if (http.User.FindFirst(Contratos.Infrastructure.Identity.AppClaims.OrganizationId)?.Value is { } orgId)
             diag.Set("OrganizationId", orgId);
+        if (http.User.FindFirst(Contratos.Infrastructure.Identity.AppClaims.ImpersonatorId)?.Value is { } impersonatorId)
+            diag.Set("ImpersonatorId", impersonatorId);
     };
 });
 
@@ -199,7 +212,7 @@ app.MapHealthChecks("/health/live", HealthResponse.Options(_ => false));
 app.MapHealthChecks("/health/ready", HealthResponse.Options(r => r.Tags.Contains("ready")));
 app.MapHealthChecks("/health", HealthResponse.Options(r => r.Tags.Contains("ready")));
 
-var api = app.MapGroup("/api/v1").AddEndpointFilter<AntiforgeryFilter>();
+var api = app.MapGroup("/api/v1").AddEndpointFilter<AntiforgeryFilter>().AddEndpointFilter<ImpersonationAuditFilter>();
 api.MapAuthEndpoints();
 api.MapUsersEndpoints();
 api.MapOrganizationEndpoints();

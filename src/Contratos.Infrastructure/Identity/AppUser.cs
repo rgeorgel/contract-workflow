@@ -40,4 +40,12 @@ public static class AppClaims
     public const string Name = "name";
     /// <summary>Equipe da plataforma (e-mail em <c>Platform:AdminEmails</c>): acesso ao portal super admin.</summary>
     public const string PlatformAdmin = "platform_admin";
+
+    // "Entrar como": a equipe da plataforma usa a conta de um cliente. O cookie é do cliente; estes claims
+    // dizem quem da equipe está por trás e até quando (sessão curta, sem renovar).
+    public const string ImpersonatorId = "impersonator_id";
+    public const string ImpersonatorName = "impersonator_name";
+    public const string ImpersonationExpires = "impersonation_expires";
+
+    public static readonly string[] Impersonation = [ImpersonatorId, ImpersonatorName, ImpersonationExpires];
 }

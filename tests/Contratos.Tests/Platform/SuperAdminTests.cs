@@ -172,4 +172,90 @@ public sealed class SuperAdminTests(ApiFactory factory)
         Assert.True(overview.GetProperty("signupsByDay").EnumerateArray().Last().GetProperty("count").GetInt32() >= 2);
         Assert.True(overview.GetProperty("newest").GetArrayLength() >= 2);
     }
+
+    // ---------- Entrar como ----------
+
+    private static async Task<Guid> UserIdAsync(TestAccount account) =>
+        (await (await account.Client.GetAsync("/api/v1/auth/me")).JsonAsync()).GetProperty("id").GetGuid();
+
+    [Fact]
+    public async Task Entrar_como_usa_a_conta_do_cliente_e_registra_cada_alteracao()
+    {
+        var sa = await PlatformAdminAsync(6);
+        var customer = await TestAccounts.CreateAdminAsync(factory);
+        var orgId = await OrgIdAsync(customer);
+        var customerId = await UserIdAsync(customer);
+        var detail = await DetailAsync(sa, orgId);
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("users")[0].GetProperty("impersonationBlockedReason").ValueKind);
+
+        var start = await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/users/{customerId}/impersonate");
+        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+        Assert.Equal("/dashboard.html", (await start.JsonAsync()).GetProperty("redirect").GetString());
+
+        // A sessão agora é do cliente, sem o acesso ao portal, e sabe quem da equipe está por trás.
+        var me = await (await sa.Client.GetAsync("/api/v1/auth/me")).JsonAsync();
+        Assert.Equal(customerId, me.GetProperty("id").GetGuid());
+        Assert.False(me.GetProperty("platformAdmin").GetBoolean());
+        Assert.Equal("Admin Teste", me.GetProperty("impersonation").GetProperty("impersonatorName").GetString());
+        var expires = me.GetProperty("impersonation").GetProperty("expiresAt").GetDateTimeOffset();
+        Assert.InRange(expires, DateTimeOffset.UtcNow.AddMinutes(55), DateTimeOffset.UtcNow.AddMinutes(61));
+        Assert.Equal(HttpStatusCode.Forbidden, (await sa.Client.GetAsync("/api/v1/superadmin/overview")).StatusCode);
+
+        // Acesso total: cria um template como o cliente; a escrita (e a recusada) vão para a auditoria.
+        Assert.Equal(HttpStatusCode.Created, (await sa.Client.PostAsync("/api/v1/templates", new { name = "Feito pela equipe" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sa.Client.PostAsync("/api/v1/templates", new { name = "" })).StatusCode);
+
+        var stop = await sa.Client.PostAsync("/api/v1/auth/stop-impersonation");
+        Assert.Equal(HttpStatusCode.OK, stop.StatusCode);
+        Assert.Equal($"/superadmin/tenant.html?id={orgId}", (await stop.JsonAsync()).GetProperty("redirect").GetString());
+        Assert.True((await (await sa.Client.GetAsync("/api/v1/auth/me")).JsonAsync()).GetProperty("platformAdmin").GetBoolean());
+
+        var audit = (await DetailAsync(sa, orgId)).GetProperty("audit").EnumerateArray().ToList();
+        Assert.Equal(["ImpersonationEnded", "ImpersonatedWrite", "ImpersonatedWrite", "Impersonated"],
+            audit.Select(a => a.GetProperty("action").GetString()));
+        Assert.Equal("POST /api/v1/templates → 400", audit[1].GetProperty("details").GetString());
+        Assert.Equal("POST /api/v1/templates → 201", audit[2].GetProperty("details").GetString());
+        Assert.StartsWith("Admin Teste (como Admin Teste)", audit[2].GetProperty("actorName").GetString());
+        Assert.Contains(customer.Email, audit[3].GetProperty("details").GetString());
+
+        // A sessão de volta é a da equipe: sair de novo não faz sentido.
+        Assert.Equal(HttpStatusCode.Conflict, (await sa.Client.PostAsync("/api/v1/auth/stop-impersonation")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Entrar_como_recusa_equipe_desativados_e_contas_suspensas()
+    {
+        var sa = await PlatformAdminAsync(7);
+        var customer = await TestAccounts.CreateAdminAsync(factory);
+        var orgId = await OrgIdAsync(customer);
+        var editor = await TestAccounts.InviteAndAcceptAsync(factory, customer, "Editor");
+        var editorId = await UserIdAsync(editor);
+
+        // Clientes não usam a rota.
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await customer.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/users/{editorId}/impersonate")).StatusCode);
+
+        // Usuário de outra organização, alguém da equipe e a própria conta: não.
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{await OrgIdAsync(sa)}/users/{editorId}/impersonate")).StatusCode);
+        var self = await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{await OrgIdAsync(sa)}/users/{await UserIdAsync(sa)}/impersonate");
+        Assert.Equal(HttpStatusCode.Conflict, self.StatusCode);
+        Assert.Equal("cannot_impersonate", (await self.JsonAsync()).GetProperty("code").GetString());
+        var colleague = await PlatformAdminAsync(8);
+        var colleagueRes = await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{await OrgIdAsync(colleague)}/users/{await UserIdAsync(colleague)}/impersonate");
+        Assert.Equal(HttpStatusCode.Conflict, colleagueRes.StatusCode);
+
+        // Desativado.
+        Assert.Equal(HttpStatusCode.OK, (await customer.Client.PutAsync($"/api/v1/users/{editorId}", new { active = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/users/{editorId}/impersonate")).StatusCode);
+        var users = (await DetailAsync(sa, orgId)).GetProperty("users").EnumerateArray().ToList();
+        Assert.Contains(users, u => u.GetProperty("id").GetGuid() == editorId && u.GetProperty("impersonationBlockedReason").GetString() == "o usuário está desativado");
+
+        // Organização suspensa.
+        Assert.Equal(HttpStatusCode.OK, (await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/suspend", new { reason = "teste" })).StatusCode);
+        var customerId = users.Single(u => u.GetProperty("role").GetString() == "Admin").GetProperty("id").GetGuid();
+        var suspended = await sa.Client.PostAsync($"/api/v1/superadmin/tenants/{orgId}/users/{customerId}/impersonate");
+        Assert.Equal(HttpStatusCode.Conflict, suspended.StatusCode);
+        Assert.Contains("suspensa", (await suspended.JsonAsync()).GetProperty("title").GetString());
+    }
 }

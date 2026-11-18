@@ -18,7 +18,8 @@ namespace Contratos.Infrastructure.Platform;
 /// </summary>
 internal sealed class SuperAdminService(
     AppDbContext db, UsageMeter meter, BillingReader reader, IPlatformBillingService billing,
-    PlatformAuditWriter audit, ICurrentTenant tenant, TimeProvider clock) : ISuperAdminService
+    PlatformAuditWriter audit, ICurrentTenant tenant, TimeProvider clock,
+    Microsoft.Extensions.Options.IOptionsMonitor<PlatformOptions> platform) : ISuperAdminService
 {
     private static readonly TimeSpan Brt = TimeSpan.FromHours(-3);
     private const string LegacyFreeId = "gratis";
@@ -214,6 +215,7 @@ internal sealed class SuperAdminService(
         var org = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == id, ct);
         if (org is null)
             return Error.NotFound("Organização não encontrada.");
+        var options = platform.CurrentValue;
 
         var summary = (await BuildItemsAsync([org], ct))[0];
         var users = await db.Users.AsNoTracking().Where(u => u.OrganizationId == id)
@@ -240,7 +242,8 @@ internal sealed class SuperAdminService(
             await reader.BuildAsync(org, ct),
             users.Select(u => new TenantUserDto(u.Id, u.Name, u.Email!, u.Role.ToString(),
                 u.DeactivatedAt is not null ? "Desativado" : u.IsPendingInvite ? "Convidado" : !u.EmailConfirmed ? "Não confirmado" : "Ativo",
-                u.EmailConfirmed, u.CreatedAt, u.LastSeenAt)).ToList(),
+                u.EmailConfirmed, u.CreatedAt, u.LastSeenAt,
+                ImpersonationService.RefusalReason(u, org, tenant.UserId, options))).ToList(),
             templates, auditEntries);
     }
 

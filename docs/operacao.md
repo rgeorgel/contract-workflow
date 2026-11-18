@@ -123,6 +123,8 @@ Quem entra: usuários cujo e-mail está em `PLATFORM_ADMIN_EMAILS` (separados po
 
 Suspender uma organização: ninguém dela entra (login recusado com `account_suspended`, sessões abertas caem em até 1 minuto), as chaves de API e as sessões de embed param de valer. Contratos já enviados seguem com os signatários e os webhooks continuam saindo. A equipe não consegue suspender a própria organização.
 
+**Entrar como**: no detalhe do tenant, cada usuário ativo tem o botão "Entrar como". A pessoa da equipe passa a usar a conta dele com acesso total, por até 1 hora (a sessão não renova), com uma faixa no topo de todas as páginas e o botão "Voltar ao super admin". Fica na auditoria: a entrada (com quem e como quem), a saída e cada escrita feita no meio (`POST /api/v1/templates → 201`, por exemplo; sem corpo nem query string). Nos logs, essas requisições levam `ImpersonatorId`. Não dá para entrar como alguém da equipe, como a própria conta, como usuário desativado, convidado sem senha ou de e-mail não confirmado, nem numa organização suspensa. O "Entrar como" não altera o último acesso do cliente.
+
 "Último acesso" é gravado no login e quando a pessoa abre uma página (no máximo a cada 5 minutos); contas de antes desta versão aparecem como "Nunca acessou" até o próximo acesso.
 
 ## Assinatura online (Stripe)

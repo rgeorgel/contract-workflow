@@ -53,6 +53,7 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 **Portal super admin**
 - Em `/superadmin/`, para a equipe da plataforma (e-mails em `PLATFORM_ADMIN_EMAILS`): painel com cadastros, MRR e contratos; lista de organizações com plano, uso, atividade e último acesso; detalhe com linha do tempo
 - Trocar plano, conceder créditos, suspender e reativar a conta, com registro de quem fez
+- "Entrar como" um usuário do cliente (1 hora, acesso total), com cada alteração registrada na auditoria
 - Detalhes em [docs/operacao.md](docs/operacao.md#portal-super-admin)
 
 ## Rodando

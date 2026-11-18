@@ -44,9 +44,10 @@ public sealed record TenantListItem(
 public sealed record TenantListQuery(
     string? Q, string? Plan, string? Status, string? Activity, string? Sort, int Page = 1, int PageSize = 24);
 
+/// <param name="ImpersonationBlockedReason">Por que não dá para "Entrar como" esta pessoa; null quando dá.</param>
 public sealed record TenantUserDto(
     Guid Id, string Name, string Email, string Role, string Status, bool EmailConfirmed,
-    DateTimeOffset CreatedAt, DateTimeOffset? LastSeenAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? LastSeenAt, string? ImpersonationBlockedReason);
 
 public sealed record TemplateUsageDto(Guid Id, string Name, bool Archived, int Contracts, DateTimeOffset UpdatedAt);
 

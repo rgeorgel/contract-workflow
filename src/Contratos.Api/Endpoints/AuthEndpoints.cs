@@ -19,8 +19,12 @@ public sealed record CsrfResponse(string Token);
 public sealed record AcceptedResponse(string Message);
 /// <param name="PaymentOverdue">Assinatura com pagamento recusado: criar contratos, templates e usuários fica bloqueado.</param>
 public sealed record OrganizationSummary(Guid Id, string Name, string Slug, bool PaymentOverdue);
+/// <summary>Sessão de "Entrar como": quem da equipe está usando a conta e até quando.</summary>
+public sealed record ImpersonationInfo(string ImpersonatorName, DateTimeOffset? ExpiresAt);
 /// <param name="PlatformAdmin">Equipe da plataforma: vê o link do portal super admin.</param>
-public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization, bool PlatformAdmin);
+/// <param name="Impersonation">Preenchido quando alguém da equipe está usando esta conta ("Entrar como").</param>
+public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization, bool PlatformAdmin,
+    ImpersonationInfo? Impersonation = null);
 
 internal static class AuthEndpoints
 {
@@ -68,6 +72,10 @@ internal static class AuthEndpoints
             .WithSummary("Encerra a sessão");
         auth.MapGet("/me", Me).RequireAuthorization()
             .WithSummary("Usuário logado, perfil e organização");
+        auth.MapPost("/stop-impersonation", async (ClaimsPrincipal principal, Contratos.Infrastructure.Platform.ImpersonationService svc, CancellationToken ct) =>
+                (await svc.StopAsync(principal, ct)).ToHttp())
+            .RequireAuthorization()
+            .WithSummary("Encerra o \"Entrar como\" e volta para a conta da equipe");
 
         auth.MapPost("/forgot-password", ForgotPassword).RequireRateLimiting(RateLimitPolicy)
             .WithSummary("Envia o link de nova senha");
@@ -156,6 +164,15 @@ internal static class AuthEndpoints
             .SingleOrDefaultAsync(ct);
         if (me is null)
             return TypedResults.Unauthorized();
+
+        // "Entrar como" não conta como acesso do cliente.
+        if (principal.FindFirstValue(AppClaims.ImpersonatorName) is { } impersonator)
+            return TypedResults.Ok(me with
+            {
+                Impersonation = new ImpersonationInfo(impersonator,
+                    DateTimeOffset.TryParse(principal.FindFirstValue(AppClaims.ImpersonationExpires), System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var expires) ? expires : null),
+            });
 
         await TouchLastSeenAsync(db, userId, clock, ct);
         return TypedResults.Ok(me);

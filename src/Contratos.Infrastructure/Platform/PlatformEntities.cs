@@ -42,6 +42,10 @@ public static class PlatformActions
     public const string CreditsGranted = "CreditsGranted";
     public const string Suspended = "Suspended";
     public const string Reactivated = "Reactivated";
+    public const string Impersonated = "Impersonated";
+    public const string ImpersonationEnded = "ImpersonationEnded";
+    /// <summary>Uma escrita (POST/PUT/DELETE) feita durante o "Entrar como".</summary>
+    public const string ImpersonatedWrite = "ImpersonatedWrite";
 }
 
 internal sealed class PlatformAuditEntryConfiguration : IEntityTypeConfiguration<PlatformAuditEntry>

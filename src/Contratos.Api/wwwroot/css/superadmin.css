@@ -191,6 +191,7 @@ a.tenant-card:hover { color: var(--color-text); box-shadow: var(--shadow); borde
 .user-list__top strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-list__email { color: var(--color-muted); overflow-wrap: anywhere; }
 .user-list__seen { color: var(--color-subtle); font-size: .8rem; }
+.user-list__action { justify-self: start; margin-top: 6px; }
 .side-meters { display: grid; gap: 12px; }
 
 .kv { display: grid; gap: 8px; margin: 0; font-size: .9rem; }

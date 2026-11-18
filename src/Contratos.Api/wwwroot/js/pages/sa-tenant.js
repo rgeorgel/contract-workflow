@@ -1,10 +1,10 @@
-import { api, ApiError } from '../api.js';
+import { api, ApiError, resetCsrf } from '../api.js';
 import { roleLabel } from '../auth.js';
 import { requirePlatformAdmin } from '../superadmin/shell.js';
 import { accessLine, chip, cycleLabel, formatDate, formatDateTime, meterRow, planBadge, plural, SA_ICONS, statusBadge } from '../superadmin/common.js';
 import { clear, h, icon } from '../ui/dom.js';
 import { applyErrors, clearErrors, setBusy, showAlert } from '../ui/form.js';
-import { openModal } from '../ui/modal.js';
+import { confirmModal, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { formatMoney } from '../utils/billing.js';
 import { formatRelative } from '../utils/format.js';
@@ -61,8 +61,14 @@ const EVENT_LABELS = {
   CreditsGranted: () => 'Créditos concedidos pela equipe',
   Suspended: () => 'Conta suspensa',
   Reactivated: () => 'Conta reativada',
+  Impersonated: p('acesso da equipe ("Entrar como")', 'acessos da equipe ("Entrar como")'),
+  ImpersonationEnded: p('saída do "Entrar como"', 'saídas do "Entrar como"'),
+  ImpersonatedWrite: p('alteração feita pela equipe como o cliente', 'alterações feitas pela equipe como o cliente'),
 };
-const AUDIT_LABELS = { PlanChanged: 'Plano alterado', CreditsGranted: 'Créditos concedidos', Suspended: 'Conta suspensa', Reactivated: 'Conta reativada' };
+const AUDIT_LABELS = {
+  PlanChanged: 'Plano alterado', CreditsGranted: 'Créditos concedidos', Suspended: 'Conta suspensa', Reactivated: 'Conta reativada',
+  Impersonated: 'Entrou como', ImpersonationEnded: 'Saiu do "Entrar como"', ImpersonatedWrite: 'Alteração como o cliente',
+};
 
 const eventTitle = (g) => (EVENT_LABELS[g.type] ?? ((n) => `${n}× ${g.type}`))(g.count);
 
@@ -156,7 +162,10 @@ function sideColumn(d) {
       h('span', { class: 'user-list__email' }, u.email),
       h('span', { class: 'user-list__seen' }, u.lastSeenAt
         ? `Último acesso: ${formatDateTime(u.lastSeenAt)} (${formatRelative(u.lastSeenAt)})`
-        : `Nunca acessou · cadastro em ${formatDate(u.createdAt)}`))))),
+        : `Nunca acessou · cadastro em ${formatDate(u.createdAt)}`),
+      u.impersonationBlockedReason
+        ? null
+        : h('button', { type: 'button', class: 'btn btn--secondary btn--sm user-list__action', onclick: () => impersonate(u) }, 'Entrar como'))))),
     panel('Integrações', h('div', { class: 'panel__body' }, kv([
       ['Chaves de API ativas', String(t.integrations.apiKeys)],
       ['Webhooks', String(t.integrations.webhooks)],
@@ -360,6 +369,23 @@ function openSuspend() {
       return res;
     },
   });
+}
+
+async function impersonate(user) {
+  const ok = await confirmModal({
+    title: `Entrar como ${user.name}?`,
+    description: `Você passa a usar a conta de ${user.name} (${user.email}) em ${detail.summary.name}, com o mesmo acesso dela, por até 1 hora. `
+      + 'Cada alteração fica registrada na auditoria com o seu nome. Para voltar, use "Voltar ao super admin" na faixa do topo.',
+    confirmLabel: 'Entrar como',
+  });
+  if (!ok) return;
+  try {
+    const res = await api(`/superadmin/tenants/${id}/users/${encodeURIComponent(user.id)}/impersonate`, { method: 'POST' });
+    resetCsrf(); // o token antiforgery é da sessão, que agora é do cliente
+    location.assign(res.redirect);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 async function reactivate() {

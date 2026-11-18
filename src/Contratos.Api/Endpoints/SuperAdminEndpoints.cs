@@ -48,6 +48,11 @@ internal static class SuperAdminEndpoints
                 (await svc.ReactivateAsync(id, ct)).ToHttp())
             .WithSummary("Reativa uma organização suspensa");
 
+        g.MapPost("/tenants/{id:guid}/users/{userId:guid}/impersonate",
+                async (Guid id, Guid userId, Contratos.Infrastructure.Platform.ImpersonationService svc, CancellationToken ct) =>
+                (await svc.StartAsync(id, userId, ct)).ToHttp())
+            .WithSummary("Entrar como: abre uma sessão de 1 hora na conta do usuário, com acesso total e auditada");
+
         return api;
     }
 }
