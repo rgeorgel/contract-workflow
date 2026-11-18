@@ -52,6 +52,30 @@ public sealed class Organization
 
     public Plan Plan => Plans.Get(PlanId);
 
+    // ---------- Suspensão pela equipe da plataforma ----------
+
+    public const int SuspensionReasonMaxLength = 300;
+
+    /// <summary>Conta suspensa: ninguém entra (tela, API pública e embed) até ser reativada.</summary>
+    public DateTimeOffset? SuspendedAt { get; private set; }
+    public string? SuspensionReason { get; private set; }
+
+    public bool IsSuspended => SuspendedAt is not null;
+
+    public void Suspend(string? reason, DateTimeOffset at)
+    {
+        if (reason?.Trim().Length > SuspensionReasonMaxLength)
+            throw new ArgumentException("Motivo longo demais.", nameof(reason));
+        SuspendedAt = at;
+        SuspensionReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+    }
+
+    public void Reactivate()
+    {
+        SuspendedAt = null;
+        SuspensionReason = null;
+    }
+
     // ---------- Assinatura no provedor de cobrança (Stripe) ----------
 
     public string? StripeCustomerId { get; private set; }

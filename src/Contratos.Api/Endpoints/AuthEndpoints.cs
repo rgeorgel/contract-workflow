@@ -19,11 +19,29 @@ public sealed record CsrfResponse(string Token);
 public sealed record AcceptedResponse(string Message);
 /// <param name="PaymentOverdue">Assinatura com pagamento recusado: criar contratos, templates e usuários fica bloqueado.</param>
 public sealed record OrganizationSummary(Guid Id, string Name, string Slug, bool PaymentOverdue);
-public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization);
+/// <param name="PlatformAdmin">Equipe da plataforma: vê o link do portal super admin.</param>
+public sealed record MeResponse(Guid Id, string Name, string Email, string Role, OrganizationSummary Organization, bool PlatformAdmin);
 
 internal static class AuthEndpoints
 {
     public const string RateLimitPolicy = "auth";
+
+    /// <summary>"Último acesso" com precisão de alguns minutos: não grava a cada página aberta.</summary>
+    private static readonly TimeSpan LastSeenPrecision = TimeSpan.FromMinutes(5);
+
+    private static IResult Suspended() => ResultHttp.Problem(StatusCodes.Status403Forbidden,
+        "O acesso desta conta está suspenso. Fale com o suporte para reativar.", "account_suspended");
+
+    private static Task<bool> IsSuspendedAsync(AppDbContext db, Guid organizationId, CancellationToken ct) =>
+        db.Organizations.AnyAsync(o => o.Id == organizationId && o.SuspendedAt != null, ct);
+
+    private static Task TouchLastSeenAsync(AppDbContext db, Guid userId, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var stale = now - LastSeenPrecision;
+        return db.Users.Where(u => u.Id == userId && (u.LastSeenAt == null || u.LastSeenAt < stale))
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.LastSeenAt, now), ct);
+    }
 
     public static RouteGroupBuilder MapAuthEndpoints(this RouteGroupBuilder api)
     {
@@ -94,7 +112,7 @@ internal static class AuthEndpoints
             new AcceptedResponse("Se houver um cadastro pendente para este e-mail, enviamos um novo link."));
     }
 
-    private static async Task<IResult> Login(LoginRequest request, SignInManager<AppUser> signIn)
+    private static async Task<IResult> Login(LoginRequest request, SignInManager<AppUser> signIn, AppDbContext db, TimeProvider clock, CancellationToken ct)
     {
         var invalid = ResultHttp.Problem(StatusCodes.Status401Unauthorized, "E-mail ou senha incorretos.", "invalid_credentials");
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrEmpty(request.Password))
@@ -114,24 +132,33 @@ internal static class AuthEndpoints
             return invalid;
         if (user.DeactivatedAt is not null)
             return ResultHttp.Problem(StatusCodes.Status403Forbidden, "Seu acesso foi desativado. Fale com um Admin da sua empresa.", "account_disabled");
+        if (await IsSuspendedAsync(db, user.OrganizationId, ct))
+            return Suspended();
 
         await signIn.SignInAsync(user, request.RememberMe);
+        await TouchLastSeenAsync(db, user.Id, clock, ct);
         return TypedResults.NoContent();
     }
 
     private static async Task<Results<Ok<MeResponse>, UnauthorizedHttpResult>> Me(
-        ClaimsPrincipal principal, AppDbContext db, CancellationToken ct)
+        ClaimsPrincipal principal, AppDbContext db, TimeProvider clock, CancellationToken ct)
     {
         if (!Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return TypedResults.Unauthorized();
 
+        // Conta suspensa: a tela volta ao login, que explica o motivo (o cookie cai em até 1 minuto).
+        var platformAdmin = principal.HasClaim(AppClaims.PlatformAdmin, "true");
         var me = await db.Users
             .Where(u => u.Id == userId && u.DeactivatedAt == null)
-            .Join(db.Organizations, u => u.OrganizationId, o => o.Id, (u, o) => new MeResponse(
-                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug, o.SubscriptionStatus == "past_due")))
+            .Join(db.Organizations.Where(o => o.SuspendedAt == null), u => u.OrganizationId, o => o.Id, (u, o) => new MeResponse(
+                u.Id, u.Name, u.Email!, u.Role.ToString(), new OrganizationSummary(o.Id, o.Name, o.Slug, o.SubscriptionStatus == "past_due"),
+                platformAdmin))
             .SingleOrDefaultAsync(ct);
+        if (me is null)
+            return TypedResults.Unauthorized();
 
-        return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
+        await TouchLastSeenAsync(db, userId, clock, ct);
+        return TypedResults.Ok(me);
     }
 
     private static async Task<Accepted<AcceptedResponse>> ForgotPassword(EmailRequest request, IAccountService accounts, CancellationToken ct)
@@ -145,14 +172,18 @@ internal static class AuthEndpoints
         (await accounts.ResetPasswordAsync(request.UserId, request.Token ?? "", request.Password ?? "", ct)).ToHttp();
 
     private static async Task<IResult> AcceptInvite(
-        AcceptInviteRequest request, IUserService users, SignInManager<AppUser> signIn, CancellationToken ct)
+        AcceptInviteRequest request, IUserService users, SignInManager<AppUser> signIn, AppDbContext db, TimeProvider clock, CancellationToken ct)
     {
         var result = await users.AcceptInviteAsync(request, ct);
         if (!result.IsSuccess)
             return result.Error!.ToHttp();
 
         var user = await signIn.UserManager.FindByIdAsync(result.Value.ToString());
-        await signIn.SignInAsync(user!, isPersistent: false);
+        // A senha fica definida; entrar, só depois de a conta ser reativada.
+        if (await IsSuspendedAsync(db, user!.OrganizationId, ct))
+            return Suspended();
+        await signIn.SignInAsync(user, isPersistent: false);
+        await TouchLastSeenAsync(db, user.Id, clock, ct);
         return TypedResults.NoContent();
     }
 }

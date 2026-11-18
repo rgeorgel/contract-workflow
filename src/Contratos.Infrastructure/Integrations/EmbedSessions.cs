@@ -166,6 +166,7 @@ public sealed class EmbedSessions(
         var now = clock.GetUtcNow();
         var s = await query
             .Where(s => s.RevokedAt == null && s.ExpiresAt > now && db.ApiKeys.Any(k => k.Id == s.ApiKeyId && k.RevokedAt == null))
+            .Where(s => db.Organizations.Any(o => o.Id == s.OrganizationId && o.SuspendedAt == null))
             .Select(s => new { s.Id, s.OrganizationId, s.UserId, s.Permissions, s.ExternalUserName })
             .SingleOrDefaultAsync(ct);
         return s is null ? null : new EmbedIdentity(s.Id, s.OrganizationId, s.UserId, s.Permissions, s.ExternalUserName);

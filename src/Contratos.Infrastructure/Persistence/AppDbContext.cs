@@ -6,6 +6,7 @@ using Contratos.Domain.Templates;
 using Contratos.Infrastructure.Identity;
 using Contratos.Infrastructure.Integrations;
 using Contratos.Infrastructure.Messaging;
+using Contratos.Infrastructure.Platform;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,6 +40,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<EmbedOrigin> EmbedOrigins => Set<EmbedOrigin>();
     public DbSet<EmbedSession> EmbedSessions => Set<EmbedSession>();
+    public DbSet<PlatformAuditEntry> PlatformAudit => Set<PlatformAuditEntry>();
 
     /// <summary>
     /// Antes de gravar: eventos novos da linha do tempo viram eventos de webhook (na mesma transação),

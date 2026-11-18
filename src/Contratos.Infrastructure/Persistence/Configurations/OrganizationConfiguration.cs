@@ -22,6 +22,8 @@ internal sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organ
         b.Ignore(o => o.Plan);
         b.Ignore(o => o.HasLiveSubscription);
         b.Ignore(o => o.IsPaymentOverdue);
+        b.Ignore(o => o.IsSuspended);
+        b.Property(o => o.SuspensionReason).HasMaxLength(Organization.SuspensionReasonMaxLength);
         b.Property(o => o.StripeCustomerId).HasMaxLength(100);
         b.Property(o => o.StripeSubscriptionId).HasMaxLength(100);
         b.Property(o => o.SubscriptionStatus).HasMaxLength(30);

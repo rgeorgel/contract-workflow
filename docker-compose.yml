@@ -29,6 +29,7 @@ services:
       Billing__DefaultPlan: ${BILLING_DEFAULT_PLAN:-avulso}
       Billing__ContactEmail: ${BILLING_CONTACT_EMAIL:-}
       Platform__ApiKey: ${PLATFORM_API_KEY:-}
+      Platform__AdminEmails: ${PLATFORM_ADMIN_EMAILS:-}
       Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
       Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
       # API pública e webhooks dos clientes. Rede interna só em dev: em produção seria SSRF.

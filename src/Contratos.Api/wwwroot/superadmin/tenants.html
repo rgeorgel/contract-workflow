@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenants · Super admin</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/progress.css">
+  <link rel="stylesheet" href="/css/superadmin.css">
+  <script type="module" src="/js/superadmin/shell.js"></script>
+  <script type="module" src="/js/pages/sa-tenants.js"></script>
+</head>
+<body class="sa">
+  <sa-shell active="tenants"></sa-shell>
+  <main class="sa-main" data-main>
+    <div class="page-header">
+      <div>
+        <h1>Tenants</h1>
+        <p>Todas as organizações cadastradas, com plano, uso e atividade.</p>
+      </div>
+    </div>
+    <form class="sa-filters" data-filters role="search">
+      <input class="input sa-filters__q" type="search" name="q" placeholder="Buscar por nome, slug ou e-mail de usuário" aria-label="Buscar">
+      <select class="select" name="status" aria-label="Status"></select>
+      <select class="select" name="plan" aria-label="Plano"></select>
+      <select class="select" name="activity" aria-label="Atividade"></select>
+      <select class="select" name="sort" aria-label="Ordenar"></select>
+      <div class="view-toggle" role="group" aria-label="Visualização" data-view></div>
+    </form>
+    <div data-list>
+    <div class="loading" data-loading><div class="spinner" aria-label="Carregando"></div></div>
+    </div>
+  </main>
+</body>
+</html>

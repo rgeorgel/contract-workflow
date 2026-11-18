@@ -21,6 +21,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public const string PlatformKey = "test-platform-key-0123456789abcdef0123456789";
 
+    /// <summary>Equipe da plataforma (portal super admin): um e-mail por teste, porque o e-mail é único.</summary>
+    public static readonly string[] PlatformAdminEmails = Enumerable.Range(1, 8).Select(i => $"equipe{i}@plataforma.test").ToArray();
+
     public CapturingEmailSender Emails { get; } = new();
     public InMemoryFileStorage Files { get; } = new();
     public FakeStripe Stripe { get; } = new();
@@ -45,6 +48,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // Os testes gerais não esbarram em cota; os de planos trocam o plano pela API da plataforma.
         builder.UseSetting("Billing:DefaultPlan", "empresa");
         builder.UseSetting("Platform:ApiKey", PlatformKey);
+        builder.UseSetting("Platform:AdminEmails", string.Join(", ", PlatformAdminEmails));
         builder.UseSetting("Stripe:SecretKey", FakeStripe.SecretKey);
         builder.UseSetting("Stripe:WebhookSecret", FakeStripe.WebhookSecret);
         builder.UseSetting("Stripe:ApiBase", "https://api.stripe.test");

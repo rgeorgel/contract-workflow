@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(o => ConfigureDbContext(o, connectionString));
 
         services.AddOptions<AppOptions>().Bind(config.GetSection(AppOptions.Section));
+        services.AddOptions<Platform.PlatformOptions>().Bind(config.GetSection(Platform.PlatformOptions.Section));
         services.AddOptions<EmailOptions>().Bind(config.GetSection(EmailOptions.Section));
         services.AddOptions<SmtpOptions>().Bind(config.GetSection(SmtpOptions.Section));
         services.AddOptions<ResendOptions>().Bind(config.GetSection(ResendOptions.Section));
@@ -91,6 +92,8 @@ public static class DependencyInjection
         services.AddScoped<BillingReader>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IPlatformBillingService, PlatformBillingService>();
+        services.AddScoped<Platform.PlatformAuditWriter>();
+        services.AddScoped<Application.Platform.ISuperAdminService, Platform.SuperAdminService>();
         AddStripe(services, config);
         services.AddScoped<IContractService, ContractService>();
         services.AddScoped<IDashboardService, DashboardService>();

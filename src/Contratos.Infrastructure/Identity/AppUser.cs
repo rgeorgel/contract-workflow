@@ -27,6 +27,9 @@ public sealed class AppUser : IdentityUser<Guid>
     /// <summary>Usuário desativado não entra; o registro fica para a auditoria.</summary>
     public DateTimeOffset? DeactivatedAt { get; set; }
 
+    /// <summary>Último login ou uso da tela (precisão de alguns minutos), para o painel da plataforma.</summary>
+    public DateTimeOffset? LastSeenAt { get; set; }
+
     public bool IsPendingInvite => InvitedAt is not null && PasswordHash is null;
 }
 
@@ -35,4 +38,6 @@ public static class AppClaims
     public const string OrganizationId = "org_id";
     public const string Role = "role";
     public const string Name = "name";
+    /// <summary>Equipe da plataforma (e-mail em <c>Platform:AdminEmails</c>): acesso ao portal super admin.</summary>
+    public const string PlatformAdmin = "platform_admin";
 }

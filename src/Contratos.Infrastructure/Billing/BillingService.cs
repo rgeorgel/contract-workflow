@@ -68,7 +68,8 @@ internal sealed class BillingService(
 }
 
 /// <summary>Operação manual da equipe da plataforma: trocar plano e conceder créditos, enquanto não há checkout.</summary>
-internal sealed class PlatformBillingService(AppDbContext db, UsageMeter meter, BillingReader reader, TimeProvider clock) : IPlatformBillingService
+internal sealed class PlatformBillingService(
+    AppDbContext db, UsageMeter meter, BillingReader reader, Platform.PlatformAuditWriter audit, TimeProvider clock) : IPlatformBillingService
 {
     public async Task<IReadOnlyList<PlatformOrganizationItem>> ListAsync(string? query, CancellationToken ct)
     {
@@ -109,7 +110,12 @@ internal sealed class PlatformBillingService(AppDbContext db, UsageMeter meter, 
         if (org.HasLiveSubscription)
             return Error.Conflict("Esta organização tem assinatura ativa no Stripe; o plano muda pelo portal de assinatura.", "managed_by_stripe");
 
+        var previous = org.Plan.Name;
         org.ChangePlan(plan!.Id, req.PeriodStart?.ToUniversalTime(), req.PeriodEnd?.ToUniversalTime());
+        var cycle = req.PeriodStart is { } ps && req.PeriodEnd is { } pe
+            ? $" (ciclo de {ps.UtcDateTime:dd/MM/yyyy} a {pe.UtcDateTime:dd/MM/yyyy})"
+            : " (mês do calendário)";
+        await audit.AddAsync(org.Id, Platform.PlatformActions.PlanChanged, $"{previous} → {plan.Name}{cycle}", ct);
         await db.SaveChangesAsync(ct);
         return await reader.BuildAsync(org, ct);
     }
@@ -149,6 +155,9 @@ internal sealed class PlatformBillingService(AppDbContext db, UsageMeter meter, 
                 Reference = reference,
                 Note = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
             });
+            var note = string.IsNullOrWhiteSpace(req.Note) ? "" : $". {req.Note.Trim()}";
+            await audit.AddAsync(org.Id, Platform.PlatformActions.CreditsGranted,
+                $"{req.Quantity} contrato(s), válidos por {months} meses{note}", ct);
             try
             {
                 await db.SaveChangesAsync(ct);

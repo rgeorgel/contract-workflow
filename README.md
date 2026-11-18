@@ -50,6 +50,11 @@ SaaS de workflow de contratos: templates com variáveis, geração de contratos 
 - Tela de Integrações (Admin) e portal público de documentação em `/desenvolvedores/`, com OpenAPI em `/desenvolvedores/openapi.json`
 - Detalhes em [docs/operacao.md](docs/operacao.md#api-pública-e-webhooks)
 
+**Portal super admin**
+- Em `/superadmin/`, para a equipe da plataforma (e-mails em `PLATFORM_ADMIN_EMAILS`): painel com cadastros, MRR e contratos; lista de organizações com plano, uso, atividade e último acesso; detalhe com linha do tempo
+- Trocar plano, conceder créditos, suspender e reativar a conta, com registro de quem fez
+- Detalhes em [docs/operacao.md](docs/operacao.md#portal-super-admin)
+
 ## Rodando
 
 Tudo em Docker (app em http://localhost:7700, e-mails em http://localhost:8026):

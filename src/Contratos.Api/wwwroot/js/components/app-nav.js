@@ -19,6 +19,8 @@ class AppNav extends HTMLElement {
     const me = await getMe();
     const active = this.getAttribute('active');
     const links = LINKS.filter((l) => !l.roles || l.roles.includes(me.role));
+    // Equipe da plataforma: atalho para o portal super admin.
+    if (me.platformAdmin) links.push({ key: 'superadmin', href: '/superadmin/', label: 'Super admin' });
     const linkEl = (l) => h('a', { href: l.href, 'aria-current': l.key === active ? 'page' : null }, l.label);
 
     const drawer = h('nav', { class: 'app-nav__drawer', id: 'app-nav-drawer', 'aria-label': 'Menu', hidden: true },

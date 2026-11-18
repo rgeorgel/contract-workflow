@@ -20,6 +20,8 @@ public sealed class ApiKeyStore(AppDbContext db, TimeProvider clock)
         var hash = ApiKeyTokens.Hash(token);
         var key = await db.ApiKeys.AsNoTracking()
             .Where(k => k.Hash == hash && k.RevokedAt == null)
+            // Conta suspensa pela plataforma: a chave para de valer até a reativação.
+            .Where(k => db.Organizations.Any(o => o.Id == k.OrganizationId && o.SuspendedAt == null))
             .Select(k => new { k.Id, k.Name, k.OrganizationId, k.CreatedBy, k.LastUsedAt })
             .SingleOrDefaultAsync(ct);
         if (key is null)

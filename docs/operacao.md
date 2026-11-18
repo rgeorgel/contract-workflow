@@ -92,7 +92,7 @@ Regras:
   - Os Admins recebem e-mail quando resta 1 crédito e quando os créditos acabam.
   - Contas que estavam no antigo plano Grátis viraram Avulso e ganharam os mesmos 3 contratos de boas-vindas.
 
-Sem o Stripe configurado (ou para casos especiais, como cortesia), a equipe troca o plano e concede créditos pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
+Sem o Stripe configurado (ou para casos especiais, como cortesia), a equipe troca o plano e concede créditos pelo [portal super admin](#portal-super-admin) ou pela API da plataforma. Ela só existe com `PLATFORM_API_KEY` definida (mínimo de 32 caracteres; gere com `openssl rand -hex 32`). A API não usa cookie: a chave vai no cabeçalho.
 
 ```bash
 # Organizações (busca por nome ou slug), com plano, uso do ciclo e créditos
@@ -109,6 +109,21 @@ curl -s -X POST -H "Authorization: Bearer $PLATFORM_API_KEY" -H "Content-Type: a
 ```
 
 `BILLING_CONTACT_EMAIL`, se definido, aparece em Configurações como o contato para mudar de plano ou comprar contratos.
+
+## Portal super admin
+
+Em `/superadmin/` a equipe da plataforma acompanha e gerencia todas as organizações:
+
+- **Painel**: total de organizações, cadastros e contratos enviados por dia (30 dias), ativas em 7 dias, MRR estimado pelos preços de tabela, distribuição por plano e por situação, contas que pedem atenção (pagamento pendente, suspensas, cancelamento agendado)
+- **Tenants**: cartões ou lista com plano, situação, uso do ciclo (contratos, usuários, templates, créditos), contratos por status, integrações e último acesso. Busca por nome, slug ou e-mail de qualquer usuário; filtros por situação, plano e atividade; ordenação por último acesso, cadastro, nome ou contratos em 30 dias
+- **Detalhe**: linha do tempo agrupada por dia e tipo (conta, contratos, assinaturas, templates, plano, integrações e ações da equipe), usuários com último acesso, templates mais usados, créditos e assinatura
+- **Ações**: trocar plano (só sem assinatura ativa no Stripe), conceder créditos, suspender e reativar. Toda ação fica registrada (`platform_audit_log`) com quem fez; as feitas pela API da plataforma aparecem como "API da plataforma"
+
+Quem entra: usuários cujo e-mail está em `PLATFORM_ADMIN_EMAILS` (separados por vírgula), pelo login normal e com o e-mail confirmado. A pessoa continua sendo de uma organização (a da equipe, por exemplo); o link "Super admin" aparece no menu dela. Tirar o e-mail da lista corta o acesso em até 1 minuto (quando o cookie é revalidado).
+
+Suspender uma organização: ninguém dela entra (login recusado com `account_suspended`, sessões abertas caem em até 1 minuto), as chaves de API e as sessões de embed param de valer. Contratos já enviados seguem com os signatários e os webhooks continuam saindo. A equipe não consegue suspender a própria organização.
+
+"Último acesso" é gravado no login e quando a pessoa abre uma página (no máximo a cada 5 minutos); contas de antes desta versão aparecem como "Nunca acessou" até o próximo acesso.
 
 ## Assinatura online (Stripe)
 

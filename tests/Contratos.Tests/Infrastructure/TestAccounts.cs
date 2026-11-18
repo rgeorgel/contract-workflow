@@ -12,10 +12,10 @@ public static partial class TestAccounts
     public static string NewEmail(string prefix = "pessoa") => $"{prefix}-{Guid.NewGuid():N}@empresa.com.br";
 
     /// <summary>Cadastra uma organização, confirma o e-mail e devolve o Admin já logado.</summary>
-    public static async Task<TestAccount> CreateAdminAsync(ApiFactory factory, string? organizationName = null)
+    public static async Task<TestAccount> CreateAdminAsync(ApiFactory factory, string? organizationName = null, string? email = null)
     {
         var client = factory.CreateApiClient();
-        var email = NewEmail("admin");
+        email ??= NewEmail("admin");
         var org = organizationName ?? $"Empresa {Guid.NewGuid():N}"[..20];
 
         var res = await client.PostAsync("/api/v1/auth/register",
