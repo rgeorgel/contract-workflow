@@ -40,6 +40,7 @@ class AppNav extends HTMLElement {
         h('nav', { class: 'app-nav__links', 'aria-label': 'Principal' }, links.map(linkEl)),
         h('div', { class: 'app-nav__user' },
           h('span', { class: 'app-nav__who' }, h('strong', {}, me.name), h('small', {}, roleLabel(me.role))),
+          themeToggle(),
           h('button', { type: 'button', class: 'btn btn--secondary btn--sm', onclick: logout }, 'Sair'),
           toggle)),
       drawer),
@@ -48,7 +49,27 @@ class AppNav extends HTMLElement {
   }
 }
 
-const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+/** Alterna o tema claro/escuro (js/theme.js aplica e guarda a escolha). O ícone mostra o tema que o clique ativa. */
+function themeToggle() {
+  const theme = window.contratosTheme;
+  if (!theme) return null;
+  const btn = h('button', {
+    type: 'button', class: 'btn btn--ghost btn--sm app-nav__theme',
+    onclick: () => theme.set(theme.get() === 'dark' ? 'light' : 'dark'),
+  });
+  const render = () => {
+    const dark = theme.get() === 'dark';
+    const label = dark ? 'Ativar tema claro' : 'Ativar tema escuro';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.replaceChildren(icon(dark ? ICONS.sun : ICONS.moon));
+  };
+  render();
+  document.addEventListener('themechange', render);
+  return btn;
+}
+
+const timeFmt =new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
 /** Sessão de suporte ("Entrar como"): alguém da equipe está usando esta conta. Sempre visível, com o botão de encerrar. */
 function impersonationBanner(me) {

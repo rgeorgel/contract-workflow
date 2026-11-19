@@ -16,9 +16,11 @@ body.app { background: var(--color-surface); min-height: 100vh; }
 .app-nav__links a:hover { background: var(--color-surface); color: var(--color-text); }
 .app-nav__links a[aria-current="page"] { color: var(--color-primary); background: var(--color-primary-soft); }
 .app-nav__user { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-.app-nav__who { display: none; text-align: right; line-height: 1.25; font-size: .875rem; }
+.app-nav__who { display: none; white-space: nowrap; text-align: right; line-height: 1.25; font-size: .875rem; }
 .app-nav__who small { display: block; color: var(--color-muted); font-size: .78rem; }
 .app-nav__toggle { display: inline-flex; }
+.app-nav__theme { width: 36px; padding: 0; color: var(--color-muted); }
+.app-nav__theme:hover { color: var(--color-text); }
 .app-nav__drawer { display: grid; gap: 2px; padding: 8px var(--gutter) 14px; border-top: 1px solid var(--color-border); }
 .app-nav__drawer a { padding: 10px 12px; border-radius: var(--radius-sm); color: var(--color-text); text-decoration: none; font-weight: 500; }
 .app-nav__drawer a[aria-current="page"] { color: var(--color-primary); background: var(--color-primary-soft); }
@@ -50,7 +52,7 @@ body.app { background: var(--color-surface); min-height: 100vh; }
 .table th { text-align: left; font-weight: 600; color: var(--color-muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; padding: 12px 16px; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
 .table td { padding: 14px 16px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
-.table tbody tr:hover { background: #fafbfd; }
+.table tbody tr:hover { background: var(--color-row-hover); }
 .table .cell-main { font-weight: 600; }
 .table .cell-sub { display: block; color: var(--color-muted); font-size: .85rem; font-weight: 400; }
 .table .cell-actions { text-align: right; white-space: nowrap; }
@@ -108,7 +110,7 @@ dialog.modal::backdrop { background: rgb(21 26 45 / .45); }
 
 /* Toast */
 .toasts { position: fixed; z-index: 100; bottom: 16px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; width: min(420px, calc(100vw - 32px)); }
-.toast { background: var(--color-text); color: #fff; padding: 12px 16px; border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: .925rem; animation: toast-up .25s ease-out; }
+.toast { background: var(--color-inverse-bg); color: var(--color-inverse-text); padding: 12px 16px; border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: .925rem; animation: toast-up .25s ease-out; }
 .toast--error { background: var(--color-danger); }
 @keyframes toast-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
@@ -170,7 +172,7 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .dash-list li { border-bottom: 1px solid var(--color-border); }
 .dash-list li:last-child { border-bottom: 0; }
 .dash-list a { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 14px; align-items: center; padding: 14px 20px; color: var(--color-text); text-decoration: none; }
-.dash-list a:hover { background: #fafbfd; }
+.dash-list a:hover { background: var(--color-row-hover); }
 .dash-list .cell-number { font-size: .85rem; }
 .dash-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-list small { color: var(--color-muted); font-size: .82rem; }
@@ -215,8 +217,8 @@ a.stat-card:hover { border-color: var(--color-primary); color: var(--color-text)
 .overdue-banner { background: var(--color-danger-soft); color: var(--color-danger); border-bottom: 1px solid rgb(184 35 42 / .18); font-size: .9rem; }
 .overdue-banner__inner { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
 .overdue-banner__inner > span { flex: 1 1 420px; }
-.overdue-banner__btn { background: var(--color-danger); color: #fff; flex: none; }
-.overdue-banner__btn:hover { background: #9a1d23; color: #fff; }
+.overdue-banner__btn { background: var(--color-danger); color: var(--color-danger-ink); flex: none; }
+.overdue-banner__btn:hover { background: var(--color-danger-hover); color: var(--color-danger-ink); }
 
 /* Configurações: alertas e lembretes */
 .alerts-fieldset { margin-top: 28px; display: grid; gap: 12px; }
